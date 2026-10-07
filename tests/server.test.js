@@ -560,3 +560,29 @@ test('줄눈·청소 한 장 계약서: 한 링크로 묶어 한 번에 서명, 
   assert.deepEqual(signedView.contracts.map((c) => c.id), [a.id, b.id], '서명한 계약서는 함께 서명한 묶음으로 보임');
   assert.ok(signedView.contracts.every((c) => c.esign.signature === img));
 });
+
+test('계약 조건 설정: 관리자가 수정, 고객 서명 화면에 반영, 서명한 계약서는 서명 당시 조건 유지', async () => {
+  const def = await admin.ok('contractTerms', 'get');
+  assert.equal(def.isDefault, true);
+  assert.ok(def.terms.length > 0);
+  assert.notEqual((await admin('contractTerms', 'save', [])).status, 200, '빈 조건은 저장 불가');
+
+  const mine = ['하자 보증기간은 시공일로부터 1년입니다.', '잔금은 시공 당일 결제합니다.'];
+  const saved = await admin.ok('contractTerms', 'save', [...mine, '  ']);
+  assert.deepEqual(saved.terms, mine, '빈 줄은 빠짐');
+  assert.deepEqual((await admin.ok('auth', 'me')).company.contractTerms, mine, '내부 계약서 보기에도 반영');
+
+  const c = await admin.ok('contracts', 'create', { ...base, customerName: '약관고객', customerPhone: '010-3434-5656' });
+  const { token } = await admin.ok('contracts', 'requestSign', c.id);
+  const anon = client();
+  assert.deepEqual((await anon.ok('esign', 'getByToken', token)).company.contractTerms, mine, '서명 화면에 바뀐 조건');
+  await anon.ok('esign', 'sign', token, { signerName: '약관고객', signature: 'data:image/png;base64,QQ==', agreed: true });
+
+  await admin.ok('contractTerms', 'save', ['완전히 새 조건']);
+  assert.deepEqual((await admin.ok('contracts', 'get', c.id)).esign.terms, mine, '서명한 계약서는 서명 당시 조건 보관');
+  assert.deepEqual((await anon.ok('esign', 'getByToken', token)).contracts[0].esign.terms, mine);
+
+  const r = await admin.ok('contractTerms', 'reset');
+  assert.equal(r.isDefault, true);
+  assert.deepEqual(r.terms, def.terms);
+});

@@ -3897,3 +3897,52 @@ input[type='month'] {
     border-top: none;
   }
 }
+
+/* 설정 > 계약조건설정 */
+.terms-edit {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+  max-width: 900px;
+}
+
+.terms-edit li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.terms-edit .terms-no {
+  min-width: 26px;
+  padding-top: 8px;
+  font-weight: 700;
+}
+
+.terms-edit textarea {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.terms-edit .terms-btns {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding-top: 4px;
+}
+
+@media screen and (max-width: 600px) {
+  .terms-edit li {
+    flex-wrap: wrap;
+  }
+
+  .terms-edit textarea {
+    flex-basis: calc(100% - 34px);
+  }
+
+  .terms-edit .terms-btns {
+    margin-left: 34px;
+  }
+}

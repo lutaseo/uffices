@@ -56,7 +56,7 @@ export default function SettingsPage() {
       </form>
 
       <p className="sub-text" style={{ marginTop: 30 }}>
-        브랜드·구분 코드, 알림톡 템플릿, 계약 약관 관리는 추후 설정 메뉴에 추가됩니다.
+        브랜드·구분 코드, 알림톡 템플릿 관리는 추후 설정 메뉴에 추가됩니다.
       </p>
 
       {API_MODE === 'demo' && (

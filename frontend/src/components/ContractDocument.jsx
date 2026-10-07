@@ -1,14 +1,13 @@
 import React from 'react';
 import { calcAmounts, timeLabel } from '../utils/contract.js';
 import { formatAddress, won } from '../utils/format.js';
+import { DEFAULT_CONTRACT_TERMS } from '../constants.js';
 
-// 계약 약관. 업체별 약관 관리는 '설정' 메뉴 확장 시 DB 로 옮길 예정입니다.
-export const DEFAULT_TERMS = [
-  '시공 일정은 고객과 협의하여 확정하며, 일정 변경은 시공 3일 전까지 요청해야 합니다.',
-  '잔금은 시공 완료 후 당일 결제를 원칙으로 합니다.',
-  '시공 후 하자 발생 시 보증기간 내 무상 A/S 를 제공합니다.',
-  '고객 사정에 의한 계약 취소 시 계약금은 환불되지 않을 수 있습니다.',
-];
+// 계약 조건: 서명한 계약서는 서명 당시 조건, 아니면 업체 설정(없으면 기본값)
+export const termsOf = (esign, company) =>
+  esign?.status === '서명완료' && esign.terms?.length ? esign.terms : company?.contractTerms?.length ? company.contractTerms : DEFAULT_CONTRACT_TERMS;
+
+
 
 const uniq = (arr) => [...new Set(arr.filter(Boolean))];
 
@@ -22,6 +21,7 @@ export default function ContractDocument({ contract, contracts, company, showAmo
   const amountOn = showAmount && !list.some((c) => c.amountHidden);
   const sums = list.map(calcAmounts).reduce((t, a) => ({ actual: t.actual + a.actual, paid: t.paid + a.paid, balance: t.balance + a.balance }), { actual: 0, paid: 0, balance: 0 });
   const workType = !multi && first.workType && first.workType !== '시공' ? `${first.workType} ` : '';
+  const terms = termsOf(list.find((c) => c.esign?.terms)?.esign || esign, company);
   const phones = uniq([first.customerPhone, first.customerPhone2]).join(' / ');
 
   return (
@@ -106,8 +106,8 @@ export default function ContractDocument({ contract, contracts, company, showAmo
       <div className="doc-terms">
         <h4>계약 조건</h4>
         <ol>
-          {DEFAULT_TERMS.map((t) => (
-            <li key={t}>{t}</li>
+          {terms.map((t, i) => (
+            <li key={i} className="pre-wrap">{t}</li>
           ))}
         </ol>
       </div>

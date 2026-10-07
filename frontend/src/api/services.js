@@ -39,7 +39,7 @@ import {
 } from './core.js';
 
 export { ApiError } from './core.js';
-export { contracts, esign, notifications, reports, imports } from './contracts.js';
+export { contracts, esign, notifications, reports, imports, contractTerms } from './contracts.js';
 export { schedules, engineerOffs, engineerApp, scheduleSettings } from './schedule.js';
 
 // ============================================================
