@@ -4008,3 +4008,22 @@ input[type='month'] {
 .engineer-detail .form-section-title {
   margin-top: 18px;
 }
+
+/* 통계 > 시공기사별 */
+.stats-basis {
+  padding: 6px 10px;
+  border: 1px solid #c9d3e3;
+  border-radius: 4px;
+  background: #f5f7fb;
+  font-size: 14px;
+}
+
+.eng-stats tr.eng-jobs-row > td {
+  background: #f8fafc;
+  padding: 8px;
+}
+
+.eng-stats .eng-jobs {
+  width: 100%;
+  font-size: 13px;
+}

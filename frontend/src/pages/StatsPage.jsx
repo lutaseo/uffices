@@ -6,6 +6,7 @@ import { calcAmounts, firstScheduleDate } from '../utils/contract.js';
 import { presetRange, isoToDateKey } from '../utils/date.js';
 import { won } from '../utils/format.js';
 import { downloadExcel } from '../utils/excel.js';
+import { withBase } from '../router.js';
 
 const GROUPS = [
   { key: 'month', label: '월별', fn: null },
@@ -13,7 +14,9 @@ const GROUPS = [
   { key: 'brand', label: '브랜드별', fn: (c) => c.brand },
   { key: 'receptionType', label: '접수형태별', fn: (c) => c.receptionType },
   { key: 'owner', label: '작성자별', fn: (c) => c.ownerName || '-' },
+  { key: 'engineer', label: '시공기사별' }, // 시공 회차 날짜 기준 (아래 EngineerStats)
 ];
+const CATEGORY_ORDER = ['줄눈', '청소', '탄성', '새집증후군', '나노코팅', '기타'];
 
 const dateOf = (c, dateType) =>
   dateType === 'scheduleDate'
@@ -29,13 +32,17 @@ export default function StatsPage() {
   const [range, setRange] = useState(() => presetRange('3months'));
   const [group, setGroup] = useState('month');
   const [rows, setRows] = useState([]);
+  const [engRows, setEngRows] = useState([]);
+  const byEngineer = group === 'engineer';
 
   useEffect(() => {
-    reports.contracts({ dateType, from: range[0], to: range[1] }).then(setRows).catch(handleError);
-  }, [dateType, range, handleError]);
+    if (byEngineer) reports.engineers({ from: range[0], to: range[1] }).then(setEngRows).catch(handleError);
+    else reports.contracts({ dateType, from: range[0], to: range[1] }).then(setRows).catch(handleError);
+  }, [byEngineer, dateType, range, handleError]);
 
   const table = useMemo(() => {
     const g = GROUPS.find((x) => x.key === group);
+    if (!g.fn && g.key !== 'month') return [];
     const keyFn = g.fn || ((c) => dateOf(c, dateType).slice(0, 7) || '미정');
     const map = {};
     rows.forEach((c) => {
@@ -72,9 +79,13 @@ export default function StatsPage() {
     <div className="page-card">
       <h2>통계정보</h2>
       <div className="filter-row">
-        <select className="input-select" value={dateType} onChange={(e) => setDateType(e.target.value)}>
-          {DATE_TYPES.map((d) => <option key={d.value} value={d.value}>{d.label} 기준</option>)}
-        </select>
+        {byEngineer ? (
+          <span className="stats-basis">시공일(①②③) 기준</span>
+        ) : (
+          <select className="input-select" value={dateType} onChange={(e) => setDateType(e.target.value)}>
+            {DATE_TYPES.map((d) => <option key={d.value} value={d.value}>{d.label} 기준</option>)}
+          </select>
+        )}
         <input type="date" className="input-date" value={range[0]} onChange={(e) => setRange([e.target.value, range[1]])} />
         <span>~</span>
         <input type="date" className="input-date" value={range[1]} onChange={(e) => setRange([range[0], e.target.value])} />
@@ -97,7 +108,20 @@ export default function StatsPage() {
             className="btn-dark-lg sm"
             style={{ marginLeft: 'auto' }}
             onClick={() =>
-              downloadExcel(
+              byEngineer
+                ? downloadExcel(
+                    engRows.map((r) => ({
+                      시공기사: r.name,
+                      배정: r.assigned,
+                      시공완료: r.done,
+                      ...Object.fromEntries(CATEGORY_ORDER.map((k) => [`완료_${k}`, r.byCategory[k] || 0])),
+                      연기요청: r.postponed,
+                      시공불가: r.unable,
+                    })),
+                    '시공기사별',
+                    `시공기사별_${range[0]}_${range[1]}`,
+                  )
+                : downloadExcel(
                 table.map((r) => ({
                   구분: r.key,
                   계약건수: r.count,
@@ -115,6 +139,9 @@ export default function StatsPage() {
         )}
       </div>
 
+      {byEngineer ? (
+        <EngineerStats rows={engRows} />
+      ) : (
       <div className="table-responsive">
         <table className="customer-table">
           <thead>
@@ -176,6 +203,110 @@ export default function StatsPage() {
           </tbody>
         </table>
       </div>
+      )}
+    </div>
+  );
+}
+
+// 시공기사별: 배정·완료 건수 + 구분별 완료, 줄을 누르면 해당 기간 시공 목록
+function EngineerStats({ rows }) {
+  const [open, setOpen] = useState(null);
+  const cats = CATEGORY_ORDER.filter((k) => rows.some((r) => r.byCategory[k]));
+  const maxDone = Math.max(1, ...rows.map((r) => r.done));
+  const sum = rows.reduce((t, r) => ({ assigned: t.assigned + r.assigned, done: t.done + r.done, postponed: t.postponed + r.postponed, unable: t.unable + r.unable }), { assigned: 0, done: 0, postponed: 0, unable: 0 });
+  const cols = 6 + cats.length;
+
+  return (
+    <div className="table-responsive">
+      <p className="sub-text">기간 안에 시공 날짜가 잡힌 회차를 기사(팀)별로 셉니다. 완료 = 기사가 '시공완료' 보고했거나 계약이 시공완료 상태. 취소 계약 제외. 줄을 누르면 시공 목록이 보입니다.</p>
+      <table className="customer-table eng-stats">
+        <thead>
+          <tr>
+            <th>시공기사</th>
+            <th>배정</th>
+            <th>시공완료</th>
+            <th style={{ width: '20%' }} />
+            {cats.map((k) => (
+              <th key={k}>{k}</th>
+            ))}
+            <th>연기요청</th>
+            <th>시공불가</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={cols} className="no-data">해당 기간에 배정된 시공이 없습니다.</td>
+            </tr>
+          )}
+          {rows.map((r) => (
+            <React.Fragment key={r.name}>
+              <tr className="clickable-row" onClick={() => setOpen(open === r.name ? null : r.name)}>
+                <td className="bold-text text-left">
+                  {open === r.name ? '▾' : '▸'} {r.name}
+                </td>
+                <td>{r.assigned}</td>
+                <td className="bold-text">{r.done}</td>
+                <td>
+                  <div className="bar" style={{ width: `${(r.done / maxDone) * 100}%` }} />
+                </td>
+                {cats.map((k) => (
+                  <td key={k}>{r.byCategory[k] || '-'}</td>
+                ))}
+                <td>{r.postponed || '-'}</td>
+                <td>{r.unable || '-'}</td>
+              </tr>
+              {open === r.name && (
+                <tr className="eng-jobs-row">
+                  <td colSpan={cols}>
+                    <table className="detail-table eng-jobs">
+                      <thead>
+                        <tr>
+                          <th>시공일</th>
+                          <th>번호</th>
+                          <th>구분</th>
+                          <th>회차</th>
+                          <th>고객</th>
+                          <th>현장</th>
+                          <th>상태</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {r.jobs.map((j) => (
+                          <tr key={`${j.contractId}-${j.step}`}>
+                            <td>{j.date}</td>
+                            <td>
+                              <a href={withBase(`/contracts/${j.contractId}`)} target="_blank" rel="noreferrer">{j.no ?? '-'}</a>
+                            </td>
+                            <td>{j.category}{j.workType && j.workType !== '시공' ? ` · ${j.workType}` : ''}</td>
+                            <td>{j.step}차</td>
+                            <td>{j.customerName}</td>
+                            <td className="text-left">{j.site}</td>
+                            <td className={j.done ? 'text-done' : j.mobileStatus ? 'text-red' : 'sub-text'}>{j.done ? '시공완료' : j.mobileStatus || '미완료'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+              )}
+            </React.Fragment>
+          ))}
+          {rows.length > 0 && (
+            <tr className="total-row">
+              <td>합계</td>
+              <td>{sum.assigned}</td>
+              <td>{sum.done}</td>
+              <td />
+              {cats.map((k) => (
+                <td key={k}>{rows.reduce((t, r) => t + (r.byCategory[k] || 0), 0)}</td>
+              ))}
+              <td>{sum.postponed}</td>
+              <td>{sum.unable}</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }
