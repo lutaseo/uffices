@@ -526,6 +526,7 @@ test('줄눈·청소 한 장 계약서: 한 링크로 묶어 한 번에 서명, 
   const b = await admin.ok('contracts', 'create', { ...site, category: '청소', totalAmount: 300000, customerNote: '청소 안내' });
   const other = await admin.ok('contracts', 'create', { ...site, ho: '404', category: '청소' }); // 다른 호수
   const coat = await admin.ok('contracts', 'create', { ...site, category: '나노코팅' }); // 코팅은 같은 현장이어도 따로
+  const otherBrand = await admin.ok('contracts', 'create', { ...site, brand: '더스타트', category: '청소' }); // 브랜드가 다르면 따로
 
   const before = await admin.ok('contracts', 'signBundle', b.id);
   assert.deepEqual(before.contracts.map((c) => c.id), [a.id, b.id], '서명 전: 같은 현장의 줄눈·청소 함께');
@@ -549,6 +550,7 @@ test('줄눈·청소 한 장 계약서: 한 링크로 묶어 한 번에 서명, 
   }
   assert.equal((await admin.ok('contracts', 'get', other.id)).esign.status, '미발송', '다른 현장은 그대로');
   assert.equal((await admin.ok('contracts', 'get', coat.id)).esign.status, '미발송', '코팅은 따로');
+  assert.equal((await admin.ok('contracts', 'get', otherBrand.id)).esign.status, '미발송', '다른 브랜드는 따로');
   assert.deepEqual((await admin.ok('contracts', 'signBundle', coat.id)).contracts.map((c) => c.id), [coat.id], '코팅 계약서는 한 장 따로');
   const again = await anon.ok('esign', 'getByToken', token);
   assert.ok(again.contracts.every((c) => c.esign.status === '서명완료' && c.esign.signature === img), '서명 후 다시 열면 둘 다 서명 표시');

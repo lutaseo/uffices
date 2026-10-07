@@ -313,13 +313,13 @@ function cleanReceipts(db, c) {
 const groupKey = (c) => [c.customerId, c.aptName, c.dong, c.ho].join('|');
 
 // 고객에게 한 장으로 보내는 계약서 묶음 (줄눈·청소 등 같은 계약자·현장의 시공들)
-//   - 줄눈·청소(SIGN_TOGETHER)끼리만 묶음. 나노코팅 등 다른 구분은 따로 한 장
+//   - 줄눈·청소(SIGN_TOGETHER)끼리, 같은 브랜드끼리만 묶음. 나노코팅 등 다른 구분·다른 브랜드는 따로 한 장
 //   - 서명 전: 같은 묶음에서 아직 서명 안 된 계약 전부
 //   - 서명 후: 그때 함께 서명한 계약들 (같은 서명 링크)
 function signBundle(db, user, base) {
   if (base.deletedAt || !SIGN_TOGETHER.includes(base.category)) return [base];
   const key = groupKey(base);
-  const same = visibleContracts(db, user).filter((c) => !c.deletedAt && groupKey(c) === key && SIGN_TOGETHER.includes(c.category));
+  const same = visibleContracts(db, user).filter((c) => !c.deletedAt && groupKey(c) === key && c.brand === base.brand && SIGN_TOGETHER.includes(c.category));
   const signed = base.esign?.status === ESIGN_STATUS.SIGNED;
   const list = signed
     ? same.filter((c) => c === base || (base.esign.token && c.esign?.token === base.esign.token))
