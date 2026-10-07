@@ -498,3 +498,79 @@ test('고객 참고사항: 저장·이력, 서명 링크(고객)에는 보이고
   const row = (await admin.ok('contracts', 'list', {})).find((x) => x.id === c.id);
   assert.equal(row.customerNote, undefined, '목록에는 안 보냄');
 });
+
+test('목록 변경 확인(listCached): 그대로면 목록 없이 응답, 수정·입금·휴지통·권한이 바뀌면 새 목록', async () => {
+  const first = await admin.ok('contracts', 'listCached', {}, '');
+  assert.ok(first.rows.length > 0 && first.version);
+  const same = await admin.ok('contracts', 'listCached', {}, first.version);
+  assert.equal(same.unchanged, true, '바뀐 게 없으면 목록 안 보냄');
+  assert.equal(same.rows, undefined);
+  const c = first.rows[0];
+  const full = await admin.ok('contracts', 'get', c.id);
+  await admin.ok('contracts', 'update', c.id, { ...full, memo: `${full.memo || ''} 변경확인` });
+  const afterEdit = await admin.ok('contracts', 'listCached', {}, first.version);
+  assert.ok(afterEdit.rows, '수정 후에는 새 목록');
+  await admin.ok('contracts', 'moveToTrash', [c.id]);
+  const afterTrash = await admin.ok('contracts', 'listCached', {}, afterEdit.version);
+  assert.ok(afterTrash.rows && !afterTrash.rows.some((r) => r.id === c.id), '휴지통 이동 반영');
+  await admin.ok('contracts', 'restore', [c.id]);
+  const other = await admin.ok('contracts', 'listCached', { brand: '더좋은집' }, afterTrash.version);
+  assert.ok(other.rows, '검색 조건이 다르면 새 목록');
+  const mine = await manager.ok('contracts', 'listCached', {}, first.version);
+  assert.ok(mine.rows, '다른 계정은 같은 확인표를 써도 새 목록');
+});
+
+test('줄눈·청소 한 장 계약서: 같은 고객(이름+전화)·같은 브랜드끼리 한 링크로 서명, 코팅·다른 브랜드·이미 서명한 건은 따로', async () => {
+  const site = { ...base, customerName: '한장고객', customerPhone: '010-6060-1212', aptName: '한장아파트', dong: '102', ho: '303' };
+  const a = await admin.ok('contracts', 'create', { ...site, category: '줄눈', totalAmount: 500000, customerNote: '줄눈 안내' });
+  const b = await admin.ok('contracts', 'create', { ...site, category: '청소', totalAmount: 300000, customerNote: '청소 안내' });
+  const otherSite = await admin.ok('contracts', 'create', { ...site, ho: '404', category: '청소' }); // 같은 고객의 다른 호수 → 같이
+  const other = await admin.ok('contracts', 'create', { ...site, customerPhone: '010-6060-9999', category: '청소' }); // 전화번호 다르면 따로
+  const coat = await admin.ok('contracts', 'create', { ...site, category: '나노코팅' }); // 코팅은 같은 현장이어도 따로
+  const otherBrand = await admin.ok('contracts', 'create', { ...site, brand: '더스타트', category: '청소' }); // 브랜드가 다르면 따로
+
+  const before = await admin.ok('contracts', 'signBundle', b.id);
+  assert.deepEqual(before.contracts.map((c) => c.id), [a.id, b.id, otherSite.id], '서명 전: 같은 고객(이름+전화)의 줄눈·청소 함께');
+  assert.equal(before.token, null, '아직 링크 없음');
+
+  const { token, count } = await admin.ok('contracts', 'requestSign', a.id);
+  assert.equal(count, 3);
+  const anon = client();
+  const view = await anon.ok('esign', 'getByToken', token);
+  assert.deepEqual(view.contracts.map((c) => c.category), ['줄눈', '청소', '청소']);
+  assert.deepEqual(view.contracts.map((c) => c.customerNote || ''), ['줄눈 안내', '청소 안내', '']);
+  assert.ok(view.contracts.every((c) => c.memo === undefined && c.history === undefined));
+  assert.equal((await admin.ok('contracts', 'signBundle', b.id)).token, token, '청소 쪽에서 봐도 같은 링크');
+
+  const img = 'data:image/png;base64,QUJD';
+  await anon.ok('esign', 'sign', token, { signerName: '한장고객', signature: img, agreed: true });
+  for (const id of [a.id, b.id]) {
+    const c = await admin.ok('contracts', 'get', id);
+    assert.equal(c.esign.status, '서명완료');
+    assert.equal(c.esign.signature, img, '두 계약 모두 서명 이미지 저장');
+  }
+  assert.equal((await admin.ok('contracts', 'get', other.id)).esign.status, '미발송', '전화번호가 다른 고객은 그대로');
+  assert.equal((await admin.ok('contracts', 'get', coat.id)).esign.status, '미발송', '코팅은 따로');
+  assert.equal((await admin.ok('contracts', 'get', otherBrand.id)).esign.status, '미발송', '다른 브랜드는 따로');
+  assert.deepEqual((await admin.ok('contracts', 'signBundle', coat.id)).contracts.map((c) => c.id), [coat.id], '코팅 계약서는 한 장 따로');
+  const again = await anon.ok('esign', 'getByToken', token);
+  assert.ok(again.contracts.every((c) => c.esign.status === '서명완료' && c.esign.signature === img), '서명 후 다시 열면 둘 다 서명 표시');
+  const r = await anon('esign', 'sign', token, { signerName: '한장고객', signature: img, agreed: true });
+  assert.notEqual(r.status, 200, '두 번 서명 불가');
+
+  // 서명 후 청소를 하나 더 추가 → 새 요청에는 서명 안 된 것만
+  const c3 = await admin.ok('contracts', 'create', { ...site, category: '청소' });
+  const later = await admin.ok('contracts', 'signBundle', c3.id);
+  assert.deepEqual(later.contracts.map((c) => c.id), [c3.id], '이미 서명한 줄눈·청소는 다시 서명하지 않음');
+  const signedView = await admin.ok('contracts', 'signBundle', a.id);
+  assert.deepEqual(signedView.contracts.map((c) => c.id), [a.id, b.id, otherSite.id], '서명한 계약서는 함께 서명한 묶음으로 보임');
+  assert.ok(signedView.contracts.every((c) => c.esign.signature === img));
+});
+
+test('계약 조건: 서명할 때 조건을 계약에 함께 보관 (나중에 조건을 바꿔도 서명한 계약서는 그대로)', async () => {
+  const c = await admin.ok('contracts', 'create', { ...base, customerName: '약관고객', customerPhone: '010-3434-5656', category: '나노코팅' });
+  const { token } = await admin.ok('contracts', 'requestSign', c.id);
+  await client().ok('esign', 'sign', token, { signerName: '약관고객', signature: 'data:image/png;base64,QQ==', agreed: true });
+  const signed = await admin.ok('contracts', 'get', c.id);
+  assert.ok(Array.isArray(signed.esign.terms) && signed.esign.terms.length > 0, '서명 당시 조건 저장');
+});

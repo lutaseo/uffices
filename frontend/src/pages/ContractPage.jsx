@@ -78,14 +78,19 @@ function NoPermission() {
   );
 }
 
+// 최근에 받은 계약 목록 (화면을 옮겼다 돌아와도 바로 보여주고, 서버에는 '바뀐 게 있는지'만 물어봄)
+//   계정·휴지통·검색조건별로 따로 기억. 새로고침하면 비워짐
+const listCache = new Map();
+
 function ContractList({ trash, engineers }) {
   const { user, can, handleError } = useAuth();
   const showAmount = can('contract.amount');
   const showTotals = showAmount && can('sales.total'); // 회사 전체 매출 합계는 관리자가 허락한 계정만
 
   const [filter, setFilter] = useState(loadSavedFilter);
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const cacheKey = `${user.id}|${trash ? 1 : 0}|${JSON.stringify(filter)}`;
+  const [rows, setRows] = useState(() => listCache.get(cacheKey)?.rows || []);
+  const [loading, setLoading] = useState(() => !listCache.has(cacheKey));
   // 쪽 번호는 기억해 두어, 상세에서 뒤로 왔을 때 같은 쪽을 보여줌
   const [page, setPageState] = useState(() => Number(sessionStorage.getItem(`${PAGE_KEY}.${trash}`)) || 1);
   const setPage = (n) => {
@@ -98,15 +103,21 @@ function ContractList({ trash, engineers }) {
   const [kakaoTarget, setKakaoTarget] = useState(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    const cached = listCache.get(cacheKey);
+    if (cached) setRows(cached.rows); // 기억해 둔 목록을 먼저 보여주고
+    else setLoading(true);
     try {
-      setRows(await contractApi.list({ ...filter, trash }));
+      const r = await contractApi.listCached({ ...filter, trash }, cached?.version || '');
+      if (r.unchanged && cached) return; // 바뀐 게 없으면 그대로 (받는 데이터 거의 없음)
+      listCache.set(cacheKey, { version: r.version, rows: r.rows });
+      if (listCache.size > 20) listCache.delete(listCache.keys().next().value); // 오래된 검색조건부터 비움
+      setRows(r.rows);
     } catch (e) {
       handleError(e);
     } finally {
       setLoading(false);
     }
-  }, [filter, trash, handleError]);
+  }, [filter, trash, handleError, cacheKey]);
 
   useEffect(() => {
     load();

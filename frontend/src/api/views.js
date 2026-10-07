@@ -62,6 +62,7 @@ export function contractListView(c, user, db) {
 
 // 변경이력: 누가 언제 무엇을 바꿨는지 (실장 권한 위임 구조에서 필수)
 export function addHistory(c, user, action, changes = []) {
+  c.updatedAt = nowIso(); // 변경이 생기면 항상 수정시각도 갱신 (목록 '변경 없음' 확인에 사용)
   c.history = c.history || [];
   c.history.push({
     at: nowIso(),

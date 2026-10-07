@@ -9,28 +9,27 @@ import { backdrop } from '../utils/backdrop.js';
 // 계약서 보기 + 전자서명 요청
 export default function ContractViewModal({ contractId, onClose, onChanged }) {
   const { company, can, handleError } = useAuth();
-  const [contract, setContract] = useState(null);
+  const [list, setList] = useState(null); // 고객에게 한 장으로 가는 계약들 (줄눈·청소 등)
   const [signUrl, setSignUrl] = useState('');
   const [kakaoOpen, setKakaoOpen] = useState(false);
 
+  const load = () =>
+    contractApi.signBundle(contractId).then((b) => {
+      setList(b.contracts);
+      setSignUrl(b.token ? `${location.origin}/sign/${b.token}` : '');
+    });
+
   useEffect(() => {
-    contractApi
-      .get(contractId)
-      .then((c) => {
-        setContract(c);
-        if (c.esign?.token) setSignUrl(`${location.origin}/sign/${c.esign.token}`);
-      })
-      .catch((e) => {
-        handleError(e);
-        onClose();
-      });
+    load().catch((e) => {
+      handleError(e);
+      onClose();
+    });
   }, [contractId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const requestSign = async () => {
     try {
-      const { url } = await contractApi.requestSign(contractId);
-      setSignUrl(url);
-      setContract(await contractApi.get(contractId));
+      await contractApi.requestSign(contractId);
+      await load();
       onChanged?.();
     } catch (e) {
       handleError(e);
@@ -46,8 +45,10 @@ export default function ContractViewModal({ contractId, onClose, onChanged }) {
     }
   };
 
-  if (!contract) return null;
+  if (!list) return null;
+  const contract = list.find((c) => c.id === Number(contractId)) || list[0];
   const status = contract.esign?.status;
+  const together = list.length > 1 ? list.map((c) => c.category).join('·') : '';
 
   return (
     <>
@@ -60,13 +61,13 @@ export default function ContractViewModal({ contractId, onClose, onChanged }) {
           </button>
         </div>
 
-        <ContractDocument contract={contract} company={company} />
+        <ContractDocument contract={contract} contracts={list} company={company} />
 
         {can('esign.send') && status !== ESIGN_STATUS.SIGNED && (
           <div className="esign-box no-print">
             {signUrl ? (
               <>
-                <p>고객 서명 링크 (고객이 이 링크에서 계약서를 확인하고 서명합니다)</p>
+                <p>고객 서명 링크 (고객이 이 링크에서 계약서를 확인하고 서명합니다{together && ` — ${together} 한 장으로 한 번에 서명`})</p>
                 <div className="inline-fields">
                   <input className="input-text full" readOnly value={signUrl} onFocus={(e) => e.target.select()} />
                   <button type="button" className="btn-dark-sm" onClick={copy}>링크 복사</button>
@@ -78,7 +79,7 @@ export default function ContractViewModal({ contractId, onClose, onChanged }) {
               </>
             ) : (
               <button type="button" className="btn-confirm" onClick={requestSign}>
-                ✍ 고객 전자서명 요청하기
+                ✍ 고객 전자서명 요청하기{together && ` (${together} 한 장으로)`}
               </button>
             )}
           </div>

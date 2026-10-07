@@ -3,6 +3,7 @@
 import http from 'node:http';
 import { handleRpc } from './handler.js';
 import { healthReport } from './health.js';
+import { compressIfUseful } from './compress.js';
 
 const PORT = Number(process.env.API_PORT || 3001);
 
@@ -25,7 +26,7 @@ http
       res.writeHead(400).end();
       return;
     }
-    const out = await handleRpc({ body, headers: req.headers });
+    const out = compressIfUseful(await handleRpc({ body, headers: req.headers }), req.headers['accept-encoding']);
     res.writeHead(out.status, out.headers).end(out.body);
   })
   .listen(PORT, () => console.log(`UFFICE API 서버: http://localhost:${PORT}/api/rpc`));

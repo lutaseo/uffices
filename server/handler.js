@@ -13,7 +13,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import * as services from '../frontend/src/api/services.js';
 import { setRuntimeAdapter } from '../frontend/src/api/runtime.js';
 import { ApiError } from '../frontend/src/api/core.js';
-import { getPool, loadSnapshot, persistChanges, resolveCompanyId, contractByEsignToken } from './pg.js';
+import { getPool, loadSnapshot, persistChanges, resolveCompanyId, contractByEsignToken, fingerprint } from './pg.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { bootstrap } from './bootstrap.js';
 import { COOKIE_NAME, decodeSession, encodeSession, parseCookies, sessionCookie } from './session.js';
@@ -25,7 +25,9 @@ const clone = (v) => JSON.parse(JSON.stringify(v));
 setRuntimeAdapter({
   async loadDb() {
     // 요청 하나 안에서는 같은 기준 데이터(마지막 저장 시점)의 사본을 돌려줌
-    return clone(store.getStore().committed);
+    //   읽기 전용 요청은 저장하지 않으므로 사본 없이 그대로 (계약 수천 건 복사 비용 절약)
+    const ctx = store.getStore();
+    return ctx.readOnly ? ctx.committed : clone(ctx.committed);
   },
   saveDb(db) {
     store.getStore().committed = clone(db);
@@ -85,8 +87,10 @@ const READ_ONLY = new Set([
   'customers.list',
   'customers.findByPhone',
   'contracts.list',
+  'contracts.listCached',
   'contracts.get',
   'contracts.group',
+  'contracts.signBundle',
   'esign.getByToken',
   'notifications.history',
   'reports.contracts',
@@ -119,7 +123,7 @@ const LIGHT_TABLES = {
 const RECEIPT_CALLS = new Set(['contracts.receipt', 'contracts.addPayment', 'contracts.updatePayment', 'contracts.removePayment', 'contracts.update', 'contracts.paymentPhotos']);
 
 // 계약 목록·통계: 저장하지 않는 요청이라 계약의 긴 글·변경이력 없이 읽어도 됨
-const SLIM_CALLS = new Set(['contracts.list', 'reports.contracts']);
+const SLIM_CALLS = new Set(['contracts.list', 'contracts.listCached', 'reports.contracts']);
 
 const STATUS = { UNAUTHORIZED: 401, FORBIDDEN: 403, NOT_FOUND: 404 };
 
@@ -162,9 +166,11 @@ export async function handleRpc({ body, headers }) {
     userAgent: String(headers['user-agent'] || '').slice(0, 300),
     ip: String(headers['x-forwarded-for'] || '').split(',')[0].trim(),
     committed: null,
+    readOnly: READ_ONLY.has(name),
   };
 
   const readOnlyCall = READ_ONLY.has(name);
+  const startedAt = Date.now();
   try {
     await ensureReady();
   } catch (e) {
@@ -189,12 +195,14 @@ export async function handleRpc({ body, headers }) {
       const who = await resolveCompanyId(client, ctx.session);
       scope = who.isSuper ? { allCompanies: true } : { companyId: who.companyId };
       if (LIGHT_TABLES[name]) scope.tables = LIGHT_TABLES[name];
-      if (name === 'contracts.get') scope.signatureFor = args[0]; // 계약서 보기일 때만 서명 이미지 로드
+      if (name === 'contracts.get' || name === 'contracts.signBundle') scope.signatureFor = args[0]; // 계약서 보기일 때만 서명 이미지 로드
       if (RECEIPT_CALLS.has(name)) scope.receiptsFor = args[0]; // 이 계약의 영수증 사진만 로드
       if (SLIM_CALLS.has(name) && readOnlyCall) scope.slimContracts = true; // 목록: 긴 글·변경이력은 읽지 않음
     }
+    const tLoad = Date.now();
     const { db, readOnly } = await loadSnapshot(client, scope);
-    const before = clone(db);
+    const loadMs = Date.now() - tLoad;
+    const before = readOnlyCall ? null : fingerprint(db); // 저장 비교용 지문 (읽기 전용은 생략)
     ctx.committed = db;
 
     let result;
@@ -208,6 +216,9 @@ export async function handleRpc({ body, headers }) {
     // 업무 코드가 저장(saveDb)한 내용만 반영. (예: 로그인 실패 횟수는 오류여도 저장됨)
     if (!readOnlyCall) await persistChanges(client, before, ctx.committed, readOnly);
     await client.query('COMMIT');
+    // 느린 요청 기록 (Vercel 로그에서 '[느림]' 으로 검색) — 다음에 느릴 때 원인을 바로 찾기 위함
+    const totalMs = Date.now() - startedAt;
+    if (totalMs > 3000) console.warn(`[느림] ${name} 전체 ${totalMs}ms (DB 읽기 ${loadMs}ms, 계약 ${db.contracts?.length ?? 0}건)`);
 
     const extraHeaders = ctx.setCookie ? { 'Set-Cookie': ctx.setCookie } : {};
     if (error) {

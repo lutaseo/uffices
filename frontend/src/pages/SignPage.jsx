@@ -80,7 +80,9 @@ export default function SignPage({ token }) {
       const signature = canvasRef.current.toDataURL('image/png');
       await esign.sign(token, { signerName, signature, agreed });
       // 방금 한 서명과 '서명완료' 상태를 계약서에 바로 보여줌
-      setData((d) => ({ ...d, contract: { ...d.contract, esign: { ...d.contract.esign, status: '서명완료', signerName: signerName.trim(), signature, signedAt: new Date().toISOString() } } }));
+      const signedAt = new Date().toISOString();
+      const mark = (c) => ({ ...c, esign: { ...c.esign, status: '서명완료', signerName: signerName.trim(), signature, signedAt } });
+      setData((d) => ({ ...d, contract: mark(d.contract), contracts: (d.contracts || [d.contract]).map(mark) }));
       setDone(true);
     } catch (e) {
       alert(e.message);
@@ -94,7 +96,7 @@ export default function SignPage({ token }) {
   return (
     <div className="sign-page">
       <div className="sign-card">
-        <ContractDocument contract={data.contract} company={data.company} showStatus />
+        <ContractDocument contract={data.contract} contracts={data.contracts} company={data.company} showStatus />
 
         {done ? (
           <div className="sign-done">✅ 서명이 완료되었습니다. 감사합니다.</div>

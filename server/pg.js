@@ -117,19 +117,31 @@ function splitSignature(row) {
 }
 
 // 변경된 행만 저장 (추가/수정/삭제)
+// 저장 전 상태의 '지문'만 만들어 둠 (전체 복사 대신 행마다 JSON 글자 하나) → 쓰기 요청이 가벼워짐
+export function fingerprint(db) {
+  const fp = { __fingerprint: true };
+  for (const key of TABLE_KEYS) {
+    const isContracts = key === 'contracts';
+    const rows = new Map();
+    const sigs = new Map();
+    for (const r of db[key] || []) {
+      const [data, sig] = isContracts ? splitSignature(r) : [r, null];
+      if (sig) sigs.set(r.id, sig);
+      rows.set(r.id, JSON.stringify(data));
+    }
+    fp[key] = { rows, sigs };
+  }
+  return fp;
+}
+
 export async function persistChanges(client, before, after, readOnly) {
+  const fp = before && before.__fingerprint ? before : fingerprint(before);
   for (const key of TABLE_KEYS) {
     if (readOnly.has(key)) continue;
     const table = TABLE_MAP[key];
     const isContracts = key === 'contracts';
-    const prevSig = new Map();
-    const prev = new Map(
-      (before[key] || []).map((r) => {
-        const [data, sig] = isContracts ? splitSignature(r) : [r, null];
-        if (sig) prevSig.set(r.id, sig);
-        return [r.id, JSON.stringify(data)];
-      }),
-    );
+    const prevSig = fp[key].sigs;
+    const prev = fp[key].rows;
     const nextIds = new Set();
     const ids = [];
     const companyIds = [];
@@ -189,6 +201,6 @@ export async function resolveCompanyId(client, session) {
 
 // 서명 링크 → { companyId, contractId } (없으면 null 들)
 export async function contractByEsignToken(client, token) {
-  const r = await rows(client, `SELECT id, company_id FROM contracts WHERE data->'esign'->>'token' = $1`, [String(token || '')]);
+  const r = await rows(client, `SELECT id, company_id FROM contracts WHERE data->'esign'->>'token' = $1 ORDER BY id`, [String(token || '')]);
   return r[0] ? { companyId: Number(r[0].company_id), contractId: Number(r[0].id) } : { companyId: null, contractId: null };
 }

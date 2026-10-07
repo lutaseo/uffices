@@ -5,6 +5,9 @@ export const BRANDS = ['더좋은집', '더스타트'];
 // 구분 (품목)
 export const CATEGORIES = ['줄눈', '청소', '탄성', '새집증후군', '나노코팅', '기타'];
 
+// 고객에게 계약서 한 장으로 묶어 보내는 구분 (같은 계약자·현장일 때). 그 외(나노코팅 등)는 따로
+export const SIGN_TOGETHER = ['줄눈', '청소'];
+
 // 시공종류
 export const WORK_TYPES = ['시공', 'AS', '하자보수'];
 
@@ -49,6 +52,23 @@ export const RECEIPT_TYPES = ['미발행', '현금영수증', '세금계산서',
 export const ISSUE_STATUS = ['', '발행요청', '발행완료', '해당없음'];
 
 // 전자계약(서명) 상태
+// 계약서 '계약 조건' (고정 — 바꿀 때는 여기를 수정)
+//   CONTRACT_TERMS_BY_BRAND 에 브랜드별 조건을 넣으면 그 브랜드 계약서에 사용, 없으면 기본 조건
+//   이미 서명한 계약서는 서명할 때의 조건이 계약에 함께 저장되어 바뀌지 않음
+export const DEFAULT_CONTRACT_TERMS = [
+  '시공 일정은 고객과 협의하여 확정하며, 일정 변경은 시공 3일 전까지 요청해야 합니다.',
+  '잔금은 시공 완료 후 당일 결제를 원칙으로 합니다.',
+  '시공 후 하자 발생 시 보증기간 내 무상 A/S 를 제공합니다.',
+  '고객 사정에 의한 계약 취소 시 계약금은 환불되지 않을 수 있습니다.',
+];
+
+export const CONTRACT_TERMS_BY_BRAND = {
+  // 더좋은집: ['…', '…'],
+  // 더스타트: ['…', '…'],
+};
+
+export const contractTermsFor = (brand) => (CONTRACT_TERMS_BY_BRAND[brand]?.length ? CONTRACT_TERMS_BY_BRAND[brand] : DEFAULT_CONTRACT_TERMS);
+
 export const ESIGN_STATUS = {
   NONE: '미발송',
   WAITING: '서명대기',

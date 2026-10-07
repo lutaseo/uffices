@@ -22,6 +22,8 @@ import {
   RECEPTION_TYPES,
   WORK_STATUS,
   WORK_TYPES,
+  contractTermsFor,
+  SIGN_TOGETHER,
 } from '../constants.js';
 import { inRange, isDateKey, isoToDateKey, today } from '../utils/date.js';
 import { digitsOnly, formatAddress, formatPhone, won } from '../utils/format.js';
@@ -86,6 +88,13 @@ const SORTERS = {
   scheduleDate_asc: (a, b) =>
     (firstScheduleDate(a) || '9999').localeCompare(firstScheduleDate(b) || '9999') || byNo(b, a),
 };
+
+// 짧은 문자열 지문 (변경 확인용, 보안용 아님)
+function shortHash(text) {
+  let h = 0;
+  for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
 
 // ------------------------------------------------------------
 // 입력 정규화 + 검증 (서버 검증에 해당)
@@ -303,6 +312,24 @@ function cleanReceipts(db, c) {
 // 같은 계약 묶음: 같은 계약자 + 같은 현장(아파트/동/호)의 시공들
 const groupKey = (c) => [c.customerId, c.aptName, c.dong, c.ho].join('|');
 
+// 고객에게 한 장으로 보내는 계약서 묶음
+//   - 같은 고객(이름+전화번호) · 같은 회사(브랜드)의 줄눈·청소(SIGN_TOGETHER) 계약끼리
+//   - 나노코팅 등 다른 구분, 다른 브랜드는 따로 한 장
+//   - 서명 전: 그중 아직 서명 안 된 계약 전부 / 서명 후: 그때 함께 서명한 계약들 (같은 서명 링크)
+const signKey = (c) => [String(c.customerName || '').replace(/\s+/g, ''), digitsOnly(c.customerPhone), c.brand].join('|');
+
+function signBundle(db, user, base) {
+  if (base.deletedAt || !SIGN_TOGETHER.includes(base.category)) return [base];
+  const key = signKey(base);
+  const same = visibleContracts(db, user).filter((c) => !c.deletedAt && SIGN_TOGETHER.includes(c.category) && signKey(c) === key);
+  const signed = base.esign?.status === ESIGN_STATUS.SIGNED;
+  const list = signed
+    ? same.filter((c) => c === base || (base.esign.token && c.esign?.token === base.esign.token))
+    : same.filter((c) => c.esign?.status !== ESIGN_STATUS.SIGNED);
+  if (!list.includes(base)) list.push(base);
+  return list.sort((a, b) => a.id - b.id);
+}
+
 // 변경이력용 비교
 function diffContract(db, before, after) {
   const changes = [];
@@ -387,6 +414,31 @@ export const contracts = {
       .filter((c) => matchesFilter(c, filters))
       .map((c) => contractListView(c, user, db))
       .sort(SORTERS[filters.sort] || SORTERS.no_desc);
+  },
+
+  // 목록 + 변경 확인표(version). 화면이 가진 목록과 같으면 목록 없이 "그대로"만 보냄 → 다시 받는 수 MB 절약
+  //   version: 볼 수 있는 계약 수·최근 수정시각·번호합 + 기사/직원 이름 + 내 권한 — 하나라도 바뀌면 달라짐
+  async listCached(filters = {}, knownVersion = '') {
+    const { db, user } = await authorize('contract.view');
+    const all = visibleContracts(db, user);
+    let maxUpd = '';
+    let idSum = 0;
+    all.forEach((c) => {
+      if ((c.updatedAt || '') > maxUpd) maxUpd = c.updatedAt || '';
+      idSum += c.id;
+    });
+    const names = (list) => list.map((x) => `${x.id}:${x.name}`).join(',');
+    const version = [
+      all.length,
+      maxUpd,
+      idSum,
+      shortHash(names(db.engineers) + '|' + names(db.teams || []) + '|' + names(db.users)),
+      user.id,
+      shortHash(JSON.stringify(user.permissions || []) + user.dataScope),
+      shortHash(JSON.stringify(filters)),
+    ].join('/');
+    if (knownVersion && knownVersion === version) return { version, unchanged: true };
+    return { version, rows: await contracts.list(filters) };
   },
 
   async get(id) {
@@ -654,63 +706,96 @@ export const contracts = {
     saveDb(db);
   },
 
+  // 계약서 보기: 고객에게 한 장으로 가는 계약 묶음 (첫 번째 = 요청한 계약 기준 서명 이미지 포함)
+  async signBundle(id) {
+    const { db, user } = await authorize('contract.view');
+    const base = findContract(db, user, id);
+    const list = signBundle(db, user, base);
+    const signature = base.esign?.signature;
+    const views = list.map((c) => {
+      const v = contractView(c, user, db);
+      if (signature && c.esign?.status === ESIGN_STATUS.SIGNED && (c === base || c.esign.token === base.esign.token)) v.esign.signature = signature;
+      return v;
+    });
+    // 묶음 전체가 같은 링크일 때만 기존 링크 사용 (따로 보낸 예전 링크가 섞여 있으면 다시 요청 → 한 장으로 합침)
+    const t = base.esign?.token;
+    const token = t && base.esign.status !== ESIGN_STATUS.NONE && list.every((c) => c.esign?.token === t) ? t : null;
+    return { contracts: views, token, url: token ? signUrlOf(token) : '' };
+  },
+
   // POST /api/contracts/:id/esign  → 고객에게 서명 링크 발송
+  //   같은 계약자·현장의 서명 안 된 계약(줄눈·청소 등)을 한 링크로 묶어 한 번에 서명
   async requestSign(id) {
     const { db, user } = await authorize('esign.send');
     const c = findContract(db, user, id);
     if (c.deletedAt) throw new ApiError('휴지통에 있는 계약입니다.');
     if (c.esign?.status === ESIGN_STATUS.SIGNED) throw new ApiError('이미 서명이 완료된 계약입니다.');
+    const list = signBundle(db, user, c);
     const token = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    c.esign = { ...c.esign, status: ESIGN_STATUS.WAITING, token, requestedAt: nowIso(), requestedBy: user.id };
-    c.updatedAt = nowIso();
-    addHistory(c, user, '전자서명 요청');
+    const together = list.length > 1 ? list.map((x) => x.category).join('·') : '';
+    for (const x of list) {
+      x.esign = { ...x.esign, status: ESIGN_STATUS.WAITING, token, requestedAt: nowIso(), requestedBy: user.id };
+      x.updatedAt = nowIso();
+      addHistory(x, user, together ? `전자서명 요청 (${together} 한 장으로)` : '전자서명 요청');
+    }
     saveDb(db);
-    return { token, url: `${publicBaseUrl().replace(/\/+$/, '')}/sign/${token}` };
+    return { token, url: signUrlOf(token), count: list.length };
   },
 };
+
+const signUrlOf = (token) => `${publicBaseUrl().replace(/\/+$/, '')}/sign/${token}`;
 
 // ============================================================
 // 전자서명 / 고객 모바일웹 (로그인 불필요)   GET/POST /api/esign/:token
 // ============================================================
 
 export const esign = {
+  // 한 링크에 묶인 계약들(줄눈·청소 등)을 한 장의 계약서로
   async getByToken(token) {
     const db = await loadDb();
-    const c = db.contracts.find((x) => x.esign?.token === token && !x.deletedAt);
-    if (!c) throw new ApiError('유효하지 않거나 만료된 서명 링크입니다.', 'NOT_FOUND');
-    const company = db.companies.find((x) => x.id === c.companyId);
-    const view = clone(c);
-    view.no = numberOf(db, c);
-    if (view.esign.status !== ESIGN_STATUS.SIGNED) delete view.esign.signature; // 서명 완료 후에는 고객 본인 서명 표시
-    delete view.history;
-    delete view.memo; // 내부 메모는 고객에게 노출하지 않음
-    delete view.happyCallMemo;
-    delete view.notes;
-    delete view.engineerNote;
-    return { contract: view, company: { name: company.name, ceo: company.ceo, bizNo: company.bizNo, address: company.address } };
+    const list = bundleByToken(db, token);
+    const company = db.companies.find((x) => x.id === list[0].companyId);
+    const signature = list.find((c) => c.esign.signature)?.esign.signature;
+    const views = list.map((c) => {
+      const view = clone(c);
+      view.no = numberOf(db, c);
+      if (view.esign.status === ESIGN_STATUS.SIGNED) {
+        if (signature) view.esign.signature = signature; // 서명 완료 후에는 고객 본인 서명 표시
+      } else delete view.esign.signature;
+      delete view.history;
+      delete view.memo; // 내부 메모는 고객에게 노출하지 않음
+      delete view.happyCallMemo;
+      delete view.notes;
+      delete view.engineerNote;
+      return view;
+    });
+    return { contract: views[0], contracts: views, company: { name: company.name, ceo: company.ceo, bizNo: company.bizNo, address: company.address } };
   },
 
   async sign(token, { signerName, signature, agreed }) {
     const db = await loadDb();
-    const c = db.contracts.find((x) => x.esign?.token === token && !x.deletedAt);
-    if (!c) throw new ApiError('유효하지 않거나 만료된 서명 링크입니다.', 'NOT_FOUND');
-    if (c.esign.status === ESIGN_STATUS.SIGNED) throw new ApiError('이미 서명이 완료된 계약입니다.');
+    const list = bundleByToken(db, token);
+    if (list.some((c) => c.esign.status === ESIGN_STATUS.SIGNED)) throw new ApiError('이미 서명이 완료된 계약입니다.');
     if (!agreed) throw new ApiError('계약 내용에 동의해 주세요.');
     if (!signerName?.trim()) throw new ApiError('서명자 성함을 입력해 주세요.');
     if (!signature) throw new ApiError('서명을 해 주세요.');
-    c.esign = {
-      ...c.esign,
-      status: ESIGN_STATUS.SIGNED,
-      signerName: signerName.trim(),
-      signature,
-      signedAt: nowIso(),
-      ...(await clientInfo()), // 서명 증빙: 접속 기기(서버에서는 IP 포함)
-    };
-    c.updatedAt = nowIso();
-    addHistory(c, { id: null, name: `고객(${signerName.trim()})`, role: 'CUSTOMER' }, '전자서명 완료');
+    const info = await clientInfo(); // 서명 증빙: 접속 기기(서버에서는 IP 포함)
+    const signedAt = nowIso();
+    const terms = contractTermsFor(list[0].brand); // 서명 당시 계약 조건 보관 (나중에 조건을 바꿔도 그대로)
+    for (const c of list) {
+      c.esign = { ...c.esign, status: ESIGN_STATUS.SIGNED, signerName: signerName.trim(), signature, signedAt, terms, ...info };
+      c.updatedAt = signedAt;
+      addHistory(c, { id: null, name: `고객(${signerName.trim()})`, role: 'CUSTOMER' }, '전자서명 완료');
+    }
     saveDb(db);
   },
 };
+
+function bundleByToken(db, token) {
+  const list = token ? db.contracts.filter((x) => x.esign?.token === token && !x.deletedAt).sort((a, b) => a.id - b.id) : [];
+  if (!list.length) throw new ApiError('유효하지 않거나 만료된 서명 링크입니다.', 'NOT_FOUND');
+  return list;
+}
 
 // ============================================================
 // 알림톡   POST /api/notifications   (서버에서 비즈고 API 호출)
