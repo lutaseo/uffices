@@ -306,6 +306,52 @@ function mySchedule(db, me, c, s, stepIndex) {
   };
 }
 
+// 같은 계약자·현장 (계약 상세 묶음과 같은 기준)
+const siteKey = (c) => [c.customerId, c.aptName, c.dong, c.ho].join('|');
+
+function engineerContractView(db, me, c) {
+  const a = calcAmounts(c);
+  return {
+    id: c.id,
+    no: numberOf(db, c),
+    brand: c.brand,
+    category: c.category,
+    receptionType: c.receptionType || '',
+    workType: c.workType,
+    status: c.status,
+    completedDate: c.completedDate || '',
+    contractDate: c.contractDate,
+    ownerName: db.users.find((u) => u.id === c.ownerId)?.name || '',
+    customerName: c.customerName,
+    customerPhone: c.customerPhone,
+    customerPhone2: c.customerPhone2 || '',
+    aptName: c.aptName || '',
+    dong: c.dong || '',
+    ho: c.ho || '',
+    aptType: c.aptType || '',
+    area: c.area || '',
+    address: formatAddress(c),
+    moveInDate: c.moveInDate || '',
+    lineItems: (c.lineItems || []).map((l) => ({ name: l.name, detail: l.detail || '', qty: l.qty })),
+    items: c.items || '',
+    customerNote: c.customerNote || '',
+    engineerNote: c.engineerNote || '',
+    amounts: { actual: a.actual - a.canceled, paid: a.paid - a.refund, balance: a.balance }, // 현장 잔금 수령용 요약
+    schedules: c.schedules.map((s, i) => ({
+      stepIndex: i,
+      mine: isMine(me, s),
+      date: s.date,
+      time: s.time,
+      ampm: s.ampm,
+      memo: isMine(me, s) ? s.memo || '' : '',
+      assigneeName: assigneeOf(db, s).assigneeName,
+      mobileStatus: s.mobileStatus || '',
+      mobileMemo: isMine(me, s) ? s.mobileMemo || '' : '',
+      reportedAt: s.reportedAt,
+    })),
+  };
+}
+
 function isMine(me, s) {
   return s.assignType === 'team' ? !!me.teamId && s.teamId === me.teamId : s.engineerId === me.engineerId;
 }
@@ -322,44 +368,19 @@ export const engineerApp = {
     return out.sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''));
   },
 
-  // 계약 상세 (기사 본인에게 배정된 계약만) — 단가·내부 메모·상담내역·변경이력은 보내지 않음
+  // 계약 상세 (기사 본인에게 배정된 계약만) — 실장 계약 상세처럼 같은 계약자·현장 시공 묶음으로
+  //   단가·입금 상세(카드번호 등)·내부 메모·상담내역·변경이력은 보내지 않음
   async contract(contractId) {
     const { db, user } = await authorizeEngineer();
-    const c = db.contracts.find((x) => x.id === Number(contractId) && x.companyId === user.companyId && !x.deletedAt);
-    if (!c || !c.schedules.some((s) => isMine(user, s))) throw new ApiError('본인에게 배정된 계약이 아닙니다.', 'FORBIDDEN');
-    const a = calcAmounts(c);
-    return {
-      id: c.id,
-      no: numberOf(db, c),
-      brand: c.brand,
-      category: c.category,
-      workType: c.workType,
-      status: c.status,
-      contractDate: c.contractDate,
-      customerName: c.customerName,
-      customerPhone: c.customerPhone,
-      customerPhone2: c.customerPhone2 || '',
-      address: formatAddress(c),
-      area: c.area || '',
-      moveInDate: c.moveInDate || '',
-      lineItems: (c.lineItems || []).map((l) => ({ name: l.name, detail: l.detail || '', qty: l.qty })),
-      items: c.items || '',
-      customerNote: c.customerNote || '',
-      engineerNote: c.engineerNote || '',
-      balance: a.balance, // 현장 잔금 수령용
-      schedules: c.schedules.map((s, i) => ({
-        stepIndex: i,
-        mine: isMine(user, s),
-        date: s.date,
-        time: s.time,
-        ampm: s.ampm,
-        memo: isMine(user, s) ? s.memo || '' : '',
-        assigneeName: assigneeOf(db, s).assigneeName,
-        mobileStatus: s.mobileStatus || '',
-        mobileMemo: isMine(user, s) ? s.mobileMemo || '' : '',
-        reportedAt: s.reportedAt,
-      })),
-    };
+    const assigned = (c) => c.companyId === user.companyId && !c.deletedAt && c.schedules.some((s) => isMine(user, s));
+    const base = db.contracts.find((x) => x.id === Number(contractId));
+    if (!base || !assigned(base)) throw new ApiError('본인에게 배정된 계약이 아닙니다.', 'FORBIDDEN');
+    const key = siteKey(base);
+    const contracts = db.contracts
+      .filter((c) => assigned(c) && siteKey(c) === key)
+      .sort((x, y) => x.id - y.id)
+      .map((c) => engineerContractView(db, user, c));
+    return { selectedId: base.id, contracts };
   },
 
   // 기사 현장 보고 → 계약서 '모바일웹 ①②③' 에 표시
