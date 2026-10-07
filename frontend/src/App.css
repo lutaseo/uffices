@@ -4018,12 +4018,19 @@ input[type='month'] {
   font-size: 14px;
 }
 
-.eng-stats tr.eng-jobs-row > td {
-  background: #f8fafc;
-  padding: 8px;
+.eng-pick {
+  min-width: 160px;
+  font-weight: 600;
 }
 
-.eng-stats .eng-jobs {
-  width: 100%;
-  font-size: 13px;
+.eng-summary {
+  margin: 4px 0 10px;
+}
+
+.eng-done-only {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 8px;
+  font-size: 14px;
 }
