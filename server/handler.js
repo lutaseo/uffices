@@ -71,7 +71,6 @@ const SERVICES = {
   engineerApp: services.engineerApp,
   scheduleSettings: services.scheduleSettings,
   imports: services.imports,
-  contractTerms: services.contractTerms,
 };
 const BLOCKED = new Set(['auth.resetDemoData']);
 
@@ -102,7 +101,6 @@ const READ_ONLY = new Set([
   'contracts.receipt',
   'companies.publicInfo',
   'scheduleSettings.get',
-  'contractTerms.get',
 ]);
 
 // 트래픽 절약: 자주 불리는 가벼운 요청은 필요한 업체 표만 읽음 (나머지는 계약 등 전체)
@@ -119,7 +117,6 @@ const LIGHT_TABLES = {
   'products.list': ['products'],
   'apartments.list': ['apartments'],
   'scheduleSettings.get': [],
-  'contractTerms.get': [],
 };
 
 // 입금 영수증 사진을 읽거나 바꾸는 요청 (첫 인자 = 계약 번호)

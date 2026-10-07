@@ -1,11 +1,10 @@
 import React from 'react';
 import { calcAmounts, timeLabel } from '../utils/contract.js';
 import { formatAddress, won } from '../utils/format.js';
-import { DEFAULT_CONTRACT_TERMS } from '../constants.js';
+import { contractTermsFor } from '../constants.js';
 
-// 계약 조건: 서명한 계약서는 서명 당시 조건, 아니면 업체 설정(없으면 기본값)
-export const termsOf = (esign, company) =>
-  esign?.status === '서명완료' && esign.terms?.length ? esign.terms : company?.contractTerms?.length ? company.contractTerms : DEFAULT_CONTRACT_TERMS;
+// 계약 조건: 서명한 계약서는 서명 당시 조건, 아니면 브랜드별 고정 조건
+const termsOf = (esign, brand) => (esign?.status === '서명완료' && esign.terms?.length ? esign.terms : contractTermsFor(brand));
 
 
 
@@ -21,7 +20,7 @@ export default function ContractDocument({ contract, contracts, company, showAmo
   const amountOn = showAmount && !list.some((c) => c.amountHidden);
   const sums = list.map(calcAmounts).reduce((t, a) => ({ actual: t.actual + a.actual, paid: t.paid + a.paid, balance: t.balance + a.balance }), { actual: 0, paid: 0, balance: 0 });
   const workType = !multi && first.workType && first.workType !== '시공' ? `${first.workType} ` : '';
-  const terms = termsOf(list.find((c) => c.esign?.terms)?.esign || esign, company);
+  const terms = termsOf(list.find((c) => c.esign?.terms)?.esign || esign, first.brand);
   const phones = uniq([first.customerPhone, first.customerPhone2]).join(' / ');
 
   return (
@@ -74,7 +73,7 @@ export default function ContractDocument({ contract, contracts, company, showAmo
             <td>{first.moveInDate || '-'}</td>
           </tr>
           {list.map((c, i) => (
-            <Part key={c.id ?? i} c={c} multi={multi} amountOn={amountOn} />
+            <Part key={c.id ?? i} c={c} multi={multi} amountOn={amountOn} site={formatAddress(c) !== formatAddress(first) ? formatAddress(c) : ''} />
           ))}
           {multi && amountOn && (
             <tr className="doc-total">
@@ -128,7 +127,7 @@ export default function ContractDocument({ contract, contracts, company, showAmo
 }
 
 // 시공 한 건(줄눈 / 청소 …)의 내용·일정·금액
-function Part({ c, multi, amountOn }) {
+function Part({ c, multi, amountOn, site }) {
   const a = calcAmounts(c);
   const label = (t) => (multi ? `${c.category} ${t}` : t);
   return (
@@ -139,6 +138,12 @@ function Part({ c, multi, amountOn }) {
             {c.category}
             {c.workType && c.workType !== '시공' ? ` ${c.workType}` : ''} 시공 <span className="sub-text">No.{c.no ?? '-'}</span>
           </th>
+        </tr>
+      )}
+      {site && (
+        <tr>
+          <th>{label('시공 현장')}</th>
+          <td colSpan={3}>{site}</td>
         </tr>
       )}
       <tr>

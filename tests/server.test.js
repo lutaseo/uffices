@@ -520,24 +520,25 @@ test('목록 변경 확인(listCached): 그대로면 목록 없이 응답, 수�
   assert.ok(mine.rows, '다른 계정은 같은 확인표를 써도 새 목록');
 });
 
-test('줄눈·청소 한 장 계약서: 한 링크로 묶어 한 번에 서명, 다른 현장·이미 서명한 건은 제외', async () => {
+test('줄눈·청소 한 장 계약서: 같은 고객(이름+전화)·같은 브랜드끼리 한 링크로 서명, 코팅·다른 브랜드·이미 서명한 건은 따로', async () => {
   const site = { ...base, customerName: '한장고객', customerPhone: '010-6060-1212', aptName: '한장아파트', dong: '102', ho: '303' };
   const a = await admin.ok('contracts', 'create', { ...site, category: '줄눈', totalAmount: 500000, customerNote: '줄눈 안내' });
   const b = await admin.ok('contracts', 'create', { ...site, category: '청소', totalAmount: 300000, customerNote: '청소 안내' });
-  const other = await admin.ok('contracts', 'create', { ...site, ho: '404', category: '청소' }); // 다른 호수
+  const otherSite = await admin.ok('contracts', 'create', { ...site, ho: '404', category: '청소' }); // 같은 고객의 다른 호수 → 같이
+  const other = await admin.ok('contracts', 'create', { ...site, customerPhone: '010-6060-9999', category: '청소' }); // 전화번호 다르면 따로
   const coat = await admin.ok('contracts', 'create', { ...site, category: '나노코팅' }); // 코팅은 같은 현장이어도 따로
   const otherBrand = await admin.ok('contracts', 'create', { ...site, brand: '더스타트', category: '청소' }); // 브랜드가 다르면 따로
 
   const before = await admin.ok('contracts', 'signBundle', b.id);
-  assert.deepEqual(before.contracts.map((c) => c.id), [a.id, b.id], '서명 전: 같은 현장의 줄눈·청소 함께');
+  assert.deepEqual(before.contracts.map((c) => c.id), [a.id, b.id, otherSite.id], '서명 전: 같은 고객(이름+전화)의 줄눈·청소 함께');
   assert.equal(before.token, null, '아직 링크 없음');
 
   const { token, count } = await admin.ok('contracts', 'requestSign', a.id);
-  assert.equal(count, 2);
+  assert.equal(count, 3);
   const anon = client();
   const view = await anon.ok('esign', 'getByToken', token);
-  assert.deepEqual(view.contracts.map((c) => c.category), ['줄눈', '청소']);
-  assert.deepEqual(view.contracts.map((c) => c.customerNote), ['줄눈 안내', '청소 안내']);
+  assert.deepEqual(view.contracts.map((c) => c.category), ['줄눈', '청소', '청소']);
+  assert.deepEqual(view.contracts.map((c) => c.customerNote || ''), ['줄눈 안내', '청소 안내', '']);
   assert.ok(view.contracts.every((c) => c.memo === undefined && c.history === undefined));
   assert.equal((await admin.ok('contracts', 'signBundle', b.id)).token, token, '청소 쪽에서 봐도 같은 링크');
 
@@ -548,7 +549,7 @@ test('줄눈·청소 한 장 계약서: 한 링크로 묶어 한 번에 서명, 
     assert.equal(c.esign.status, '서명완료');
     assert.equal(c.esign.signature, img, '두 계약 모두 서명 이미지 저장');
   }
-  assert.equal((await admin.ok('contracts', 'get', other.id)).esign.status, '미발송', '다른 현장은 그대로');
+  assert.equal((await admin.ok('contracts', 'get', other.id)).esign.status, '미발송', '전화번호가 다른 고객은 그대로');
   assert.equal((await admin.ok('contracts', 'get', coat.id)).esign.status, '미발송', '코팅은 따로');
   assert.equal((await admin.ok('contracts', 'get', otherBrand.id)).esign.status, '미발송', '다른 브랜드는 따로');
   assert.deepEqual((await admin.ok('contracts', 'signBundle', coat.id)).contracts.map((c) => c.id), [coat.id], '코팅 계약서는 한 장 따로');
@@ -562,32 +563,14 @@ test('줄눈·청소 한 장 계약서: 한 링크로 묶어 한 번에 서명, 
   const later = await admin.ok('contracts', 'signBundle', c3.id);
   assert.deepEqual(later.contracts.map((c) => c.id), [c3.id], '이미 서명한 줄눈·청소는 다시 서명하지 않음');
   const signedView = await admin.ok('contracts', 'signBundle', a.id);
-  assert.deepEqual(signedView.contracts.map((c) => c.id), [a.id, b.id], '서명한 계약서는 함께 서명한 묶음으로 보임');
+  assert.deepEqual(signedView.contracts.map((c) => c.id), [a.id, b.id, otherSite.id], '서명한 계약서는 함께 서명한 묶음으로 보임');
   assert.ok(signedView.contracts.every((c) => c.esign.signature === img));
 });
 
-test('계약 조건 설정: 관리자가 수정, 고객 서명 화면에 반영, 서명한 계약서는 서명 당시 조건 유지', async () => {
-  const def = await admin.ok('contractTerms', 'get');
-  assert.equal(def.isDefault, true);
-  assert.ok(def.terms.length > 0);
-  assert.notEqual((await admin('contractTerms', 'save', [])).status, 200, '빈 조건은 저장 불가');
-
-  const mine = ['하자 보증기간은 시공일로부터 1년입니다.', '잔금은 시공 당일 결제합니다.'];
-  const saved = await admin.ok('contractTerms', 'save', [...mine, '  ']);
-  assert.deepEqual(saved.terms, mine, '빈 줄은 빠짐');
-  assert.deepEqual((await admin.ok('auth', 'me')).company.contractTerms, mine, '내부 계약서 보기에도 반영');
-
-  const c = await admin.ok('contracts', 'create', { ...base, customerName: '약관고객', customerPhone: '010-3434-5656' });
+test('계약 조건: 서명할 때 조건을 계약에 함께 보관 (나중에 조건을 바꿔도 서명한 계약서는 그대로)', async () => {
+  const c = await admin.ok('contracts', 'create', { ...base, customerName: '약관고객', customerPhone: '010-3434-5656', category: '나노코팅' });
   const { token } = await admin.ok('contracts', 'requestSign', c.id);
-  const anon = client();
-  assert.deepEqual((await anon.ok('esign', 'getByToken', token)).company.contractTerms, mine, '서명 화면에 바뀐 조건');
-  await anon.ok('esign', 'sign', token, { signerName: '약관고객', signature: 'data:image/png;base64,QQ==', agreed: true });
-
-  await admin.ok('contractTerms', 'save', ['완전히 새 조건']);
-  assert.deepEqual((await admin.ok('contracts', 'get', c.id)).esign.terms, mine, '서명한 계약서는 서명 당시 조건 보관');
-  assert.deepEqual((await anon.ok('esign', 'getByToken', token)).contracts[0].esign.terms, mine);
-
-  const r = await admin.ok('contractTerms', 'reset');
-  assert.equal(r.isDefault, true);
-  assert.deepEqual(r.terms, def.terms);
+  await client().ok('esign', 'sign', token, { signerName: '약관고객', signature: 'data:image/png;base64,QQ==', agreed: true });
+  const signed = await admin.ok('contracts', 'get', c.id);
+  assert.ok(Array.isArray(signed.esign.terms) && signed.esign.terms.length > 0, '서명 당시 조건 저장');
 });

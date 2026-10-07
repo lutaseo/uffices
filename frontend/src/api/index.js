@@ -33,5 +33,4 @@ export const {
   engineerApp,
   scheduleSettings,
   imports,
-  contractTerms,
 } = impl;

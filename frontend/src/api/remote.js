@@ -60,7 +60,6 @@ export const SERVICE_NAMES = [
   'engineerApp',
   'scheduleSettings',
   'imports',
-  'contractTerms',
 ];
 
 export const remoteServices = Object.fromEntries(SERVICE_NAMES.map((name) => [name, proxy(name)]));

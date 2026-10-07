@@ -4,7 +4,7 @@
 // ============================================================
 
 import { loadDb, saveDb, nextId, publicBaseUrl, clientInfo } from './runtime.js';
-import { ApiError, authorize, clone, companyOf, findContract, isLoginIdTaken, nowIso, session, visibleContracts } from './core.js';
+import { ApiError, authorize, clone, findContract, isLoginIdTaken, nowIso, visibleContracts } from './core.js';
 import { addHistory, assigneeOf, contractListView, contractView, hideAmounts } from './views.js';
 import { assertAssignable } from './schedule.js';
 import { invalidateNumbers, numberOf } from './numbering.js';
@@ -22,7 +22,7 @@ import {
   RECEPTION_TYPES,
   WORK_STATUS,
   WORK_TYPES,
-  DEFAULT_CONTRACT_TERMS,
+  contractTermsFor,
   SIGN_TOGETHER,
 } from '../constants.js';
 import { inRange, isDateKey, isoToDateKey, today } from '../utils/date.js';
@@ -312,14 +312,16 @@ function cleanReceipts(db, c) {
 // 같은 계약 묶음: 같은 계약자 + 같은 현장(아파트/동/호)의 시공들
 const groupKey = (c) => [c.customerId, c.aptName, c.dong, c.ho].join('|');
 
-// 고객에게 한 장으로 보내는 계약서 묶음 (줄눈·청소 등 같은 계약자·현장의 시공들)
-//   - 줄눈·청소(SIGN_TOGETHER)끼리, 같은 브랜드끼리만 묶음. 나노코팅 등 다른 구분·다른 브랜드는 따로 한 장
-//   - 서명 전: 같은 묶음에서 아직 서명 안 된 계약 전부
-//   - 서명 후: 그때 함께 서명한 계약들 (같은 서명 링크)
+// 고객에게 한 장으로 보내는 계약서 묶음
+//   - 같은 고객(이름+전화번호) · 같은 회사(브랜드)의 줄눈·청소(SIGN_TOGETHER) 계약끼리
+//   - 나노코팅 등 다른 구분, 다른 브랜드는 따로 한 장
+//   - 서명 전: 그중 아직 서명 안 된 계약 전부 / 서명 후: 그때 함께 서명한 계약들 (같은 서명 링크)
+const signKey = (c) => [String(c.customerName || '').replace(/\s+/g, ''), digitsOnly(c.customerPhone), c.brand].join('|');
+
 function signBundle(db, user, base) {
   if (base.deletedAt || !SIGN_TOGETHER.includes(base.category)) return [base];
-  const key = groupKey(base);
-  const same = visibleContracts(db, user).filter((c) => !c.deletedAt && groupKey(c) === key && c.brand === base.brand && SIGN_TOGETHER.includes(c.category));
+  const key = signKey(base);
+  const same = visibleContracts(db, user).filter((c) => !c.deletedAt && SIGN_TOGETHER.includes(c.category) && signKey(c) === key);
   const signed = base.esign?.status === ESIGN_STATUS.SIGNED;
   const list = signed
     ? same.filter((c) => c === base || (base.esign.token && c.esign?.token === base.esign.token))
@@ -767,7 +769,7 @@ export const esign = {
       delete view.engineerNote;
       return view;
     });
-    return { contract: views[0], contracts: views, company: { name: company.name, ceo: company.ceo, bizNo: company.bizNo, address: company.address, contractTerms: termsOf(company) } };
+    return { contract: views[0], contracts: views, company: { name: company.name, ceo: company.ceo, bizNo: company.bizNo, address: company.address } };
   },
 
   async sign(token, { signerName, signature, agreed }) {
@@ -779,48 +781,13 @@ export const esign = {
     if (!signature) throw new ApiError('서명을 해 주세요.');
     const info = await clientInfo(); // 서명 증빙: 접속 기기(서버에서는 IP 포함)
     const signedAt = nowIso();
-    const terms = termsOf(db.companies.find((x) => x.id === list[0].companyId)); // 서명 당시 계약 조건 보관 (나중에 설정을 바꿔도 그대로)
+    const terms = contractTermsFor(list[0].brand); // 서명 당시 계약 조건 보관 (나중에 조건을 바꿔도 그대로)
     for (const c of list) {
       c.esign = { ...c.esign, status: ESIGN_STATUS.SIGNED, signerName: signerName.trim(), signature, signedAt, terms, ...info };
       c.updatedAt = signedAt;
       addHistory(c, { id: null, name: `고객(${signerName.trim()})`, role: 'CUSTOMER' }, '전자서명 완료');
     }
     saveDb(db);
-  },
-};
-
-// ============================================================
-// 계약 조건(약관) 설정   설정 > 계약조건설정
-//   고객 계약서·서명 화면의 '계약 조건'. 서명한 계약서는 서명 당시 조건을 그대로 보관
-// ============================================================
-
-const termsOf = (company) => (company?.contractTerms?.length ? company.contractTerms : DEFAULT_CONTRACT_TERMS);
-
-export const contractTerms = {
-  async get() {
-    const { db, user } = await session();
-    const company = companyOf(db, user);
-    return { terms: clone(termsOf(company)), isDefault: !company?.contractTerms?.length };
-  },
-
-  async save(list) {
-    const { db, user } = await authorize('settings.manage');
-    const terms = (Array.isArray(list) ? list : []).map((t) => String(t || '').trim()).filter(Boolean);
-    if (!terms.length) throw new ApiError('계약 조건을 한 개 이상 입력해 주세요.');
-    if (terms.length > 30) throw new ApiError('계약 조건은 30개까지 입력할 수 있습니다.');
-    if (terms.some((t) => t.length > 1000)) throw new ApiError('조항 하나는 1,000자까지 입력할 수 있습니다.');
-    const company = companyOf(db, user);
-    company.contractTerms = terms;
-    saveDb(db);
-    return { terms: clone(terms), isDefault: false };
-  },
-
-  async reset() {
-    const { db, user } = await authorize('settings.manage');
-    const company = companyOf(db, user);
-    delete company.contractTerms;
-    saveDb(db);
-    return { terms: clone(DEFAULT_CONTRACT_TERMS), isDefault: true };
   },
 };
 
