@@ -597,3 +597,27 @@ test('기사모바일 계약 상세: 본인 배정 계약만, 단가·내부 메
   const other = await admin.ok('contracts', 'create', { ...base, customerName: '남의계약', customerPhone: '010-2323-4545' });
   assert.equal((await eng('engineerApp', 'contract', other.id)).status, 403, '배정 안 된 계약은 차단');
 });
+
+test('통계 시공기사별: 시공일 기준 기사마다 배정·완료·구분별 완료, 취소 제외', async () => {
+  const engs = await admin.ok('engineers', 'list');
+  const en = engs[0];
+  const sch = (date, extra = {}) => ({ date, ampm: 'AM', assignType: 'engineer', engineerId: String(en.id), ...extra });
+  const mk = (category, schedules, extra = {}) =>
+    admin.ok('contracts', 'create', { ...base, customerName: `기사통계${category}`, customerPhone: '010-8181-0000', category, schedules, ...extra });
+  const from = '2031-03-01', to = '2031-03-31';
+  const a = await mk('줄눈', [sch('2031-03-05'), sch('2031-04-02')]); // 2차는 기간 밖
+  await mk('청소', [sch('2031-03-06')]);
+  const x = await mk('줄눈', [sch('2031-03-07')]);
+  await admin.ok('contracts', 'update', a.id, { ...(await admin.ok('contracts', 'get', a.id)), status: '시공완료', completedDate: '2031-03-05' });
+  await admin.ok('contracts', 'update', x.id, { ...(await admin.ok('contracts', 'get', x.id)), status: '취소', canceledDate: '2031-03-01', cancelReason: '고객 취소' });
+
+  const rows = await admin.ok('reports', 'engineers', { from, to });
+  const r = rows.find((y) => y.name === en.name);
+  assert.equal(r.assigned, 2, '기간 안 회차만, 취소 제외');
+  assert.equal(r.done, 1);
+  assert.deepEqual(r.byCategory, { 줄눈: 1 });
+  assert.equal(r.jobs.length, 2);
+  const eng = client();
+  await eng.ok('auth', 'login', 'gong', 'gong1234');
+  assert.equal((await eng('reports', 'engineers', { from, to })).status, 403, '기사 계정은 통계 불가');
+});

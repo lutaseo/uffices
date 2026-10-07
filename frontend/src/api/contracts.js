@@ -845,6 +845,33 @@ export const reports = {
       .map((c) => contractListView(c, user, db))
       .map((v) => (can(user, 'sales.total') ? v : hideAmounts(v))); // 매출 합계 권한 없으면 통계에 금액 없음
   },
+
+  // 시공기사별: 시공 회차(①②③) 날짜 기준으로 기사(팀)마다 배정·완료 집계 (취소 계약 제외)
+  //   완료 = 기사가 '시공완료' 보고했거나 계약이 시공완료 상태
+  async engineers({ from, to } = {}) {
+    const { db, user } = await authorize('stats.view');
+    const map = {};
+    for (const c of visibleContracts(db, user)) {
+      if (c.deletedAt || c.status === '취소') continue;
+      c.schedules.forEach((s, i) => {
+        if (!s.date || !inRange(s.date, from, to)) return;
+        const who = assigneeOf(db, s).assigneeName;
+        if (!who) return;
+        const done = s.mobileStatus === '시공완료' || c.status === '시공완료';
+        const r = (map[who] = map[who] || { name: who, assigned: 0, done: 0, postponed: 0, unable: 0, byCategory: {}, jobs: [] });
+        r.assigned += 1;
+        if (done) {
+          r.done += 1;
+          r.byCategory[c.category] = (r.byCategory[c.category] || 0) + 1;
+        } else if (s.mobileStatus === '시공연기요청') r.postponed += 1;
+        else if (s.mobileStatus === '시공불가') r.unable += 1;
+        r.jobs.push({ contractId: c.id, no: numberOf(db, c), date: s.date, step: i + 1, category: c.category, workType: c.workType, customerName: c.customerName, site: formatAddress(c), done, mobileStatus: s.mobileStatus || '' });
+      });
+    }
+    return Object.values(map)
+      .map((r) => ({ ...r, jobs: r.jobs.sort((a, b) => a.date.localeCompare(b.date)) }))
+      .sort((a, b) => b.done - a.done || a.name.localeCompare(b.name));
+  },
 };
 
 // ============================================================

@@ -94,6 +94,7 @@ const READ_ONLY = new Set([
   'esign.getByToken',
   'notifications.history',
   'reports.contracts',
+  'reports.engineers',
   'schedules.list',
   'engineerOffs.list',
   'engineerApp.mySchedules',
@@ -124,7 +125,7 @@ const LIGHT_TABLES = {
 const RECEIPT_CALLS = new Set(['contracts.receipt', 'contracts.addPayment', 'contracts.updatePayment', 'contracts.removePayment', 'contracts.update', 'contracts.paymentPhotos']);
 
 // 계약 목록·통계: 저장하지 않는 요청이라 계약의 긴 글·변경이력 없이 읽어도 됨
-const SLIM_CALLS = new Set(['contracts.list', 'contracts.listCached', 'reports.contracts']);
+const SLIM_CALLS = new Set(['contracts.list', 'contracts.listCached', 'reports.contracts', 'reports.engineers']);
 
 const STATUS = { UNAUTHORIZED: 401, FORBIDDEN: 403, NOT_FOUND: 404 };
 
