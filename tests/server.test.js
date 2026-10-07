@@ -605,7 +605,7 @@ test('통계 시공기사별: 시공일 기준 기사마다 배정·완료·구�
   const mk = (category, schedules, extra = {}) =>
     admin.ok('contracts', 'create', { ...base, customerName: `기사통계${category}`, customerPhone: '010-8181-0000', category, schedules, ...extra });
   const from = '2031-03-01', to = '2031-03-31';
-  const a = await mk('줄눈', [sch('2031-03-05'), sch('2031-04-02')]); // 2차는 기간 밖
+  const a = await mk('줄눈', [sch('2031-03-05'), sch('2031-03-20')], { totalAmount: 1000000, discount: 100000, payments: [{ date: '2031-02-01', kind: '계약금', method: '계좌이체', amount: 200000 }] }); // 같은 기사 1·2차
   await mk('청소', [sch('2031-03-06')]);
   const x = await mk('줄눈', [sch('2031-03-07')]);
   await admin.ok('contracts', 'update', a.id, { ...(await admin.ok('contracts', 'get', a.id)), status: '시공완료', completedDate: '2031-03-05' });
@@ -613,10 +613,20 @@ test('통계 시공기사별: 시공일 기준 기사마다 배정·완료·구�
 
   const rows = await admin.ok('reports', 'engineers', { from, to });
   const r = rows.find((y) => y.name === en.name);
-  assert.equal(r.assigned, 2, '기간 안 회차만, 취소 제외');
-  assert.equal(r.done, 1);
-  assert.deepEqual(r.byCategory, { 줄눈: 1 });
-  assert.equal(r.jobs.length, 2);
+  assert.equal(r.assigned, 3, '기간 안 회차만, 취소 제외');
+  assert.equal(r.done, 2);
+  assert.deepEqual(r.byCategory, { 줄눈: 2 });
+  assert.equal(r.jobs.length, 3);
+  assert.deepEqual(r.doneAmounts, { total: 1000000, discount: 100000, deposit: 200000, paid: 200000, balance: 700000 }, '같은 계약 두 회차여도 금액은 한 번');
+  assert.equal(r.jobs.filter((j) => j.money).length, 2, '두 번째 회차는 금액 없음');
+  const boss = client();
+  await boss.ok('auth', 'login', 'admin', 'admin1234');
+  await boss.ok('users', 'create', { role: 'MANAGER', loginId: 'engstatmgr', password: 'engstat1234', name: '통계실장', permissions: ['contract.view', 'contract.amount', 'stats.view'], dataScope: 'all' });
+  const mgr = client();
+  await mgr.ok('auth', 'login', 'engstatmgr', 'engstat1234');
+  const m = (await mgr.ok('reports', 'engineers', { from, to })).find((y) => y.name === en.name);
+  assert.equal(m.done, 2);
+  assert.ok(m.amounts === undefined && m.jobs.every((j) => j.money === undefined), '매출 합계 권한 없는 실장은 금액 없음');
   const eng = client();
   await eng.ok('auth', 'login', 'gong', 'gong1234');
   assert.equal((await eng('reports', 'engineers', { from, to })).status, 403, '기사 계정은 통계 불가');

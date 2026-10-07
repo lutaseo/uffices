@@ -4034,3 +4034,19 @@ input[type='month'] {
   margin: 4px 0 8px;
   font-size: 14px;
 }
+
+.eng-summary.money .amount-card b {
+  font-size: 18px;
+}
+
+@media screen and (min-width: 900px) {
+  .eng-summary.money {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+@media screen and (max-width: 600px) {
+  .eng-summary.money {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
