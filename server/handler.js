@@ -98,6 +98,7 @@ const READ_ONLY = new Set([
   'engineerOffs.list',
   'engineerApp.mySchedules',
   'engineerApp.myOffs',
+  'engineerApp.contract',
   'contracts.receipt',
   'companies.publicInfo',
   'scheduleSettings.get',

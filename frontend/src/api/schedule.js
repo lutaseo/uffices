@@ -322,6 +322,46 @@ export const engineerApp = {
     return out.sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''));
   },
 
+  // 계약 상세 (기사 본인에게 배정된 계약만) — 단가·내부 메모·상담내역·변경이력은 보내지 않음
+  async contract(contractId) {
+    const { db, user } = await authorizeEngineer();
+    const c = db.contracts.find((x) => x.id === Number(contractId) && x.companyId === user.companyId && !x.deletedAt);
+    if (!c || !c.schedules.some((s) => isMine(user, s))) throw new ApiError('본인에게 배정된 계약이 아닙니다.', 'FORBIDDEN');
+    const a = calcAmounts(c);
+    return {
+      id: c.id,
+      no: numberOf(db, c),
+      brand: c.brand,
+      category: c.category,
+      workType: c.workType,
+      status: c.status,
+      contractDate: c.contractDate,
+      customerName: c.customerName,
+      customerPhone: c.customerPhone,
+      customerPhone2: c.customerPhone2 || '',
+      address: formatAddress(c),
+      area: c.area || '',
+      moveInDate: c.moveInDate || '',
+      lineItems: (c.lineItems || []).map((l) => ({ name: l.name, detail: l.detail || '', qty: l.qty })),
+      items: c.items || '',
+      customerNote: c.customerNote || '',
+      engineerNote: c.engineerNote || '',
+      balance: a.balance, // 현장 잔금 수령용
+      schedules: c.schedules.map((s, i) => ({
+        stepIndex: i,
+        mine: isMine(user, s),
+        date: s.date,
+        time: s.time,
+        ampm: s.ampm,
+        memo: isMine(user, s) ? s.memo || '' : '',
+        assigneeName: assigneeOf(db, s).assigneeName,
+        mobileStatus: s.mobileStatus || '',
+        mobileMemo: isMine(user, s) ? s.mobileMemo || '' : '',
+        reportedAt: s.reportedAt,
+      })),
+    };
+  },
+
   // 기사 현장 보고 → 계약서 '모바일웹 ①②③' 에 표시
   async report({ contractId, stepIndex, mobileStatus, memo }) {
     const { db, user } = await authorizeEngineer();

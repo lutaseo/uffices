@@ -574,3 +574,23 @@ test('계약 조건: 서명할 때 조건을 계약에 함께 보관 (나중에 
   const signed = await admin.ok('contracts', 'get', c.id);
   assert.ok(Array.isArray(signed.esign.terms) && signed.esign.terms.length > 0, '서명 당시 조건 저장');
 });
+
+test('기사모바일 계약 상세: 본인 배정 계약만, 단가·내부 메모·이력은 숨김', async () => {
+  const eng = client();
+  await eng.ok('auth', 'login', 'gong', 'gong1234');
+  const [s] = await eng.ok('engineerApp', 'mySchedules', { from: '2000-01-01', to: '2100-12-31' });
+  const full = await admin.ok('contracts', 'get', s.contractId);
+  await admin.ok('contracts', 'update', s.contractId, { ...full, memo: '내부 메모', customerNote: '고객 안내', engineerNote: '기사 전달', lineItems: [{ name: '욕실', qty: 2, unitPrice: 300000 }] });
+  const d = await eng.ok('engineerApp', 'contract', s.contractId);
+  assert.equal(d.id, s.contractId);
+  assert.equal(d.customerNote, '고객 안내');
+  assert.equal(d.engineerNote, '기사 전달');
+  assert.deepEqual(d.lineItems, [{ name: '욕실', detail: '', qty: 2 }], '단가 없음');
+  assert.equal(d.memo, undefined);
+  assert.equal(d.history, undefined);
+  assert.equal(d.payments, undefined);
+  assert.ok(d.schedules.some((x) => x.mine && x.stepIndex === s.stepIndex));
+
+  const other = await admin.ok('contracts', 'create', { ...base, customerName: '남의계약', customerPhone: '010-2323-4545' });
+  assert.equal((await eng('engineerApp', 'contract', other.id)).status, 403, '배정 안 된 계약은 차단');
+});
