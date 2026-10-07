@@ -3999,3 +3999,12 @@ input[type='month'] {
   border-color: #4a6fdc;
   box-shadow: 0 0 0 1px #4a6fdc;
 }
+
+.engineer-detail .my-step {
+  color: #1a4fc4;
+  font-weight: 600;
+}
+
+.engineer-detail .form-section-title {
+  margin-top: 18px;
+}

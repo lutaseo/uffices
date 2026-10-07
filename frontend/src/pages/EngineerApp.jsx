@@ -259,16 +259,31 @@ function ReportForm({ contractId, step, onReported }) {
   );
 }
 
-// 계약 상세 (기사용): 고객·현장·시공내용·일정·전달사항·고객 참고사항 + 내 회차 보고
+// 계약 상세 (기사용): 실장 계약 상세와 같은 모양 — 계약정보 / 시공정보 / 상세시공 (보기 전용 + 내 회차 보고)
+const CIRCLED = ['①', '②', '③'];
+const siteText = (c) =>
+  [c.aptName, c.dong && `${c.dong}동`, c.ho && `${c.ho}호`, c.aptType && `타입 : ${c.aptType}`, c.area && `평 : ${c.area}`].filter(Boolean).join(' ') || c.address;
+const scheduleLine = (s) => (s?.date ? `${s.date}(${timeLabel(s) || '무관'})` : '');
+const telLinks = (c) =>
+  [c.customerPhone, c.customerPhone2].filter(Boolean).map((p) => (
+    <div key={p}>
+      <a href={`tel:${p}`}>{p}</a>
+    </div>
+  ));
+
 function ContractView({ id, step }) {
   const { handleError } = useAuth();
-  const [c, setC] = useState(null);
+  const [data, setData] = useState(null);
+  const [selectedId, setSelectedId] = useState(id);
   const [error, setError] = useState('');
 
   const load = useCallback(() => {
     engineerApp
       .contract(id)
-      .then(setC)
+      .then((d) => {
+        setData(d);
+        setSelectedId((prev) => (d.contracts.some((c) => c.id === prev) ? prev : d.selectedId));
+      })
       .catch((e) => (e.code === 'FORBIDDEN' || e.code === 'NOT_FOUND' ? setError(e.message) : handleError(e)));
   }, [id, handleError]);
   useEffect(() => {
@@ -282,84 +297,183 @@ function ContractView({ id, step }) {
     </button>
   );
   if (error) return <div className="engineer-body">{back}<p className="no-data">{error}</p></div>;
-  if (!c) return <div className="engineer-body">{back}<p className="page-loading">불러오는 중...</p></div>;
+  if (!data) return <div className="engineer-body">{back}<p className="page-loading">불러오는 중...</p></div>;
 
-  const phones = [c.customerPhone, c.customerPhone2].filter(Boolean);
+  const list = data.contracts;
+  const c = list.find((x) => x.id === selectedId) || list[0];
   const mine = c.schedules.filter((s) => s.mine);
-  const row = (label, value) =>
-    value ? (
-      <tr>
-        <th>{label}</th>
-        <td>{value}</td>
-      </tr>
-    ) : null;
 
   return (
     <div className="engineer-body engineer-detail">
       {back}
-      <div className="engineer-card">
-        <div className="engineer-card-top">
-          <span className="status-chip st-blue">{c.category}{c.workType !== '시공' ? ` · ${c.workType}` : ''}</span>
-          <span className="sub-text">No.{c.no ?? '-'} · {c.brand}</span>
-          <span className="sub-text">{c.status}</span>
-        </div>
-        <div className="bold-text big">{c.address}</div>
-        <table className="engineer-detail-table">
-          <tbody>
-            {row('고객', c.customerName)}
-            <tr>
-              <th>연락처</th>
-              <td>
-                {phones.map((p) => (
-                  <a key={p} className="tel-link" href={`tel:${p}`}>📞 {p}</a>
-                ))}
-              </td>
-            </tr>
-            {row('평수', c.area && `${c.area}평`)}
-            {row('입주예정일', c.moveInDate)}
-            {row('계약일', c.contractDate)}
-          </tbody>
-        </table>
-        {c.engineerNote && <div className="engineer-note">📌 전달사항: {c.engineerNote}</div>}
-        <div className="engineer-balance">현장 수령 잔액 <strong>{won(c.balance)}원</strong></div>
-      </div>
 
-      <h4 className="engineer-date">시공 내용</h4>
-      <div className="engineer-card">
-        {c.lineItems.length > 0 && (
-          <ul className="engineer-items">
-            {c.lineItems.map((l, i) => (
-              <li key={i}>
-                <strong>{l.name}</strong> <span className="sub-text">× {l.qty}</span>
-                {l.detail && <div className="sub-text">{l.detail}</div>}
-              </li>
-            ))}
-          </ul>
-        )}
-        {c.items && <div className="pre-wrap">{c.items}</div>}
-        {!c.lineItems.length && !c.items && <div className="sub-text">-</div>}
-      </div>
+      <h3 className="form-section-title">&gt; 계약정보</h3>
+      <table className="info-grid">
+        <tbody>
+          <tr>
+            <th>고객명</th>
+            <td>{c.customerName}</td>
+            <th>전화번호</th>
+            <td>{telLinks(c)}</td>
+            <th>브랜드</th>
+            <td>{c.brand}</td>
+          </tr>
+          <tr>
+            <th>계약일</th>
+            <td>{c.contractDate}</td>
+            <th>계약담당</th>
+            <td>{c.ownerName}</td>
+            <th>현장</th>
+            <td>{siteText(c)}</td>
+          </tr>
+          <tr>
+            <th>입주예정일</th>
+            <td colSpan={5}>{c.moveInDate}</td>
+          </tr>
+          <tr>
+            <th>고객 참고사항</th>
+            <td colSpan={5} className="pre-wrap">{c.customerNote}</td>
+          </tr>
+        </tbody>
+      </table>
 
-      {c.customerNote && (
+      <h3 className="form-section-title">&gt; 시공정보 — No.{c.no ?? '-'} {c.category}</h3>
+      <table className="info-grid">
+        <tbody>
+          <tr>
+            <th>구분</th>
+            <td>
+              {c.category}
+              {c.receptionType && `(${c.receptionType})`}
+            </td>
+            <th>시공종류</th>
+            <td>{c.workType}</td>
+            <th>시공상태</th>
+            <td>
+              {c.status}
+              {c.status === '시공완료' && c.completedDate && ` (${c.completedDate})`}
+            </td>
+          </tr>
+          <tr>
+            <th>시공 등록</th>
+            <td colSpan={2}>
+              {[0, 1, 2].map((i) => (
+                <div key={i} className={c.schedules[i]?.mine ? 'my-step' : ''}>
+                  {CIRCLED[i]} : {scheduleLine(c.schedules[i])}
+                </div>
+              ))}
+            </td>
+            <th>시공담당</th>
+            <td colSpan={2}>
+              {[0, 1, 2].map((i) => (
+                <div key={i} className={c.schedules[i]?.mine ? 'my-step' : ''}>
+                  {CIRCLED[i]} : {c.schedules[i]?.assigneeName || ''}
+                  {c.schedules[i]?.mine && <span className="sub-text"> (나)</span>}
+                  {c.schedules[i]?.mobileStatus && <span className="mobile-chip">{c.schedules[i].mobileStatus}</span>}
+                </div>
+              ))}
+            </td>
+          </tr>
+          <tr>
+            <th>패키지</th>
+            <td colSpan={3}>
+              {c.lineItems.map((l, i) => (
+                <div key={i}>
+                  {l.name}
+                  {l.qty > 1 && ` x${l.qty}`}
+                  {l.detail && <span className="sub-text"> — {l.detail}</span>}
+                </div>
+              ))}
+            </td>
+            <th>추가시공품목</th>
+            <td className="pre-wrap">{c.items}</td>
+          </tr>
+          <tr>
+            <th>계약금액</th>
+            <td colSpan={5}>
+              <div className="amount-line">
+                <span>실계약금 <b>{won(c.amounts.actual)}원</b></span>
+                <span>입금 <b>{won(c.amounts.paid)}원</b></span>
+                <span className={c.amounts.balance > 0 ? 'text-red' : 'text-done'}>남은 잔금 <b>{won(c.amounts.balance)}원</b></span>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <th>기사전달사항</th>
+            <td colSpan={5} className="pre-wrap">{c.engineerNote}</td>
+          </tr>
+          {mine.map((s) =>
+            s.memo ? (
+              <tr key={s.stepIndex}>
+                <th>{CIRCLED[s.stepIndex]} 일정 메모</th>
+                <td colSpan={5} className="pre-wrap">{s.memo}</td>
+              </tr>
+            ) : null,
+          )}
+        </tbody>
+      </table>
+
+      {mine.length > 0 && (
         <>
-          <h4 className="engineer-date">고객 참고사항</h4>
-          <div className="engineer-card pre-wrap">{c.customerNote}</div>
+          <h3 className="form-section-title">&gt; 현장 보고</h3>
+          {mine.map((s) => (
+            <div key={s.stepIndex} className={`engineer-card ${s.stepIndex === step && c.id === id ? 'focus-step' : ''}`}>
+              <div className="engineer-card-top">
+                <strong>{CIRCLED[s.stepIndex]} {s.stepIndex + 1}차</strong>
+                <span>{s.date ? `${formatKoreanDate(s.date)} ${timeLabel(s)}` : '일정 미정'}</span>
+              </div>
+              <ReportForm contractId={c.id} step={s} onReported={load} />
+            </div>
+          ))}
         </>
       )}
 
-      <h4 className="engineer-date">시공 일정</h4>
-      {c.schedules.map((s) => (
-        <div key={s.stepIndex} className={`engineer-card ${s.mine ? '' : 'other-step'} ${s.stepIndex === step ? 'focus-step' : ''}`}>
-          <div className="engineer-card-top">
-            <strong>{s.stepIndex + 1}차</strong>
-            <span>{s.date ? `${formatKoreanDate(s.date)} ${timeLabel(s)}` : '일정 미정'}</span>
-            <span className="sub-text">{s.mine ? '내 일정' : s.assigneeName || '미배정'}</span>
-          </div>
-          {s.memo && <div className="sub-text">메모: {s.memo}</div>}
-          {s.mine ? <ReportForm contractId={c.id} step={s} onReported={load} /> : s.mobileStatus && <div className="sub-text">보고: {s.mobileStatus}</div>}
-        </div>
-      ))}
-      {!mine.length && <p className="sub-text">이 계약에 배정된 내 일정이 없습니다.</p>}
+      <h3 className="form-section-title">&gt; 상세시공</h3>
+      <div className="table-responsive">
+        <table className="detail-table">
+          <thead>
+            <tr>
+              <th>번호</th>
+              <th>구분</th>
+              <th>패키지</th>
+              <th>추가시공품목</th>
+              <th>시공 등록</th>
+              <th>시공기사</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((x) => (
+              <tr key={x.id} className={`selectable-row ${x.id === c.id ? 'selected-row' : ''}`} onClick={() => setSelectedId(x.id)} title="누르면 위 시공정보에 표시됩니다">
+                <td>{x.no ?? '-'}</td>
+                <td className="nowrap">
+                  {x.category} - {x.workType}
+                  {x.status === '취소' && <div className="text-red sub-text">취소</div>}
+                </td>
+                <td className="text-left">
+                  {x.lineItems.map((l, i) => (
+                    <div key={i}>{l.name}</div>
+                  ))}
+                </td>
+                <td className="text-left pre-wrap items-cell">{x.items}</td>
+                <td className="text-left nowrap">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i}>
+                      {CIRCLED[i]} {scheduleLine(x.schedules[i])}
+                    </div>
+                  ))}
+                </td>
+                <td className="text-left nowrap">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i}>
+                      {CIRCLED[i]} : {x.schedules[i]?.assigneeName || ''}
+                    </div>
+                  ))}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

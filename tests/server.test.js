@@ -581,8 +581,11 @@ test('기사모바일 계약 상세: 본인 배정 계약만, 단가·내부 메
   const [s] = await eng.ok('engineerApp', 'mySchedules', { from: '2000-01-01', to: '2100-12-31' });
   const full = await admin.ok('contracts', 'get', s.contractId);
   await admin.ok('contracts', 'update', s.contractId, { ...full, memo: '내부 메모', customerNote: '고객 안내', engineerNote: '기사 전달', lineItems: [{ name: '욕실', qty: 2, unitPrice: 300000 }] });
-  const d = await eng.ok('engineerApp', 'contract', s.contractId);
-  assert.equal(d.id, s.contractId);
+  const g = await eng.ok('engineerApp', 'contract', s.contractId);
+  assert.equal(g.selectedId, s.contractId);
+  const d = g.contracts.find((x) => x.id === s.contractId);
+  assert.ok(g.contracts.every((x) => x.schedules.some((y) => y.mine)), '같은 현장이라도 내 배정 계약만');
+  assert.equal(typeof d.amounts.balance, 'number', '잔금 요약만');
   assert.equal(d.customerNote, '고객 안내');
   assert.equal(d.engineerNote, '기사 전달');
   assert.deepEqual(d.lineItems, [{ name: '욕실', detail: '', qty: 2 }], '단가 없음');
