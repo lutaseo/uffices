@@ -836,6 +836,9 @@ export const notifications = {
 // 통계/진행현황   GET /api/reports/contracts?dateType=&from=&to=
 // ============================================================
 
+// 통계 시공기사별에서 여러 기사가 나눠 맡은 계약의 금액을 모으는 줄 이름
+export const SHARED_ROW = '여러 기사 공동 시공';
+
 export const reports = {
   async contracts({ dateType = 'contractDate', from, to } = {}) {
     const { db, user } = await authorize('stats.view');
@@ -849,15 +852,37 @@ export const reports = {
   // 시공기사별: 시공 회차(①②③) 날짜 기준으로 기사(팀)마다 배정·완료 집계 (취소 계약 제외)
   //   완료 = 기사가 '시공완료' 보고했거나 계약이 시공완료 상태
   //   금액(총금액·할인·계약금·입금·잔액)은 '회사 매출 합계 보기' 권한(관리자)만, 같은 기사의 같은 계약은 한 번만 합산
+  //   여러 기사가 나눠 맡은 계약(1차 A, 2차 B)의 금액은 기사 개인에서 빼고 '여러 기사 공동 시공' 줄에 한 번만
+  //   → 기사별 금액 + 공동 줄 = 회사 전체 (중복 없음)
   async engineers({ from, to } = {}) {
     const { db, user } = await authorize('stats.view');
     const withAmount = can(user, 'sales.total');
     const zero = () => ({ total: 0, discount: 0, deposit: 0, paid: 0, balance: 0 });
+    const add = (t, m) => Object.keys(m).forEach((k) => (t[k] += m[k]));
     const map = {};
+    const shared = { name: SHARED_ROW, shared: true, assigned: 0, done: 0, postponed: 0, unable: 0, byCategory: {}, jobs: [], amounts: zero(), doneAmounts: zero() };
     for (const c of visibleContracts(db, user)) {
       if (c.deletedAt || c.status === '취소') continue;
       const a = withAmount ? calcAmounts(c) : null;
       const money = a && { total: a.total, discount: a.discount + a.voucher, deposit: a.byKind['계약금'] || 0, paid: a.paid - a.refund, balance: a.balance };
+      const names = [...new Set(c.schedules.map((s) => assigneeOf(db, s).assigneeName).filter(Boolean))];
+      const sharedWith = money && names.length > 1 ? names : null; // 회차별 담당이 다른 계약
+      const inRangeSteps = c.schedules.filter((s) => s.date && inRange(s.date, from, to) && assigneeOf(db, s).assigneeName);
+      if (sharedWith && inRangeSteps.length) {
+        const allDone = c.status === '시공완료' || c.schedules.every((s) => !assigneeOf(db, s).assigneeName || s.mobileStatus === '시공완료');
+        shared.assigned += 1;
+        add(shared.amounts, money);
+        if (allDone) {
+          shared.done += 1;
+          shared.byCategory[c.category] = (shared.byCategory[c.category] || 0) + 1;
+          add(shared.doneAmounts, money);
+        }
+        const step = c.schedules.indexOf(inRangeSteps[0]);
+        shared.jobs.push({
+          contractId: c.id, no: numberOf(db, c), date: inRangeSteps[0].date, step: step + 1, category: c.category, workType: c.workType,
+          customerName: c.customerName, site: formatAddress(c), done: allDone, mobileStatus: '', money, engineers: names,
+        });
+      }
       c.schedules.forEach((s, i) => {
         if (!s.date || !inRange(s.date, from, to)) return;
         const who = assigneeOf(db, s).assigneeName;
@@ -872,20 +897,22 @@ export const reports = {
         else if (s.mobileStatus === '시공불가') r.unable += 1;
         const first = !r.seen.has(c.id); // 같은 계약의 다른 회차면 금액은 이미 셈
         r.seen.add(c.id);
-        if (money && first) {
-          Object.keys(money).forEach((k) => (r.amounts[k] += money[k]));
-          if (done) Object.keys(money).forEach((k) => (r.doneAmounts[k] += money[k]));
+        if (money && first && !sharedWith) {
+          add(r.amounts, money);
+          if (done) add(r.doneAmounts, money);
         }
         r.jobs.push({
           contractId: c.id, no: numberOf(db, c), date: s.date, step: i + 1, category: c.category, workType: c.workType,
           customerName: c.customerName, site: formatAddress(c), done, mobileStatus: s.mobileStatus || '',
-          ...(money ? { money: first ? money : null } : {}),
+          ...(money ? { money: first && !sharedWith ? money : null, sharedWith } : {}),
         });
       });
     }
-    return Object.values(map)
+    const rows = Object.values(map)
       .map(({ seen, ...r }) => ({ ...r, jobs: r.jobs.sort((x, y) => x.date.localeCompare(y.date)) }))
       .sort((x, y) => y.done - x.done || x.name.localeCompare(y.name));
+    if (shared.assigned) rows.push({ ...shared, jobs: shared.jobs.sort((x, y) => x.date.localeCompare(y.date)) }); // 맨 아래
+    return rows;
   },
 };
 

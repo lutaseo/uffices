@@ -4050,3 +4050,7 @@ input[type='month'] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.eng-stats tr.shared-row td {
+  background: #fffaf0;
+}

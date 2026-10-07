@@ -242,13 +242,15 @@ export default function StatsPage() {
 }
 
 // 시공기사별 전체: 기사마다 배정·완료 건수 + 구분별 완료 (줄을 누르면 그 기사만 보기)
-function EngineerStats({ rows, onPick }) {
+function EngineerStats({ rows: all, onPick }) {
+  const sharedRow = all.find((r) => r.shared); // 여러 기사 공동 시공 (금액만)
+  const rows = all.filter((r) => !r.shared);
   const cats = CATEGORY_ORDER.filter((k) => rows.some((r) => r.byCategory[k]));
   const maxDone = Math.max(1, ...rows.map((r) => r.done));
   const sum = rows.reduce((t, r) => ({ assigned: t.assigned + r.assigned, done: t.done + r.done, postponed: t.postponed + r.postponed, unable: t.unable + r.unable }), { assigned: 0, done: 0, postponed: 0, unable: 0 });
-  const money = rows.some((r) => r.amounts);
+  const money = all.some((r) => r.amounts);
   const cols = 6 + cats.length + (money ? MONEY.length : 0);
-  const moneySum = money && Object.fromEntries(MONEY.map(([k]) => [k, rows.reduce((t, r) => t + (r.amounts?.[k] || 0), 0)]));
+  const moneySum = money && Object.fromEntries(MONEY.map(([k]) => [k, all.reduce((t, r) => t + (r.amounts?.[k] || 0), 0)])); // 공동 줄 포함 = 회사 전체
 
   return (
     <div className="table-responsive">
@@ -290,6 +292,18 @@ function EngineerStats({ rows, onPick }) {
               {money && moneyCells(r.amounts)}
             </tr>
           ))}
+          {sharedRow && (
+            <tr className="clickable-row shared-row" onClick={() => onPick(sharedRow.name)} title="1차·2차 담당이 다른 계약 — 금액은 여기에 한 번만">
+              <td className="bold-text text-left">
+                {sharedRow.name}
+                <div className="sub-text">회차별 담당이 다른 계약 {sharedRow.assigned}건</div>
+              </td>
+              <td colSpan={5 + cats.length} className="sub-text">
+                건수는 각 기사 줄에 포함, 금액만 여기로 따로 모음
+              </td>
+              {moneyCells(sharedRow.amounts)}
+            </tr>
+          )}
           {rows.length > 0 && (
             <tr className="total-row">
               <td>합계</td>
@@ -321,9 +335,9 @@ function EngineerDetail({ r }) {
     <>
       <div className="amount-cards eng-summary">
         <div className="amount-card">
-          <span>배정</span>
+          <span>{r.shared ? '계약' : '배정'}</span>
           <b>{r.assigned}건</b>
-          <small>{r.name}</small>
+          <small>{r.shared ? '회차별 담당 기사가 다른 계약' : r.name}</small>
         </div>
         <div className="amount-card done">
           <span>시공완료</span>
@@ -360,13 +374,14 @@ function EngineerDetail({ r }) {
               <th>고객</th>
               <th>현장</th>
               <th>상태</th>
+              {r.shared && <th>담당 기사</th>}
               {money && MONEY.map(([k, label]) => <th key={k}>{label}</th>)}
             </tr>
           </thead>
           <tbody>
             {jobs.length === 0 && (
               <tr>
-                <td colSpan={7 + (money ? MONEY.length : 0)} className="no-data">해당 기간에 시공이 없습니다.</td>
+                <td colSpan={7 + (r.shared ? 1 : 0) + (money ? MONEY.length : 0)} className="no-data">해당 기간에 시공이 없습니다.</td>
               </tr>
             )}
             {jobs.map((j) => (
@@ -380,7 +395,15 @@ function EngineerDetail({ r }) {
                 <td className="nowrap">{j.customerName}</td>
                 <td className="text-left">{j.site}</td>
                 <td className={`nowrap ${j.done ? 'text-done' : j.mobileStatus ? 'text-red' : 'sub-text'}`}>{j.done ? '시공완료' : j.mobileStatus || '미완료'}</td>
-                {money && (j.money ? moneyCells(j.money) : <td colSpan={MONEY.length} className="sub-text">같은 계약 (금액은 위 회차에 포함)</td>)}
+                {r.shared && <td className="nowrap">{j.engineers.join(' · ')}</td>}
+                {money &&
+                  (j.money ? (
+                    moneyCells(j.money)
+                  ) : (
+                    <td colSpan={MONEY.length} className="sub-text">
+                      {j.sharedWith ? `공동 시공(${j.sharedWith.join('·')}) — 금액은 '여러 기사 공동 시공'에 따로 집계` : '같은 계약 (금액은 위 회차에 포함)'}
+                    </td>
+                  ))}
               </tr>
             ))}
           </tbody>
