@@ -39,25 +39,29 @@ export default function KakaoModal({ contract, initialTemplate = '기사배정',
   const tpl = TEMPLATES[template];
   const effectiveTarget = tpl.targets.includes(target) ? target : tpl.targets[0];
   const engineer = contract.schedules[step];
+  // 고객 연락처가 2개(연락처②)면 두 번호 모두에게 발송
   const receiver =
     effectiveTarget === '기사'
-      ? { name: engineer?.engineerName || '', phone: engineer?.engineerPhone || '' }
-      : { name: contract.customerName, phone: contract.customerPhone };
+      ? { name: engineer?.engineerName || '', phones: [engineer?.engineerPhone].filter(Boolean) }
+      : { name: contract.customerName, phones: [...new Set([contract.customerPhone, contract.customerPhone2].filter(Boolean))] };
   const message = tpl.render({ brand, contract, engineer, target: effectiveTarget, signUrl });
 
   const handleSend = async () => {
     setSending(true);
     try {
-      await notifications.send({
-        contractId: contract.id,
-        template,
-        target: effectiveTarget,
-        brand,
-        receiverName: receiver.name,
-        receiverPhone: receiver.phone,
-        message,
-      });
-      alert(`${receiver.name}님에게 [${tpl.label}] 알림톡 발송을 요청했습니다.\n(현재는 테스트 모드로 실제 발송되지 않습니다)`);
+      for (const phone of receiver.phones) {
+        await notifications.send({
+          contractId: contract.id,
+          template,
+          target: effectiveTarget,
+          brand,
+          receiverName: receiver.name,
+          receiverPhone: phone,
+          message,
+        });
+      }
+      const to = receiver.phones.length > 1 ? ` (${receiver.phones.join(', ')} 두 번호 모두)` : '';
+      alert(`${receiver.name}님에게${to} [${tpl.label}] 알림톡 발송을 요청했습니다.\n(현재는 테스트 모드로 실제 발송되지 않습니다)`);
       onClose();
     } catch (e) {
       handleError(e);
@@ -108,7 +112,8 @@ export default function KakaoModal({ contract, initialTemplate = '기사배정',
 
         <div className="talk-preview-box">
           <p>
-            <strong>수신자:</strong> {receiver.name || '-'} ({receiver.phone || '연락처 없음'})
+            <strong>수신자:</strong> {receiver.name || '-'} ({receiver.phones.join(', ') || '연락처 없음'})
+            {receiver.phones.length > 1 && <span className="sub-text"> — 두 번호 모두 발송</span>}
           </p>
           <div className="preview-text">{message}</div>
         </div>
@@ -117,7 +122,7 @@ export default function KakaoModal({ contract, initialTemplate = '기사배정',
           <button type="button" className="btn-cancel" onClick={onClose}>
             취소
           </button>
-          <button type="button" className="btn-confirm" onClick={handleSend} disabled={sending || !receiver.phone}>
+          <button type="button" className="btn-confirm" onClick={handleSend} disabled={sending || !receiver.phones.length}>
             {sending ? '발송 중...' : `${effectiveTarget}에게 알림톡 발송`}
           </button>
         </div>

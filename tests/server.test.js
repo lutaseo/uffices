@@ -519,3 +519,44 @@ test('목록 변경 확인(listCached): 그대로면 목록 없이 응답, 수�
   const mine = await manager.ok('contracts', 'listCached', {}, first.version);
   assert.ok(mine.rows, '다른 계정은 같은 확인표를 써도 새 목록');
 });
+
+test('줄눈·청소 한 장 계약서: 한 링크로 묶어 한 번에 서명, 다른 현장·이미 서명한 건은 제외', async () => {
+  const site = { ...base, customerName: '한장고객', customerPhone: '010-6060-1212', aptName: '한장아파트', dong: '102', ho: '303' };
+  const a = await admin.ok('contracts', 'create', { ...site, category: '줄눈', totalAmount: 500000, customerNote: '줄눈 안내' });
+  const b = await admin.ok('contracts', 'create', { ...site, category: '청소', totalAmount: 300000, customerNote: '청소 안내' });
+  const other = await admin.ok('contracts', 'create', { ...site, ho: '404', category: '탄성' }); // 다른 호수
+
+  const before = await admin.ok('contracts', 'signBundle', b.id);
+  assert.deepEqual(before.contracts.map((c) => c.id), [a.id, b.id], '서명 전: 같은 현장의 줄눈·청소 함께');
+  assert.equal(before.token, null, '아직 링크 없음');
+
+  const { token, count } = await admin.ok('contracts', 'requestSign', a.id);
+  assert.equal(count, 2);
+  const anon = client();
+  const view = await anon.ok('esign', 'getByToken', token);
+  assert.deepEqual(view.contracts.map((c) => c.category), ['줄눈', '청소']);
+  assert.deepEqual(view.contracts.map((c) => c.customerNote), ['줄눈 안내', '청소 안내']);
+  assert.ok(view.contracts.every((c) => c.memo === undefined && c.history === undefined));
+  assert.equal((await admin.ok('contracts', 'signBundle', b.id)).token, token, '청소 쪽에서 봐도 같은 링크');
+
+  const img = 'data:image/png;base64,QUJD';
+  await anon.ok('esign', 'sign', token, { signerName: '한장고객', signature: img, agreed: true });
+  for (const id of [a.id, b.id]) {
+    const c = await admin.ok('contracts', 'get', id);
+    assert.equal(c.esign.status, '서명완료');
+    assert.equal(c.esign.signature, img, '두 계약 모두 서명 이미지 저장');
+  }
+  assert.equal((await admin.ok('contracts', 'get', other.id)).esign.status, '미발송', '다른 현장은 그대로');
+  const again = await anon.ok('esign', 'getByToken', token);
+  assert.ok(again.contracts.every((c) => c.esign.status === '서명완료' && c.esign.signature === img), '서명 후 다시 열면 둘 다 서명 표시');
+  const r = await anon('esign', 'sign', token, { signerName: '한장고객', signature: img, agreed: true });
+  assert.notEqual(r.status, 200, '두 번 서명 불가');
+
+  // 서명 후 청소를 하나 더 추가 → 새 요청에는 서명 안 된 것만
+  const c3 = await admin.ok('contracts', 'create', { ...site, category: '탄성' });
+  const later = await admin.ok('contracts', 'signBundle', c3.id);
+  assert.deepEqual(later.contracts.map((c) => c.id), [c3.id], '이미 서명한 줄눈·청소는 다시 서명하지 않음');
+  const signedView = await admin.ok('contracts', 'signBundle', a.id);
+  assert.deepEqual(signedView.contracts.map((c) => c.id), [a.id, b.id], '서명한 계약서는 함께 서명한 묶음으로 보임');
+  assert.ok(signedView.contracts.every((c) => c.esign.signature === img));
+});

@@ -201,6 +201,6 @@ export async function resolveCompanyId(client, session) {
 
 // 서명 링크 → { companyId, contractId } (없으면 null 들)
 export async function contractByEsignToken(client, token) {
-  const r = await rows(client, `SELECT id, company_id FROM contracts WHERE data->'esign'->>'token' = $1`, [String(token || '')]);
+  const r = await rows(client, `SELECT id, company_id FROM contracts WHERE data->'esign'->>'token' = $1 ORDER BY id`, [String(token || '')]);
   return r[0] ? { companyId: Number(r[0].company_id), contractId: Number(r[0].id) } : { companyId: null, contractId: null };
 }

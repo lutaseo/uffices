@@ -90,6 +90,7 @@ const READ_ONLY = new Set([
   'contracts.listCached',
   'contracts.get',
   'contracts.group',
+  'contracts.signBundle',
   'esign.getByToken',
   'notifications.history',
   'reports.contracts',
@@ -194,7 +195,7 @@ export async function handleRpc({ body, headers }) {
       const who = await resolveCompanyId(client, ctx.session);
       scope = who.isSuper ? { allCompanies: true } : { companyId: who.companyId };
       if (LIGHT_TABLES[name]) scope.tables = LIGHT_TABLES[name];
-      if (name === 'contracts.get') scope.signatureFor = args[0]; // 계약서 보기일 때만 서명 이미지 로드
+      if (name === 'contracts.get' || name === 'contracts.signBundle') scope.signatureFor = args[0]; // 계약서 보기일 때만 서명 이미지 로드
       if (RECEIPT_CALLS.has(name)) scope.receiptsFor = args[0]; // 이 계약의 영수증 사진만 로드
       if (SLIM_CALLS.has(name) && readOnlyCall) scope.slimContracts = true; // 목록: 긴 글·변경이력은 읽지 않음
     }
