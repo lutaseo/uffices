@@ -17,6 +17,16 @@ const GROUPS = [
   { key: 'engineer', label: '시공기사별' }, // 시공 회차 날짜 기준 (아래 EngineerStats)
 ];
 const CATEGORY_ORDER = ['줄눈', '청소', '탄성', '새집증후군', '나노코팅', '기타'];
+// 시공기사별 금액 칸 (관리자: '회사 매출 합계 보기' 권한일 때만 서버가 보내줌)
+const MONEY = [
+  ['total', '총금액'],
+  ['discount', '할인'],
+  ['deposit', '계약금'],
+  ['paid', '입금'],
+  ['balance', '잔액'],
+];
+const moneyCells = (m, cls = '') => MONEY.map(([k]) => <td key={k} className={`text-right nowrap ${k === 'balance' && m?.[k] > 0 ? 'text-red' : ''} ${cls}`}>{m ? won(m[k]) : ''}</td>);
+const moneyExcel = (m) => (m ? Object.fromEntries(MONEY.map(([k, label]) => [label, m[k]])) : {});
 
 const dateOf = (c, dateType) =>
   dateType === 'scheduleDate'
@@ -126,7 +136,7 @@ export default function StatsPage() {
             onClick={() =>
               byEngineer && engPicked
                 ? downloadExcel(
-                    engPicked.jobs.map((j) => ({ 시공일: j.date, 번호: j.no, 구분: j.category, 회차: `${j.step}차`, 고객: j.customerName, 현장: j.site, 상태: j.done ? '시공완료' : j.mobileStatus || '미완료' })),
+                    engPicked.jobs.map((j) => ({ 시공일: j.date, 번호: j.no, 구분: j.category, 회차: `${j.step}차`, 고객: j.customerName, 현장: j.site, 상태: j.done ? '시공완료' : j.mobileStatus || '미완료', ...moneyExcel(j.money) })),
                     '시공목록',
                     `${engPicked.name}_${range[0]}_${range[1]}`,
                   )
@@ -139,6 +149,7 @@ export default function StatsPage() {
                       ...Object.fromEntries(CATEGORY_ORDER.map((k) => [`완료_${k}`, r.byCategory[k] || 0])),
                       연기요청: r.postponed,
                       시공불가: r.unable,
+                      ...moneyExcel(r.amounts),
                     })),
                     '시공기사별',
                     `시공기사별_${range[0]}_${range[1]}`,
@@ -235,7 +246,9 @@ function EngineerStats({ rows, onPick }) {
   const cats = CATEGORY_ORDER.filter((k) => rows.some((r) => r.byCategory[k]));
   const maxDone = Math.max(1, ...rows.map((r) => r.done));
   const sum = rows.reduce((t, r) => ({ assigned: t.assigned + r.assigned, done: t.done + r.done, postponed: t.postponed + r.postponed, unable: t.unable + r.unable }), { assigned: 0, done: 0, postponed: 0, unable: 0 });
-  const cols = 6 + cats.length;
+  const money = rows.some((r) => r.amounts);
+  const cols = 6 + cats.length + (money ? MONEY.length : 0);
+  const moneySum = money && Object.fromEntries(MONEY.map(([k]) => [k, rows.reduce((t, r) => t + (r.amounts?.[k] || 0), 0)]));
 
   return (
     <div className="table-responsive">
@@ -252,6 +265,7 @@ function EngineerStats({ rows, onPick }) {
             ))}
             <th>연기요청</th>
             <th>시공불가</th>
+            {money && MONEY.map(([k, label]) => <th key={k}>{label}</th>)}
           </tr>
         </thead>
         <tbody>
@@ -273,6 +287,7 @@ function EngineerStats({ rows, onPick }) {
               ))}
               <td>{r.postponed || '-'}</td>
               <td>{r.unable || '-'}</td>
+              {money && moneyCells(r.amounts)}
             </tr>
           ))}
           {rows.length > 0 && (
@@ -286,6 +301,7 @@ function EngineerStats({ rows, onPick }) {
               ))}
               <td>{sum.postponed}</td>
               <td>{sum.unable}</td>
+              {money && moneyCells(moneySum)}
             </tr>
           )}
         </tbody>
@@ -299,6 +315,8 @@ function EngineerDetail({ r }) {
   const [doneOnly, setDoneOnly] = useState(false);
   const jobs = doneOnly ? r.jobs.filter((j) => j.done) : r.jobs;
   const cats = CATEGORY_ORDER.filter((k) => r.byCategory[k]);
+  const money = !!r.amounts;
+  const shown = money && (doneOnly ? r.doneAmounts : r.amounts);
   return (
     <>
       <div className="amount-cards eng-summary">
@@ -318,6 +336,16 @@ function EngineerDetail({ r }) {
           <small>미완료 {r.assigned - r.done}건</small>
         </div>
       </div>
+      {money && (
+        <div className="amount-cards eng-summary money">
+          {MONEY.map(([k, label]) => (
+            <div key={k} className={`amount-card ${k === 'balance' && shown[k] > 0 ? 'due' : ''}`}>
+              <span>{label}{doneOnly ? ' (시공완료분)' : ''}</span>
+              <b>{won(shown[k])}원</b>
+            </div>
+          ))}
+        </div>
+      )}
       <label className="eng-done-only">
         <input type="checkbox" checked={doneOnly} onChange={(e) => setDoneOnly(e.target.checked)} /> 시공완료만 보기
       </label>
@@ -332,12 +360,13 @@ function EngineerDetail({ r }) {
               <th>고객</th>
               <th>현장</th>
               <th>상태</th>
+              {money && MONEY.map(([k, label]) => <th key={k}>{label}</th>)}
             </tr>
           </thead>
           <tbody>
             {jobs.length === 0 && (
               <tr>
-                <td colSpan={7} className="no-data">해당 기간에 시공이 없습니다.</td>
+                <td colSpan={7 + (money ? MONEY.length : 0)} className="no-data">해당 기간에 시공이 없습니다.</td>
               </tr>
             )}
             {jobs.map((j) => (
@@ -351,6 +380,7 @@ function EngineerDetail({ r }) {
                 <td className="nowrap">{j.customerName}</td>
                 <td className="text-left">{j.site}</td>
                 <td className={`nowrap ${j.done ? 'text-done' : j.mobileStatus ? 'text-red' : 'sub-text'}`}>{j.done ? '시공완료' : j.mobileStatus || '미완료'}</td>
+                {money && (j.money ? moneyCells(j.money) : <td colSpan={MONEY.length} className="sub-text">같은 계약 (금액은 위 회차에 포함)</td>)}
               </tr>
             ))}
           </tbody>

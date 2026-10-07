@@ -848,29 +848,44 @@ export const reports = {
 
   // 시공기사별: 시공 회차(①②③) 날짜 기준으로 기사(팀)마다 배정·완료 집계 (취소 계약 제외)
   //   완료 = 기사가 '시공완료' 보고했거나 계약이 시공완료 상태
+  //   금액(총금액·할인·계약금·입금·잔액)은 '회사 매출 합계 보기' 권한(관리자)만, 같은 기사의 같은 계약은 한 번만 합산
   async engineers({ from, to } = {}) {
     const { db, user } = await authorize('stats.view');
+    const withAmount = can(user, 'sales.total');
+    const zero = () => ({ total: 0, discount: 0, deposit: 0, paid: 0, balance: 0 });
     const map = {};
     for (const c of visibleContracts(db, user)) {
       if (c.deletedAt || c.status === '취소') continue;
+      const a = withAmount ? calcAmounts(c) : null;
+      const money = a && { total: a.total, discount: a.discount + a.voucher, deposit: a.byKind['계약금'] || 0, paid: a.paid - a.refund, balance: a.balance };
       c.schedules.forEach((s, i) => {
         if (!s.date || !inRange(s.date, from, to)) return;
         const who = assigneeOf(db, s).assigneeName;
         if (!who) return;
         const done = s.mobileStatus === '시공완료' || c.status === '시공완료';
-        const r = (map[who] = map[who] || { name: who, assigned: 0, done: 0, postponed: 0, unable: 0, byCategory: {}, jobs: [] });
+        const r = (map[who] = map[who] || { name: who, assigned: 0, done: 0, postponed: 0, unable: 0, byCategory: {}, jobs: [], seen: new Set(), ...(withAmount ? { amounts: zero(), doneAmounts: zero() } : {}) });
         r.assigned += 1;
         if (done) {
           r.done += 1;
           r.byCategory[c.category] = (r.byCategory[c.category] || 0) + 1;
         } else if (s.mobileStatus === '시공연기요청') r.postponed += 1;
         else if (s.mobileStatus === '시공불가') r.unable += 1;
-        r.jobs.push({ contractId: c.id, no: numberOf(db, c), date: s.date, step: i + 1, category: c.category, workType: c.workType, customerName: c.customerName, site: formatAddress(c), done, mobileStatus: s.mobileStatus || '' });
+        const first = !r.seen.has(c.id); // 같은 계약의 다른 회차면 금액은 이미 셈
+        r.seen.add(c.id);
+        if (money && first) {
+          Object.keys(money).forEach((k) => (r.amounts[k] += money[k]));
+          if (done) Object.keys(money).forEach((k) => (r.doneAmounts[k] += money[k]));
+        }
+        r.jobs.push({
+          contractId: c.id, no: numberOf(db, c), date: s.date, step: i + 1, category: c.category, workType: c.workType,
+          customerName: c.customerName, site: formatAddress(c), done, mobileStatus: s.mobileStatus || '',
+          ...(money ? { money: first ? money : null } : {}),
+        });
       });
     }
     return Object.values(map)
-      .map((r) => ({ ...r, jobs: r.jobs.sort((a, b) => a.date.localeCompare(b.date)) }))
-      .sort((a, b) => b.done - a.done || a.name.localeCompare(b.name));
+      .map(({ seen, ...r }) => ({ ...r, jobs: r.jobs.sort((x, y) => x.date.localeCompare(y.date)) }))
+      .sort((x, y) => y.done - x.done || x.name.localeCompare(y.name));
   },
 };
 
