@@ -3898,3 +3898,104 @@ input[type='month'] {
   }
 }
 
+
+/* 기사모바일 내 일정: 달력 → 날짜 누르면 아래에 그날 일정, 카드 누르면 계약 상세 */
+.engineer-body .calendar-header-control {
+  position: relative;
+}
+
+.btn-today-sm {
+  position: absolute;
+  right: 0;
+  padding: 4px 10px;
+  border: 1px solid #c9d3e3;
+  border-radius: 14px;
+  background: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.engineer-body .calendar-cell.mini {
+  cursor: pointer;
+}
+
+.engineer-body .calendar-cell.picked-cell {
+  outline: 2px solid #4a6fdc;
+  outline-offset: -2px;
+  background: #eef3ff;
+  color: inherit;
+}
+
+.engineer-card-link {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.engineer-card-link:active {
+  background: #f1f5fb;
+}
+
+.engineer-card-more {
+  margin-left: auto;
+  color: #4a6fdc;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.btn-back-engineer {
+  align-self: flex-start;
+  padding: 8px 14px;
+  border: 1px solid #c9d3e3;
+  border-radius: 18px;
+  background: #fff;
+  font-size: 15px;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.engineer-detail .bold-text.big {
+  font-size: 17px;
+  margin: 4px 0 6px;
+}
+
+.engineer-detail-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.engineer-detail-table th {
+  width: 84px;
+  text-align: left;
+  color: #64748b;
+  font-weight: 500;
+  padding: 5px 0;
+  vertical-align: top;
+}
+
+.engineer-detail-table td {
+  padding: 5px 0;
+}
+
+.engineer-detail .tel-link {
+  display: inline-block;
+  margin: 0 12px 4px 0;
+}
+
+.engineer-items {
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.6;
+}
+
+.engineer-card.other-step {
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.engineer-card.focus-step {
+  border-color: #4a6fdc;
+  box-shadow: 0 0 0 1px #4a6fdc;
+}
