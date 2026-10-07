@@ -631,3 +631,27 @@ test('통계 시공기사별: 시공일 기준 기사마다 배정·완료·구�
   await eng.ok('auth', 'login', 'gong', 'gong1234');
   assert.equal((await eng('reports', 'engineers', { from, to })).status, 403, '기사 계정은 통계 불가');
 });
+
+test('통계 시공기사별: 1차·2차 담당이 다른 계약은 금액을 공동 줄에 한 번만 (기사 합 + 공동 = 전체)', async () => {
+  const [e1, e2] = await admin.ok('engineers', 'list');
+  const sch = (date, en) => ({ date, ampm: 'AM', assignType: 'engineer', engineerId: String(en.id) });
+  const from = '2032-05-01', to = '2032-05-31';
+  const mk = (schedules, totalAmount) => admin.ok('contracts', 'create', { ...base, customerName: '공동시공', customerPhone: '010-9191-0000', category: '줄눈', schedules, totalAmount });
+  await mk([sch('2032-05-03', e1)], 500000); // e1 단독
+  const both = await mk([sch('2032-05-04', e1), sch('2032-05-10', e2)], 900000); // e1·e2 공동
+
+  const rows = await admin.ok('reports', 'engineers', { from, to });
+  const r1 = rows.find((r) => r.name === e1.name);
+  const r2 = rows.find((r) => r.name === e2.name);
+  const shared = rows.find((r) => r.shared);
+  assert.equal(r1.assigned, 2, '건수는 각 기사에 그대로');
+  assert.equal(r2.assigned, 1);
+  assert.equal(r1.amounts.total, 500000, 'e1 은 단독 계약 금액만');
+  assert.equal(r2.amounts.total, 0);
+  assert.equal(shared.amounts.total, 900000, '공동 계약은 공동 줄에 한 번');
+  assert.deepEqual(shared.jobs.map((j) => j.contractId), [both.id]);
+  assert.deepEqual(shared.jobs[0].engineers.sort(), [e1.name, e2.name].sort());
+  const sum = rows.reduce((t, r) => t + r.amounts.total, 0);
+  assert.equal(sum, 1400000, '기사별 + 공동 = 전체 (중복 없음)');
+  assert.ok(r1.jobs.find((j) => j.contractId === both.id).sharedWith, '기사 목록에는 공동 표시');
+});
