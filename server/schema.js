@@ -2,7 +2,7 @@
 // 여러 번 실행해도 안전합니다 (IF NOT EXISTS).
 export const SCHEMA_SQL = `
 -- ============================================================
--- UFFICE 데이터베이스 스키마 (PostgreSQL / Supabase)
+-- VerityBase 데이터베이스 스키마 (PostgreSQL / Supabase)
 --
 -- 각 테이블은 id, company_id(업체 구분), data(JSON) 로 구성됩니다.
 -- 업무 로직(frontend/src/api/*.js)이 다루는 데이터 형태를 그대로 저장해,

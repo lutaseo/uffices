@@ -1,4 +1,4 @@
-# UFFICE 유피스 — 전자계약 · 시공일정 관리
+# VerityBase — 전자계약 · 시공일정 관리
 
 [![CI](https://github.com/lutaseo/uffices/actions/workflows/ci.yml/badge.svg)](https://github.com/lutaseo/uffices/actions/workflows/ci.yml)
 

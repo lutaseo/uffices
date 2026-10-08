@@ -1,8 +1,8 @@
 {
-  "name": "uffice",
+  "name": "veritybase",
   "private": true,
   "type": "module",
-  "description": "UFFICE 전자계약 — 서버(API) + 화면(frontend)",
+  "description": "VerityBase 전자계약 — 서버(API) + 화면(frontend)",
   "engines": {
     "node": ">=20"
   },

@@ -29,4 +29,4 @@ http
     const out = compressIfUseful(await handleRpc({ body, headers: req.headers }), req.headers['accept-encoding']);
     res.writeHead(out.status, out.headers).end(out.body);
   })
-  .listen(PORT, () => console.log(`UFFICE API 서버: http://localhost:${PORT}/api/rpc`));
+  .listen(PORT, () => console.log(`VerityBase API 서버: http://localhost:${PORT}/api/rpc`));
