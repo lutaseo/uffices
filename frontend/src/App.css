@@ -4054,3 +4054,27 @@ input[type='month'] {
 .eng-stats tr.shared-row td {
   background: #fffaf0;
 }
+
+/* 현장 검색: 검색어 강조 · 등록된 현장 표시 · 더 있음 안내 */
+.apt-suggest mark {
+  background: #fff3b0;
+  color: inherit;
+  padding: 0;
+}
+
+.apt-suggest li.more {
+  color: #64748b;
+  font-size: 12px;
+  cursor: default;
+}
+
+.apt-suggest li.more:hover {
+  background: none;
+}
+
+.apt-registered {
+  margin-left: 4px;
+  color: #16a34a;
+  font-size: 12px;
+  white-space: nowrap;
+}
