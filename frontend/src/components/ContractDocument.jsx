@@ -1,10 +1,10 @@
 import React from 'react';
 import { calcAmounts, timeLabel } from '../utils/contract.js';
 import { formatAddress, won } from '../utils/format.js';
-import { contractTermsFor } from '../constants.js';
+import { contractTermsFor, termSection } from '../constants.js';
 
 // 계약 조건: 서명한 계약서는 서명 당시 조건, 아니면 브랜드별 고정 조건
-const termsOf = (esign, brand) => (esign?.status === '서명완료' && esign.terms?.length ? esign.terms : contractTermsFor(brand));
+const termsOf = (esign, brand, categories) => (esign?.status === '서명완료' && esign.terms?.length ? esign.terms : contractTermsFor(brand, categories));
 
 
 
@@ -23,7 +23,7 @@ export default function ContractDocument({ contract, contracts, company, showAmo
   const amountOn = showAmount && !list.some((c) => c.amountHidden);
   const sums = list.map(calcAmounts).reduce((t, a) => ({ actual: t.actual + a.actual, paid: t.paid + a.paid, balance: t.balance + a.balance }), { actual: 0, paid: 0, balance: 0 });
   const workType = !multi && first.workType && first.workType !== '시공' ? `${first.workType} ` : '';
-  const terms = termsOf(list.find((c) => c.esign?.terms)?.esign || esign, first.brand);
+  const terms = termsOf(list.find((c) => c.esign?.terms)?.esign || esign, first.brand, list.map((c) => c.category));
   const phones = uniq([first.customerPhone, first.customerPhone2]).join(' / ');
 
   return (
@@ -107,7 +107,22 @@ export default function ContractDocument({ contract, contracts, company, showAmo
 
       <div className="doc-terms">
         <h4>계약 조건</h4>
-        {terms.some(isArticle) ? (
+        {terms.some(termSection) ? (
+          terms.map((t, i) => {
+            const [title, ...lines] = t.split('\n');
+            if (!termSection(t)) return <p key={i} className="doc-article-closing pre-wrap">{t}</p>;
+            return (
+              <section key={i} className="doc-article">
+                <h5>{title}</h5>
+                <ul className="doc-term-list">
+                  {lines.filter((l) => l.trim()).map((l, j) => (
+                    <li key={j}>{l.replace(/^\s*\*\s*/, '')}</li>
+                  ))}
+                </ul>
+              </section>
+            );
+          })
+        ) : terms.some(isArticle) ? (
           terms.map((t, i) => {
             if (!isArticle(t)) return <p key={i} className="doc-article-closing pre-wrap">{t}</p>;
             const [title, ...body] = t.split('\n');

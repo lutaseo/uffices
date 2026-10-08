@@ -4100,3 +4100,12 @@ input[type='month'] {
 .doc-terms .doc-article-closing {
   margin-top: 12px;
 }
+
+/* 계약 조건이 '[줄눈]' 같은 구분별 안내일 때: 제목 + 점 목록 */
+.doc-terms .doc-term-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #334155;
+}
