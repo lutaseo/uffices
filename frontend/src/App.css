@@ -4109,3 +4109,16 @@ input[type='month'] {
   line-height: 1.7;
   color: #334155;
 }
+
+/* 계약 조건 맨 앞 핵심 조항 (계약 당사자·계약금/잔금) */
+.doc-terms .doc-term-lead {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 2px solid #1f3a63;
+  border-radius: 6px;
+  background: #f5f8ff;
+  font-size: 14px;
+  line-height: 1.75;
+  color: #111827;
+  font-weight: 500;
+}

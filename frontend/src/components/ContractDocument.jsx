@@ -110,7 +110,7 @@ export default function ContractDocument({ contract, contracts, company, showAmo
         {terms.some(termSection) ? (
           terms.map((t, i) => {
             const [title, ...lines] = t.split('\n');
-            if (!termSection(t)) return <p key={i} className="doc-article-closing pre-wrap">{t}</p>;
+            if (!termSection(t)) return <p key={i} className={`${i === 0 ? 'doc-term-lead' : 'doc-article-closing'} pre-wrap`}>{t}</p>; // 맨 앞 = 가장 중요한 조항
             return (
               <section key={i} className="doc-article">
                 <h5>{title}</h5>
