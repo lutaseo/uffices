@@ -8,6 +8,9 @@ const termsOf = (esign, brand) => (esign?.status === '서명완료' && esign.ter
 
 
 
+// '제1조(목적)' 처럼 조 제목으로 시작하는 약관 (첫 줄 = 제목)
+const isArticle = (t) => /^제\s*\d+\s*조/.test(t);
+
 const uniq = (arr) => [...new Set(arr.filter(Boolean))];
 
 // 계약서 본문. 내부 조회(ContractViewModal)와 고객 서명 페이지(SignPage)가 함께 사용합니다.
@@ -104,11 +107,24 @@ export default function ContractDocument({ contract, contracts, company, showAmo
 
       <div className="doc-terms">
         <h4>계약 조건</h4>
-        <ol>
-          {terms.map((t, i) => (
-            <li key={i} className="pre-wrap">{t}</li>
-          ))}
-        </ol>
+        {terms.some(isArticle) ? (
+          terms.map((t, i) => {
+            if (!isArticle(t)) return <p key={i} className="doc-article-closing pre-wrap">{t}</p>;
+            const [title, ...body] = t.split('\n');
+            return (
+              <section key={i} className="doc-article">
+                <h5>{title}</h5>
+                <p className="pre-wrap">{body.join('\n')}</p>
+              </section>
+            );
+          })
+        ) : (
+          <ol>
+            {terms.map((t, i) => (
+              <li key={i} className="pre-wrap">{t}</li>
+            ))}
+          </ol>
+        )}
       </div>
 
       <div className="doc-sign">

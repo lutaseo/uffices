@@ -4078,3 +4078,25 @@ input[type='month'] {
   font-size: 12px;
   white-space: nowrap;
 }
+
+/* 계약 조건이 '제N조' 약관일 때: 조마다 제목 + 본문 */
+.doc-terms .doc-article {
+  margin: 0 0 10px;
+}
+
+.doc-terms .doc-article h5 {
+  margin: 0 0 2px;
+  font-size: 14px;
+}
+
+.doc-terms .doc-article p,
+.doc-terms .doc-article-closing {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #334155;
+}
+
+.doc-terms .doc-article-closing {
+  margin-top: 12px;
+}
