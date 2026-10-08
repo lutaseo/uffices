@@ -781,7 +781,7 @@ export const esign = {
     if (!signature) throw new ApiError('서명을 해 주세요.');
     const info = await clientInfo(); // 서명 증빙: 접속 기기(서버에서는 IP 포함)
     const signedAt = nowIso();
-    const terms = contractTermsFor(list[0].brand); // 서명 당시 계약 조건 보관 (나중에 조건을 바꿔도 그대로)
+    const terms = contractTermsFor(list[0].brand, list.map((c) => c.category)); // 서명 당시 계약 조건 보관 (나중에 조건을 바꿔도 그대로)
     for (const c of list) {
       c.esign = { ...c.esign, status: ESIGN_STATUS.SIGNED, signerName: signerName.trim(), signature, signedAt, terms, ...info };
       c.updatedAt = signedAt;
