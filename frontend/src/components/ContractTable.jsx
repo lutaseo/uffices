@@ -127,8 +127,13 @@ export default function ContractTable({ contracts, selectedIds, onToggle, onTogg
                       {a.canceled > 0 && <div className="text-red sub-text">취소</div>}
                     </td>
                     <td data-label="입금 / 잔액" className="text-right amount-cell">
-                      <div className="sub-text nowrap">입금 {won(a.paid)}</div>
-                      {kindBreakdown(a.byKind, won) && <div className="sub-text kind-break">{kindBreakdown(a.byKind, won)}</div>}
+                      {/* 입금 합계 대신 항목별(계약금 50,000 · 잔금 …)만 — 항목이 없을 때만 '입금' 합계 */}
+                      {kindBreakdown(a.byKind, won) ? (
+                        <div className="sub-text kind-break">{kindBreakdown(a.byKind, won)}</div>
+                      ) : (
+                        a.paid > 0 && <div className="sub-text nowrap">입금 {won(a.paid)}</div>
+                      )}
+                      {a.refund > 0 && <div className="sub-text nowrap text-red">환불 {won(a.refund)}</div>}
                       <div className={`amount-main ${a.balance > 0 ? 'text-red' : 'text-done'}`}>
                         {a.balance > 0 ? `잔액 ${won(a.balance)}원` : a.balance < 0 ? `초과입금 ${won(-a.balance)}원` : a.canceled > 0 ? '취소' : '완납'}
                       </div>
