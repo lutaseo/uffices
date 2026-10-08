@@ -5,7 +5,7 @@
 인테리어 시공(줄눈·청소·탄성·새집증후군·나노코팅) 업체를 위한 **전자계약 + 시공일정 관리** 서비스입니다.
 여러 업체가 함께 쓰는 구조로, 운영자(우리)가 업체에 계정을 발급하고 업체 관리자가 직원(실장)에게 권한을 나눠 줍니다.
 
-- 실서비스: https://uffices.vercel.app
+- 실서비스: https://veritybase.vercel.app
 - 배포·서버 연결 안내: [docs/DEPLOY.md](docs/DEPLOY.md)
 - 점검 결과·설계·남은 작업: [docs/REVIEW.md](docs/REVIEW.md)
 
@@ -51,7 +51,7 @@
 
 화면마다 주소가 있어 휴대폰·브라우저의 **뒤로가기/앞으로가기/새로고침**이 사이트 안에서 동작하고, 주소를 공유할 수 있습니다.
 
-업체마다 **주소 코드**가 있어 `https://uffices.vercel.app/{업체코드}` 로 접속합니다 (예: 더좋은집 = `/thegood`).
+업체마다 **주소 코드**가 있어 `https://veritybase.vercel.app/{업체코드}` 로 접속합니다 (예: 더좋은집 = `/thegood`).
 업체 코드는 운영자가 [업체/계정관리]에서 정하며, 아래 주소는 모두 업체 코드 뒤에 붙습니다 (예: `/thegood/contracts`).
 업체 주소에서는 **그 업체 계정만** 로그인할 수 있고, 운영자는 코드 없는 첫 주소(`/`)에서 로그인합니다.
 
@@ -146,7 +146,7 @@ TEST_DATABASE_URL=postgresql://postgres:비밀번호@localhost:5432/uffice_test 
 |---|---|---|
 | **CI** (GitHub Actions) | PR 생성·수정, `main` 반영 시 | 설치 → 화면 빌드(데모·서버 모드) → 서버 시험 (임시 PostgreSQL) |
 | **미리보기 배포** (Vercel) | `main` 외 브랜치 푸시 시 | 브랜치별 미리보기 주소 (데모 모드) |
-| **실서비스 배포** (Vercel) | `main` 반영 시 | https://uffices.vercel.app 자동 갱신 |
+| **실서비스 배포** (Vercel) | `main` 반영 시 | https://veritybase.vercel.app 자동 갱신 |
 
 작업 흐름: 작업 브랜치에 올림 → PR → CI 통과 확인 → `main`에 합침 → 자동 배포.
 문제가 생기면 Vercel 대시보드의 **Instant Rollback**으로 이전 배포로 즉시 되돌릴 수 있습니다.
