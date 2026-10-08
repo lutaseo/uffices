@@ -75,7 +75,7 @@ async function checkPassword(db, rec, password) {
 }
 
 export const auth = {
-  // companyCode: 업체 주소(uffices.vercel.app/thegood)에서 로그인하면 그 업체 계정만 허용
+  // companyCode: 업체 주소(veritybase.vercel.app/thegood)에서 로그인하면 그 업체 계정만 허용
   async login(loginId, password, companyCode) {
     const db = await loadDb();
     const id = String(loginId || '').trim();
@@ -133,7 +133,7 @@ export const auth = {
 // 업체 (운영자 전용)   GET/POST/PATCH /api/companies
 // ============================================================
 
-// 업체 주소 코드: uffices.vercel.app/{코드}  (영문 소문자로 시작, 영문 소문자·숫자·-, 2~20자)
+// 업체 주소 코드: veritybase.vercel.app/{코드}  (영문 소문자로 시작, 영문 소문자·숫자·-, 2~20자)
 export const RESERVED_CODES = ['admin', 'api', 'sign', 'contracts', 'customers', 'schedule', 'progress', 'stats', 'settings', 'me', 'engineer', 'assets', 'login', 'uffice', 'www'];
 function normalizeCode(db, code, exceptId) {
   const v = String(code || '').trim().toLowerCase();

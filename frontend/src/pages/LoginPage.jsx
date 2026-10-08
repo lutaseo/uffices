@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { API_MODE, companies } from '../api/index.js';
 
-// companyCode: 업체 주소(uffices.vercel.app/thegood)로 들어오면 그 업체 로그인 화면
+// companyCode: 업체 주소(veritybase.vercel.app/thegood)로 들어오면 그 업체 로그인 화면
 export default function LoginPage({ companyCode = '' }) {
   const { login } = useAuth();
   const [company, setCompany] = useState(undefined); // undefined: 확인 중, null: 없는 주소

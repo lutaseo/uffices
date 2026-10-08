@@ -56,7 +56,7 @@
 crypto.randomUUID().replaceAll('-', '') + crypto.randomUUID().replaceAll('-', '')
 ```
 
-5. **Deploy** → 1~2분 뒤 `uffices-xxxx.vercel.app` 주소가 생깁니다.
+5. **Deploy** → 1~2분 뒤 `veritybase-xxxx.vercel.app` 주소가 생깁니다.
 
 ---
 
