@@ -35,7 +35,7 @@ export default function LoginPage({ companyCode = '' }) {
     <div className="login-bg">
       <div className="login-card">
         <div className="login-left">
-          <span className="logo-box large">V</span>
+          <span className="logo-box large">VB</span>
           <h1>{company ? `${company.name} VerityBase` : 'VerityBase'}</h1>
           <p className="login-sub">전자계약 · 시공일정 관리</p>
           {companyCode && company === null && <p className="login-error">존재하지 않는 업체 주소입니다 ({companyCode}). 주소를 확인해 주세요.</p>}

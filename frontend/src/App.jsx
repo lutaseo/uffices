@@ -151,7 +151,7 @@ function MainLayout({ route }) {
     <div className="app-container">
       <header className="app-header">
         <a className="brand-logo" {...linkProps(home, go)}>
-          <span className="logo-box">V</span>
+          <span className="logo-box">VB</span>
           <span className="logo-text">{company ? `${company.name} VerityBase` : 'VerityBase 운영자'}</span>
         </a>
         <nav className="main-nav-bar">
