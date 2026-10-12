@@ -655,3 +655,16 @@ test('통계 시공기사별: 1차·2차 담당이 다른 계약은 금액을 �
   assert.equal(sum, 1400000, '기사별 + 공동 = 전체 (중복 없음)');
   assert.ok(r1.jobs.find((j) => j.contractId === both.id).sharedWith, '기사 목록에는 공동 표시');
 });
+
+test('알림톡 발송 기록: 템플릿 키·코드·빈칸 값·버튼을 함께 저장 (비즈고 연동용)', async () => {
+  const c = await admin.ok('contracts', 'create', { ...base, customerName: '알림고객', customerPhone: '010-5656-7878' });
+  const log = await admin.ok('notifications', 'send', {
+    contractId: c.id, template: '서명요청', templateKey: '서명요청', templateCode: 'vb_cus_sign',
+    variables: { 고객명: '알림고객', 링크: 'abc' }, buttons: [{ name: '계약서 확인·서명', url: 'https://veritybase.vercel.app/sign/abc' }],
+    target: '고객', brand: '더좋은집', receiverName: '알림고객', receiverPhone: '010-5656-7878', message: '알림고객님, 계약 내용을 확인하시고 서명해 주세요.',
+  });
+  assert.equal(log.templateCode, 'vb_cus_sign');
+  assert.deepEqual(log.variables, { 고객명: '알림고객', 링크: 'abc' });
+  assert.equal(log.buttons[0].url, 'https://veritybase.vercel.app/sign/abc');
+  assert.equal(log.result, 'MOCK', '아직은 테스트 모드');
+});

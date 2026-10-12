@@ -4124,3 +4124,53 @@ input[type='month'] {
   color: #111827;
   font-weight: 500;
 }
+
+/* 알림톡 미리보기: 카카오톡 말풍선 모양 */
+.kakao-bubble {
+  max-width: 320px;
+  margin: 8px auto 4px;
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  font-size: 13px;
+  text-align: left;
+}
+
+.kakao-bubble-head {
+  background: #fee500;
+  padding: 8px 12px;
+  font-weight: 600;
+}
+
+.kakao-bubble-emph {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.kakao-bubble-emph small {
+  color: #888;
+}
+
+.kakao-bubble-body {
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+
+.kakao-bubble-btn {
+  margin: 0 12px 10px;
+  padding: 8px;
+  background: #f2f3f5;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.talk-warn {
+  margin: 6px 0 0;
+  color: #c2410c;
+  font-size: 13px;
+}
