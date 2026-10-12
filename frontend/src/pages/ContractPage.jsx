@@ -18,6 +18,18 @@ const PAGE_SIZE = 20;
 const FILTER_KEY = 'uffice.contractFilter';
 const PAGE_KEY = 'uffice.contractPage';
 
+// 왼쪽 위 로고 → 메인화면: 기억해 둔 검색조건·쪽 번호를 지워 처음 목록으로
+export function resetContractListView() {
+  try {
+    sessionStorage.removeItem(FILTER_KEY);
+    Object.keys(sessionStorage)
+      .filter((k) => k.startsWith(`${PAGE_KEY}.`))
+      .forEach((k) => sessionStorage.removeItem(k));
+  } catch {
+    /* 저장소를 못 쓰는 브라우저는 무시 */
+  }
+}
+
 function loadSavedFilter() {
   try {
     return { ...EMPTY_FILTER, ...JSON.parse(sessionStorage.getItem(FILTER_KEY) || '{}') };
