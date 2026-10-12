@@ -820,7 +820,7 @@ function bundleByToken(db, token) {
 export const notifications = {
   // templateKey/templateCode/variables/buttons: 비즈고 알림톡 발송용 (utils/alimtalk.js 에서 만든 값)
   // 알림톡 발송: 비즈고 연결(서버 + API Key)이 있으면 실제 발송, 없으면(데모) 기록만 (result 'MOCK')
-  //   템플릿 코드·채널은 업체 설정(설정 > 알림톡연결)에서 브랜드별로 — 승인된 코드가 없으면 보내지 않고 안내
+  //   템플릿 코드·채널은 운영자(super) 알림톡연결 화면에서 업체·브랜드별로 — 승인된 코드가 없으면 보내지 않고 안내
   async send({ contractId, template, templateKey, variables, buttons, target, brand, receiverName, receiverPhone, message }) {
     const { db, user } = await authorize('notify.send');
     findContract(db, user, contractId);
@@ -832,7 +832,7 @@ export const notifications = {
     const code = String(cfg.codes?.[templateKey] || '').trim();
     const gw = alimtalkGateway();
     const live = !!(gw && gw.configured());
-    if (live && !code) throw new ApiError(`${brand} [${tpl.label}] 알림톡은 아직 비즈고 템플릿 코드가 없습니다. 설정 > 알림톡연결에서 승인된 템플릿 코드를 입력해 주세요.`);
+    if (live && !code) throw new ApiError(`${brand} [${tpl.label}] 알림톡은 아직 비즈고 템플릿 코드가 없습니다. 운영자에게 승인된 템플릿 코드 등록을 요청해 주세요.`);
     // 템플릿에 있는 #{빈칸}만 골라 보냄
     const names = [...new Set([tpl.body, ...tpl.buttons.map((x) => x.url)].join(' ').match(/#\{[^}]+\}/g) || [])].map((x) => x.slice(2, -1));
     const vars = variables && typeof variables === 'object' ? variables : {};
@@ -858,7 +858,7 @@ export const notifications = {
     let failure = null;
     if (live) {
       try {
-        const r = await gw.sendAlimtalk({ to: receiverPhone, templateCode: code, replaceWords, channel: cfg.channel || '', ref: `c${contractId}` });
+        const r = await gw.sendAlimtalk({ to: receiverPhone, templateCode: code, replaceWords, senderKey: cfg.senderKey || '', channel: cfg.channel || '', ref: `c${contractId}` });
         log.result = 'SENT';
         log.msgKey = r.msgKey || '';
       } catch (e) {
@@ -873,18 +873,20 @@ export const notifications = {
     return clone(log);
   },
 
-  // 업체별 알림톡 설정 (관리자): 브랜드마다 { 카카오톡 채널, 템플릿 코드(승인된 것) }
+  // 업체별 알림톡 설정 (운영자 super 전용): 브랜드마다 { 카카오톡 채널, 템플릿 코드(승인된 것) }
   //   company.alimtalk = { brands: { 더좋은집: { channel: '@thegood7777', codes: { 서명요청: '…', … } }, … } }
-  async saveAlimtalkSettings({ brands } = {}) {
+  async saveAlimtalkSettings({ companyId, brands } = {}) {
     const { db, user } = await authorize();
-    if (user.role !== ROLES.ADMIN) throw new ApiError('관리자만 바꿀 수 있습니다.', 'FORBIDDEN');
-    const company = db.companies.find((x) => x.id === user.companyId);
+    if (user.role !== ROLES.SUPER) throw new ApiError('운영자만 바꿀 수 있습니다.', 'FORBIDDEN');
+    const company = db.companies.find((x) => x.id === Number(companyId));
+    if (!company) throw new ApiError('업체를 선택해 주세요.');
     const names = company.brands?.length ? company.brands : Object.keys(brands || {});
     const clean = Object.fromEntries(
       names.map((b) => [
         b,
         {
           channel: String(brands?.[b]?.channel || '').trim().slice(0, 60),
+          senderKey: String(brands?.[b]?.senderKey || '').trim().slice(0, 100), // 채널 목록이 안 나올 때 직접 입력
           codes: Object.fromEntries(Object.keys(ALIMTALK_TEMPLATES).map((k) => [k, String(brands?.[b]?.codes?.[k] || '').trim().slice(0, 60)])),
         },
       ]),
@@ -894,32 +896,30 @@ export const notifications = {
     return clone(company.alimtalk);
   },
 
-  // ---------------- 비즈고 연결 (관리자) ----------------
-  // 연결 상태: API Key 등록 여부 + 카카오 발신프로필(채널) 목록
+  // ---------------- 비즈고 연결 (운영자 super 전용) ----------------
+  // 연결 상태: API Key 등록 여부 + 카카오 발신프로필(채널) 목록 + 업체별 설정
   async gatewayStatus() {
-    const { user } = await authorize();
-    if (user.role !== ROLES.ADMIN) throw new ApiError('관리자만 확인할 수 있습니다.', 'FORBIDDEN');
-    const { db } = await authorize();
-    const comp = db.companies.find((x) => x.id === user.companyId) || {};
-    const settings = { brands: clone(comp.alimtalk?.brands || {}), brandList: clone(comp.brands || []) };
+    const { db, user } = await authorize();
+    if (user.role !== ROLES.SUPER) throw new ApiError('운영자만 확인할 수 있습니다.', 'FORBIDDEN');
+    const companies = db.companies.map((c) => ({ id: c.id, name: c.name, code: c.code, brandList: clone(c.brands || []), brands: clone(c.alimtalk?.brands || {}) }));
     const gw = alimtalkGateway();
-    if (!gw) return { mode: 'demo', configured: false, senders: [], settings, error: '데모 모드에서는 알림톡을 보낼 수 없습니다.' };
-    if (!gw.configured()) return { mode: 'server', configured: false, senders: [], settings, error: 'Vercel 환경변수 BIZGO_API_KEY 가 없습니다.' };
+    if (!gw) return { mode: 'demo', configured: false, senders: [], companies, error: '데모 모드에서는 알림톡을 보낼 수 없습니다.' };
+    if (!gw.configured()) return { mode: 'server', configured: false, senders: [], companies, error: 'Vercel 환경변수 BIZGO_API_KEY 가 없습니다.' };
     try {
-      return { mode: 'server', configured: true, senders: await gw.listSenders(), settings, error: '' };
+      return { mode: 'server', configured: true, senders: await gw.listSenders(), companies, error: '' };
     } catch (e) {
-      return { mode: 'server', configured: true, senders: [], settings, error: e.message, code: e.code || '' };
+      return { mode: 'server', configured: true, senders: [], companies, error: e.message, code: e.code || '' };
     }
   },
 
   // 시험 발송: 승인된 템플릿 코드 + 빈칸 값으로 한 번호에 실제 발송
-  async testSend({ to, templateCode, replaceWords, channel } = {}) {
+  async testSend({ to, templateCode, replaceWords, channel, senderKey } = {}) {
     const { user } = await authorize();
-    if (user.role !== ROLES.ADMIN) throw new ApiError('관리자만 시험 발송할 수 있습니다.', 'FORBIDDEN');
+    if (user.role !== ROLES.SUPER) throw new ApiError('운영자만 시험 발송할 수 있습니다.', 'FORBIDDEN');
     const gw = alimtalkGateway();
     if (!gw) throw new ApiError('데모 모드에서는 알림톡을 보낼 수 없습니다.');
     try {
-      const r = await gw.sendAlimtalk({ to, templateCode: String(templateCode || '').trim(), replaceWords: replaceWords || {}, channel: channel || '', ref: `test-${user.companyId}` });
+      const r = await gw.sendAlimtalk({ to, templateCode: String(templateCode || '').trim(), replaceWords: replaceWords || {}, senderKey: String(senderKey || '').trim(), channel: channel || '', ref: 'test-super' });
       return { ok: true, msgKey: r.msgKey };
     } catch (e) {
       throw new ApiError(e.message || '발송에 실패했습니다.');

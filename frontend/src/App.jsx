@@ -41,6 +41,7 @@ const MENUS = [
   { key: 'stats', label: '통계정보', icon: '📊', perm: 'stats.view', path: '/stats' },
   // 운영자 전용 (업체 관리자는 설정 > 사용자관리 에서 실장을 관리)
   { key: 'accounts', label: '업체/계정관리', icon: '🔑', visible: (u) => u.role === ROLES.SUPER, path: '/admin' },
+  { key: 'alimtalk', label: '알림톡연결', icon: '💬', visible: (u) => u.role === ROLES.SUPER, path: '/admin/alimtalk' },
   {
     key: 'setting',
     label: '설정',
@@ -53,7 +54,6 @@ const MENUS = [
       { key: 'products', label: '상품관리', path: '/settings/products', perm: 'settings.manage' },
       { key: 'apartments', label: '아파트관리', path: '/settings/apartments', perm: 'settings.manage' },
       { key: 'scheduleSetting', label: '일정관리설정', path: '/settings/schedule', perm: 'settings.manage' },
-      { key: 'alimtalk', label: '알림톡연결', path: '/settings/alimtalk', visible: (u) => u.role === ROLES.ADMIN },
       { key: 'import', label: '데이터 가져오기', path: '/settings/import', visible: (u) => u.role === ROLES.ADMIN },
       { key: 'me', label: '내 정보', path: '/me' },
     ],
@@ -68,7 +68,6 @@ const SETTING_PAGES = {
   products: ProductSettings,
   apartments: ApartmentSettings,
   scheduleSetting: ScheduleSettings,
-  alimtalk: AlimtalkSettings,
   import: ImportPage,
   me: SettingsPage,
 };
@@ -115,7 +114,9 @@ function CompanyGate({ route }) {
 const belongsTo = (m, path) =>
   m.key === 'setting'
     ? path.startsWith('/settings') || path === '/me'
-    : path === m.path || path.startsWith(`${m.path}/`);
+    : m.key === 'accounts' // /admin 아래 다른 운영자 메뉴(/admin/alimtalk)와 겹치지 않게
+      ? path === m.path
+      : path === m.path || path.startsWith(`${m.path}/`);
 
 function MainLayout({ route }) {
   const { user, company, logout, can } = useAuth();
@@ -126,7 +127,7 @@ function MainLayout({ route }) {
     return !item.perm || can(item.perm);
   };
   const menus = MENUS.filter((m) => {
-    if (user.role === ROLES.SUPER) return m.key === 'accounts' || m.key === 'setting';
+    if (user.role === ROLES.SUPER) return m.key === 'accounts' || m.key === 'alimtalk' || m.key === 'setting';
     return m.always || allowed(m);
   })
     .map((m) => ({ ...m, subs: (m.subs || []).filter(allowed) }))
@@ -241,6 +242,7 @@ function MainLayout({ route }) {
         {current?.key === 'progress' && <ProgressStatus />}
         {current?.key === 'stats' && <StatsPage />}
         {current?.key === 'accounts' && <AccountManagement />}
+        {current?.key === 'alimtalk' && <AlimtalkSettings />}
         {current?.key === 'setting' && <SettingPage path={path} subs={current.subs} />}
       </main>
     </div>
