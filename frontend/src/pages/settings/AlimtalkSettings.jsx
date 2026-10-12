@@ -18,6 +18,9 @@ export default function AlimtalkSettings() {
   const [newWord, setNewWord] = useState('');
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState(null);
+  const [lastKey, setLastKey] = useState(''); // 마지막 시험 발송 메시지 키 → 도착 결과 확인
+  const [report, setReport] = useState(null);
+  const [checkingReport, setCheckingReport] = useState(false);
   const [companyId, setCompanyId] = useState('');
   const [brandCfg, setBrandCfg] = useState(null); // { 더좋은집: { channel, senderKey, codes: {…} }, … }
   const [savingCfg, setSavingCfg] = useState(false);
@@ -53,13 +56,27 @@ export default function AlimtalkSettings() {
     if (!window.confirm(`${form.to} 번호로 실제 알림톡을 보냅니다. (요금 발생)\n계속할까요?`)) return;
     setSending(true);
     setResult(null);
+    setReport(null);
+    setLastKey('');
     try {
       const r = await notifications.testSend({ to: form.to, templateCode: form.templateCode, replaceWords: form.words, channel: form.channel, senderKey: form.senderKey });
-      setResult({ ok: true, text: `접수되었습니다.${r.msgKey ? ` (메시지 키 ${r.msgKey})` : ''} 휴대폰 카카오톡을 확인해 주세요.` });
+      setResult({ ok: true, text: `비즈고가 접수했습니다.${r.msgKey ? ` (메시지 키 ${r.msgKey})` : ''} 접수는 '도착'이 아닙니다 — 잠시 뒤 아래 [도착 결과 확인]을 눌러 주세요.` });
+      setLastKey(r.msgKey || '');
     } catch (err) {
       setResult({ ok: false, text: err.message });
     } finally {
       setSending(false);
+    }
+  };
+
+  const checkReport = async () => {
+    setCheckingReport(true);
+    try {
+      setReport(await notifications.testResult(lastKey.split(',')[0]));
+    } catch (err) {
+      setReport({ error: err.message });
+    } finally {
+      setCheckingReport(false);
     }
   };
 
@@ -172,6 +189,7 @@ export default function AlimtalkSettings() {
                     <td className="label-col">발신프로필 키</td>
                     <td className="input-col">
                       <input className="input-text" value={cfg.senderKey} onChange={(e) => setCfg(b, { senderKey: e.target.value.trim() })} placeholder="채널 목록이 안 나올 때만 (비즈고 > 카카오 발신프로필 관리에서 복사)" />
+                      {cfg.senderKey && !/^[0-9A-Za-z]{30,}$/.test(cfg.senderKey) && <p className="text-red">발신프로필 키 형식이 아닙니다 (보통 40자리 영문·숫자).</p>}
                     </td>
                   </tr>
                   {Object.entries(ALIMTALK_TEMPLATES).map(([k, t]) => (
@@ -227,6 +245,7 @@ export default function AlimtalkSettings() {
               <td className="label-col">발신프로필 키</td>
               <td className="input-col">
                 <input className="input-text" value={form.senderKey} onChange={(e) => setForm({ ...form, senderKey: e.target.value.trim() })} placeholder="채널 목록이 안 나오면 여기에 직접 (비워 두면 자동)" />
+                {form.senderKey && !/^[0-9A-Za-z]{30,}$/.test(form.senderKey) && <p className="text-red">템플릿 코드가 아닙니다. 비즈고 카카오 발신프로필 관리 화면의 긴 영문·숫자 키(보통 40자리)를 넣어 주세요.</p>}
               </td>
             </tr>
             <tr>
@@ -259,6 +278,22 @@ export default function AlimtalkSettings() {
           </tbody>
         </table>
         {result && <p className={result.ok ? 'text-done bold-text' : 'text-red bold-text'}>{result.ok ? '✅ ' : '⚠ '}{result.text}</p>}
+        {lastKey && (
+          <div className="gw-report">
+            <button type="button" className="btn-dark-sm" onClick={checkReport} disabled={checkingReport}>
+              {checkingReport ? '확인 중...' : '도착 결과 확인'}
+            </button>
+            {report?.error && <p className="text-red">⚠ {report.error}</p>}
+            {Array.isArray(report) && !report.length && <p className="sub-text">아직 결과가 없습니다. 10초~1분 뒤 다시 눌러 주세요.</p>}
+            {Array.isArray(report) &&
+              report.map((x, i) => (
+                <p key={i} className={x.ok ? 'text-done bold-text' : 'text-red bold-text'}>
+                  {x.ok ? '✅ 카카오톡 도착 성공' : `⚠ 실패 [${x.reportCode}] ${x.reportText || ''}`}
+                  <span className="sub-text"> {x.reportTime}</span>
+                </p>
+              ))}
+          </div>
+        )}
         <div className="form-bottom-btns">
           <button type="submit" className="btn-dark-lg" disabled={sending || !status?.configured}>
             {sending ? '보내는 중...' : '시험 발송'}

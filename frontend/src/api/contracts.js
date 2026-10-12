@@ -881,6 +881,8 @@ export const notifications = {
     const company = db.companies.find((x) => x.id === Number(companyId));
     if (!company) throw new ApiError('업체를 선택해 주세요.');
     const names = company.brands?.length ? company.brands : Object.keys(brands || {});
+    const badKey = names.find((b) => brands?.[b]?.senderKey && !/^[0-9A-Za-z]{30,}$/.test(String(brands[b].senderKey).trim()));
+    if (badKey) throw new ApiError(`${badKey}: 발신프로필 키 형식이 아닙니다. 비즈고 카카오 발신프로필 관리 화면의 긴 영문·숫자 키(보통 40자리)를 넣어 주세요.`);
     const clean = Object.fromEntries(
       names.map((b) => [
         b,
@@ -923,6 +925,19 @@ export const notifications = {
       return { ok: true, msgKey: r.msgKey };
     } catch (e) {
       throw new ApiError(e.message || '발송에 실패했습니다.');
+    }
+  },
+
+  // 시험 발송 결과: 비즈고가 '접수'한 뒤 카카오에 실제로 도착했는지 (메시지 키로 조회)
+  async testResult(msgKey) {
+    const { user } = await authorize();
+    if (user.role !== ROLES.SUPER) throw new ApiError('운영자만 확인할 수 있습니다.', 'FORBIDDEN');
+    const gw = alimtalkGateway();
+    if (!gw?.inquiryReport) throw new ApiError('데모 모드에서는 확인할 수 없습니다.');
+    try {
+      return await gw.inquiryReport(msgKey);
+    } catch (e) {
+      throw new ApiError(e.message || '결과를 확인하지 못했습니다.');
     }
   },
 

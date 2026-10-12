@@ -62,6 +62,9 @@ async function request(method, path, { query, body } = {}) {
   return data;
 }
 
+// 카카오 발신프로필 키: 영문·숫자만, 보통 40자리 (템플릿 코드 togisa_start01 같은 값을 잘못 넣는 것 방지)
+export const looksLikeSenderKey = (v) => /^[0-9A-Za-z]{30,}$/.test(String(v || ''));
+
 // 카카오 발신프로필(채널) 목록 — senderKey 를 몰라도 여기서 찾음
 export async function listSenders() {
   const data = await request('GET', '/api/comm/v1/account/kakao/sender/profiles', { query: { page: 1, rows: 50 } });
@@ -97,7 +100,11 @@ export async function sendAlimtalk({ to, templateCode, replaceWords = {}, sender
   const phone = String(to || '').replace(/\D/g, '');
   if (phone.length < 10) throw new BizgoError('받는 번호가 올바르지 않습니다.', 'BAD_PHONE');
   if (!templateCode) throw new BizgoError('템플릿 코드가 없습니다.', 'NO_TEMPLATE');
-  const key = String(senderKey || '').trim() || (await resolveSenderKey(channel));
+  const direct = String(senderKey || '').trim();
+  if (direct && !looksLikeSenderKey(direct)) {
+    throw new BizgoError('발신프로필 키 형식이 아닙니다. 템플릿 코드가 아니라, 비즈고 카카오 발신프로필 관리 화면의 긴 영문·숫자 키(보통 40자리)를 넣어 주세요.', 'BAD_SENDER_KEY');
+  }
+  const key = direct || (await resolveSenderKey(channel));
   const words = Object.fromEntries(Object.entries(replaceWords).map(([k, v]) => [k, String(v ?? '')]));
   const data = await request('POST', '/api/comm/v1/send/omni', {
     body: {
@@ -109,6 +116,23 @@ export async function sendAlimtalk({ to, templateCode, replaceWords = {}, sender
   const result = data?.data || data || {};
   const keys = result.msgKeys || (result.destinations || []).map((d) => d.msgKey).filter(Boolean);
   return { ok: true, msgKey: Array.isArray(keys) ? keys.join(',') : String(result.msgKey || ''), raw: result };
+}
+
+// 발송 결과(리포트) 조회 — 접수 후 실제 도착 여부. reportCode '10000' 이면 성공 (30일 이내)
+export async function inquiryReport(msgKey) {
+  const key = String(msgKey || '').trim();
+  if (!/^[0-9A-Za-z_-]{1,80}$/.test(key)) throw new BizgoError('메시지 키가 올바르지 않습니다.', 'BAD_MSGKEY');
+  const data = await request('GET', `/api/comm/v1/report/inquiry/${encodeURIComponent(key)}`);
+  const list = data?.data?.report || data?.report || [];
+  return list.map((r) => ({
+    msgKey: r.msgKey || key,
+    serviceType: r.serviceType || '',
+    sendTime: r.sendTime || '',
+    reportTime: r.reportTime || '',
+    reportCode: String(r.reportCode || ''),
+    reportText: r.reportText || '',
+    ok: String(r.reportCode || '') === '10000',
+  }));
 }
 
 export const bizgoConfigured = () => !!apiKey();
