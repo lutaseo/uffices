@@ -8,7 +8,7 @@
 //   /{업체}/contracts     계약 목록          /{업체}/contracts/12/edit  계약 수정
 //   /{업체}/contracts/new 계약 등록          /{업체}/contracts/new?from=12  같은 현장 시공 추가
 //   /{업체}/customers  /schedule  /progress  /stats  /settings/...  /me
-//   /{업체}/engineer  /{업체}/engineer/off   (기사모바일)
+//   /{업체}/m  /{업체}/m/off  /{업체}/m/contract/12   (기사모바일, 예전 /engineer 주소도 넘겨줌)
 //   /{업체}/c  /{업체}/c/:고유값      (고객모바일 — 이름+휴대폰 / 알림톡 링크로 바로 로그인)
 //   /                    운영자 로그인      /admin  (운영자 업체 관리)
 //   /sign/:token         고객 전자서명 (로그인 불필요, 업체 코드 없음)
@@ -20,7 +20,7 @@ import { useEffect, useState } from 'react';
 const EVENT = 'uffice:navigate';
 
 // 업체 코드가 아닌 첫 주소 단어 (화면 이름)
-const PAGES = ['c', 'e', 'contracts', 'customers', 'schedule', 'progress', 'stats', 'admin', 'settings', 'me', 'engineer', 'sign', 'api', 'assets'];
+const PAGES = ['c', 'e', 'm', 'contracts', 'customers', 'schedule', 'progress', 'stats', 'admin', 'settings', 'me', 'engineer', 'sign', 'api', 'assets'];
 
 function split(pathname) {
   const clean = pathname.replace(/\/+$/, '') || '/';

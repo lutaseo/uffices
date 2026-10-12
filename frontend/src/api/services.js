@@ -134,7 +134,7 @@ export const auth = {
 // ============================================================
 
 // 업체 주소 코드: veritybase.vercel.app/{코드}  (영문 소문자로 시작, 영문 소문자·숫자·-, 2~20자)
-export const RESERVED_CODES = ['admin', 'api', 'sign', 'contracts', 'customers', 'schedule', 'progress', 'stats', 'settings', 'me', 'engineer', 'assets', 'login', 'uffice', 'www', 'c', 'e'];
+export const RESERVED_CODES = ['admin', 'api', 'sign', 'contracts', 'customers', 'schedule', 'progress', 'stats', 'settings', 'me', 'engineer', 'assets', 'login', 'uffice', 'www', 'c', 'e', 'm'];
 function normalizeCode(db, code, exceptId) {
   const v = String(code || '').trim().toLowerCase();
   if (!/^[a-z][a-z0-9-]{1,19}$/.test(v)) throw new ApiError('업체 주소 코드는 영문 소문자로 시작하는 영문·숫자·- 2~20자로 입력해 주세요. (예: thegood)');

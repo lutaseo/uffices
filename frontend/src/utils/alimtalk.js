@@ -23,7 +23,7 @@ export const ALIMTALK_TEMPLATES = {
     title: '작업이 배정되었습니다.',
     subtitle: '더 좋은집',
     body: '기사님께 작업이 배정되었습니다.\n모바일에서 확인해주세요.\n\n- 시공일 : #{시공일}\n- 시간 : #{시간}\n- 주소 : #{주소}',
-    buttons: [{ name: '시공확인페이지', url: `${ALIMTALK_BASE_URL}/thegood/engineer` }],
+    buttons: [{ name: '시공확인페이지', url: `${ALIMTALK_BASE_URL}/thegood/m` }],
   },
   // 고객님께: 담당 기사 배정
   기사배정_고객: {
