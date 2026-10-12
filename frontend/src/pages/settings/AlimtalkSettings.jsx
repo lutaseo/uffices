@@ -4,7 +4,7 @@ import { useAuth } from '../../auth/AuthContext.jsx';
 import { formatPhone } from '../../utils/format.js';
 import { ALIMTALK_TEMPLATES } from '../../utils/alimtalk.js';
 
-// 설정 > 알림톡연결 (관리자): 비즈고 연결 확인 + 승인된 템플릿으로 시험 발송
+// 운영자(super) > 알림톡연결: 비즈고 연결 확인 + 업체·브랜드별 템플릿 코드 + 승인된 템플릿으로 시험 발송
 //   API Key 는 Vercel 환경변수(BIZGO_API_KEY)에만 — 이 화면에서는 보이지도 입력받지도 않음
 const PRESETS = {
   togisa_start01: { label: '기사 작업배정 (예전 승인 템플릿)', words: { 시공일: '2026-10-20', 시간: '09:00', 주소: '시험아파트 101-1001' } },
@@ -14,11 +14,12 @@ export default function AlimtalkSettings() {
   const { handleError } = useAuth();
   const [status, setStatus] = useState(null);
   const [checking, setChecking] = useState(false);
-  const [form, setForm] = useState({ to: '', templateCode: 'togisa_start01', channel: '', words: PRESETS.togisa_start01.words });
+  const [form, setForm] = useState({ to: '', templateCode: 'togisa_start01', channel: '', senderKey: '', words: PRESETS.togisa_start01.words });
   const [newWord, setNewWord] = useState('');
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState(null);
-  const [brandCfg, setBrandCfg] = useState(null); // { 더좋은집: { channel, codes: {…} }, … }
+  const [companyId, setCompanyId] = useState('');
+  const [brandCfg, setBrandCfg] = useState(null); // { 더좋은집: { channel, senderKey, codes: {…} }, … }
   const [savingCfg, setSavingCfg] = useState(false);
 
   const check = async () => {
@@ -26,16 +27,22 @@ export default function AlimtalkSettings() {
     try {
       const s = await notifications.gatewayStatus();
       setStatus(s);
-      if (!brandCfg) {
-        const names = s.settings?.brandList?.length ? s.settings.brandList : Object.keys(s.settings?.brands || {});
-        setBrandCfg(Object.fromEntries(names.map((b) => [b, { channel: s.settings?.brands?.[b]?.channel || '', codes: { ...(s.settings?.brands?.[b]?.codes || {}) } }])));
-      }
+      if (!brandCfg && s.companies?.length) pickCompany(s.companies[0].id, s);
       if (s.senders?.length && !form.channel) setForm((f) => ({ ...f, channel: s.senders[0].channelId || s.senders[0].channelName }));
     } catch (e) {
       handleError(e);
     } finally {
       setChecking(false);
     }
+  };
+  // 업체를 고르면 그 업체의 브랜드별 설정을 불러옴
+  const pickCompany = (id, s = status) => {
+    const comp = s?.companies?.find((c) => c.id === Number(id));
+    setCompanyId(comp ? comp.id : '');
+    if (!comp) return setBrandCfg(null);
+    const names = comp.brandList?.length ? comp.brandList : Object.keys(comp.brands || {});
+    const cfgOf = (b) => comp.brands?.[b] || {};
+    setBrandCfg(Object.fromEntries(names.map((b) => [b, { channel: cfgOf(b).channel || '', senderKey: cfgOf(b).senderKey || '', codes: { ...(cfgOf(b).codes || {}) } }])));
   };
   useEffect(() => {
     check();
@@ -47,7 +54,7 @@ export default function AlimtalkSettings() {
     setSending(true);
     setResult(null);
     try {
-      const r = await notifications.testSend({ to: form.to, templateCode: form.templateCode, replaceWords: form.words, channel: form.channel });
+      const r = await notifications.testSend({ to: form.to, templateCode: form.templateCode, replaceWords: form.words, channel: form.channel, senderKey: form.senderKey });
       setResult({ ok: true, text: `접수되었습니다.${r.msgKey ? ` (메시지 키 ${r.msgKey})` : ''} 휴대폰 카카오톡을 확인해 주세요.` });
     } catch (err) {
       setResult({ ok: false, text: err.message });
@@ -59,8 +66,9 @@ export default function AlimtalkSettings() {
   const saveCfg = async () => {
     setSavingCfg(true);
     try {
-      await notifications.saveAlimtalkSettings({ brands: brandCfg });
-      alert('저장되었습니다. 이제 계약·일정 화면의 알림톡 버튼이 이 코드로 실제 발송됩니다.');
+      const saved = await notifications.saveAlimtalkSettings({ companyId, brands: brandCfg });
+      setStatus((st) => ({ ...st, companies: st.companies.map((c) => (c.id === companyId ? { ...c, brands: saved.brands } : c)) }));
+      alert('저장되었습니다. 이제 이 업체의 계약·일정 화면 알림톡 버튼이 이 코드로 실제 발송됩니다.');
     } catch (e) {
       handleError(e);
     } finally {
@@ -77,7 +85,7 @@ export default function AlimtalkSettings() {
       <div className="page-header">
         <h2>알림톡연결</h2>
         <ul className="notice-list">
-          <li>비즈고(카카오 알림톡) 연결 상태를 확인하고, 승인된 템플릿으로 시험 발송합니다.</li>
+          <li>운영자 전용 화면입니다. 비즈고(카카오 알림톡) 연결 상태를 확인하고, 업체별 템플릿 코드를 넣고, 시험 발송합니다.</li>
           <li>비즈고 API Key 는 Vercel 환경변수 <b>BIZGO_API_KEY</b> 에만 넣습니다. (이 화면·채팅에 쓰지 마세요)</li>
           <li>시험 발송은 실제로 발송되며 비즈고 요금이 나갑니다.</li>
         </ul>
@@ -122,7 +130,19 @@ export default function AlimtalkSettings() {
         </button>
       </div>
 
-      <h3 className="section-title">2. 템플릿 코드 (브랜드별)</h3>
+      <h3 className="section-title">2. 템플릿 코드 (업체·브랜드별)</h3>
+      {status?.companies?.length > 0 && (
+        <p>
+          업체{' '}
+          <select className="input-text gw-company" value={companyId} onChange={(e) => pickCompany(e.target.value)}>
+            {status.companies.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} ({c.code})
+              </option>
+            ))}
+          </select>
+        </p>
+      )}
       <p className="sub-text">비즈고에서 <b>승인된</b> 템플릿 코드를 넣어 주세요. 코드가 있는 알림톡만 계약·일정 화면에서 실제로 발송됩니다. (검수 중인 코드는 승인 후 넣기)</p>
       {brandCfg && (
         <div className="gw-brands">
@@ -148,6 +168,12 @@ export default function AlimtalkSettings() {
                       )}
                     </td>
                   </tr>
+                  <tr>
+                    <td className="label-col">발신프로필 키</td>
+                    <td className="input-col">
+                      <input className="input-text" value={cfg.senderKey} onChange={(e) => setCfg(b, { senderKey: e.target.value.trim() })} placeholder="채널 목록이 안 나올 때만 (비즈고 > 카카오 발신프로필 관리에서 복사)" />
+                    </td>
+                  </tr>
                   {Object.entries(ALIMTALK_TEMPLATES).map(([k, t]) => (
                     <tr key={k}>
                       <td className="label-col">{t.label}</td>
@@ -163,7 +189,7 @@ export default function AlimtalkSettings() {
         </div>
       )}
       <div className="form-bottom-btns">
-        <button type="button" className="btn-dark-lg" onClick={saveCfg} disabled={savingCfg || !brandCfg}>
+        <button type="button" className="btn-dark-lg" onClick={saveCfg} disabled={savingCfg || !brandCfg || !companyId}>
           {savingCfg ? '저장 중...' : '템플릿 코드 저장'}
         </button>
       </div>
@@ -197,6 +223,12 @@ export default function AlimtalkSettings() {
                 </td>
               </tr>
             )}
+            <tr>
+              <td className="label-col">발신프로필 키</td>
+              <td className="input-col">
+                <input className="input-text" value={form.senderKey} onChange={(e) => setForm({ ...form, senderKey: e.target.value.trim() })} placeholder="채널 목록이 안 나오면 여기에 직접 (비워 두면 자동)" />
+              </td>
+            </tr>
             <tr>
               <td className="label-col">빈칸 값</td>
               <td className="input-col">

@@ -81,7 +81,14 @@ export async function resolveSenderKey(hint = '') {
   const list = await listSenders();
   const h = String(hint || '').replace(/^@/, '').toLowerCase();
   const found = (h && list.find((c) => [c.channelId, c.channelName].some((v) => String(v).replace(/^@/, '').toLowerCase() === h))) || (list.length === 1 ? list[0] : null);
-  if (!found?.senderKey) throw new BizgoError(`발신프로필을 찾지 못했습니다${list.length ? ` (등록된 채널: ${list.map((c) => c.channelId || c.channelName).join(', ')})` : ''}.`, 'NO_SENDER');
+  if (!found?.senderKey) {
+    throw new BizgoError(
+      list.length
+        ? `발신프로필을 찾지 못했습니다 (이 키로 쓸 수 있는 채널: ${list.map((c) => c.channelId || c.channelName).join(', ')}). 채널을 골라 주세요.`
+        : '이 API Key 로 조회되는 카카오 발신프로필(채널)이 없습니다. 비즈고의 카카오 발신프로필 관리 화면에서 발신프로필 키(senderKey)를 복사해 "발신프로필 키" 칸에 넣어 주세요.',
+      'NO_SENDER',
+    );
+  }
   return found.senderKey;
 }
 
@@ -90,7 +97,7 @@ export async function sendAlimtalk({ to, templateCode, replaceWords = {}, sender
   const phone = String(to || '').replace(/\D/g, '');
   if (phone.length < 10) throw new BizgoError('받는 번호가 올바르지 않습니다.', 'BAD_PHONE');
   if (!templateCode) throw new BizgoError('템플릿 코드가 없습니다.', 'NO_TEMPLATE');
-  const key = senderKey || (await resolveSenderKey(channel));
+  const key = String(senderKey || '').trim() || (await resolveSenderKey(channel));
   const words = Object.fromEntries(Object.entries(replaceWords).map(([k, v]) => [k, String(v ?? '')]));
   const data = await request('POST', '/api/comm/v1/send/omni', {
     body: {

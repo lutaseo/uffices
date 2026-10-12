@@ -131,6 +131,7 @@ const LIGHT_TABLES = {
   'scheduleSettings.get': [],
   'notifications.gatewayStatus': [],
   'notifications.testSend': [],
+  'notifications.saveAlimtalkSettings': [], // 업체 표만 바꿈 (운영자가 전체 업체 계약까지 읽지 않게)
 };
 
 // 입금 영수증 사진을 읽거나 바꾸는 요청 (첫 인자 = 계약 번호)
