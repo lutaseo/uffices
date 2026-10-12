@@ -4341,3 +4341,13 @@ input[type='month'] {
   font-family: monospace;
   color: #475569;
 }
+
+.gw-brands {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.gw-brand h4 {
+  margin: 4px 0 6px;
+}

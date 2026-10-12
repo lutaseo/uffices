@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { notifications } from '../../api/index.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { formatPhone } from '../../utils/format.js';
+import { ALIMTALK_TEMPLATES } from '../../utils/alimtalk.js';
 
 // 설정 > 알림톡연결 (관리자): 비즈고 연결 확인 + 승인된 템플릿으로 시험 발송
 //   API Key 는 Vercel 환경변수(BIZGO_API_KEY)에만 — 이 화면에서는 보이지도 입력받지도 않음
@@ -17,12 +18,18 @@ export default function AlimtalkSettings() {
   const [newWord, setNewWord] = useState('');
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState(null);
+  const [brandCfg, setBrandCfg] = useState(null); // { 더좋은집: { channel, codes: {…} }, … }
+  const [savingCfg, setSavingCfg] = useState(false);
 
   const check = async () => {
     setChecking(true);
     try {
       const s = await notifications.gatewayStatus();
       setStatus(s);
+      if (!brandCfg) {
+        const names = s.settings?.brandList?.length ? s.settings.brandList : Object.keys(s.settings?.brands || {});
+        setBrandCfg(Object.fromEntries(names.map((b) => [b, { channel: s.settings?.brands?.[b]?.channel || '', codes: { ...(s.settings?.brands?.[b]?.codes || {}) } }])));
+      }
       if (s.senders?.length && !form.channel) setForm((f) => ({ ...f, channel: s.senders[0].channelId || s.senders[0].channelName }));
     } catch (e) {
       handleError(e);
@@ -48,6 +55,19 @@ export default function AlimtalkSettings() {
       setSending(false);
     }
   };
+
+  const saveCfg = async () => {
+    setSavingCfg(true);
+    try {
+      await notifications.saveAlimtalkSettings({ brands: brandCfg });
+      alert('저장되었습니다. 이제 계약·일정 화면의 알림톡 버튼이 이 코드로 실제 발송됩니다.');
+    } catch (e) {
+      handleError(e);
+    } finally {
+      setSavingCfg(false);
+    }
+  };
+  const setCfg = (b, patch) => setBrandCfg((c) => ({ ...c, [b]: { ...c[b], ...patch } }));
 
   const setWord = (k, v) => setForm((f) => ({ ...f, words: { ...f.words, [k]: v } }));
   const removeWord = (k) => setForm((f) => ({ ...f, words: Object.fromEntries(Object.entries(f.words).filter(([x]) => x !== k)) }));
@@ -102,7 +122,53 @@ export default function AlimtalkSettings() {
         </button>
       </div>
 
-      <h3 className="section-title">2. 시험 발송</h3>
+      <h3 className="section-title">2. 템플릿 코드 (브랜드별)</h3>
+      <p className="sub-text">비즈고에서 <b>승인된</b> 템플릿 코드를 넣어 주세요. 코드가 있는 알림톡만 계약·일정 화면에서 실제로 발송됩니다. (검수 중인 코드는 승인 후 넣기)</p>
+      {brandCfg && (
+        <div className="gw-brands">
+          {Object.entries(brandCfg).map(([b, cfg]) => (
+            <div key={b} className="gw-brand">
+              <h4>{b}</h4>
+              <table className="form-grid-table">
+                <tbody>
+                  <tr>
+                    <td className="label-col">카카오톡 채널</td>
+                    <td className="input-col">
+                      {status?.senders?.length ? (
+                        <select className="input-text" value={cfg.channel} onChange={(e) => setCfg(b, { channel: e.target.value })}>
+                          <option value="">선택하세요</option>
+                          {status.senders.map((x) => (
+                            <option key={x.senderKey || x.channelId} value={x.channelId || x.channelName}>
+                              {x.channelName} {x.channelId}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input className="input-text" value={cfg.channel} onChange={(e) => setCfg(b, { channel: e.target.value.trim() })} placeholder="@채널아이디" />
+                      )}
+                    </td>
+                  </tr>
+                  {Object.entries(ALIMTALK_TEMPLATES).map(([k, t]) => (
+                    <tr key={k}>
+                      <td className="label-col">{t.label}</td>
+                      <td className="input-col">
+                        <input className="input-text" value={cfg.codes[k] || ''} onChange={(e) => setCfg(b, { codes: { ...cfg.codes, [k]: e.target.value.trim() } })} placeholder="템플릿 코드" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="form-bottom-btns">
+        <button type="button" className="btn-dark-lg" onClick={saveCfg} disabled={savingCfg || !brandCfg}>
+          {savingCfg ? '저장 중...' : '템플릿 코드 저장'}
+        </button>
+      </div>
+
+      <h3 className="section-title">3. 시험 발송</h3>
       <form onSubmit={send}>
         <table className="form-grid-table narrow-table">
           <tbody>

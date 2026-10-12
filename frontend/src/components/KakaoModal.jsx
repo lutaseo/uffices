@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { contracts as contractApi, notifications } from '../api/index.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { BRANDS } from '../constants.js';
-import { ALIMTALK_TEMPLATES, buildAlimtalk, templateKeyOf } from '../utils/alimtalk.js';
+import { buildAlimtalk, templateKeyOf } from '../utils/alimtalk.js';
 import { backdrop } from '../utils/backdrop.js';
 
 // 화면에서 고르는 템플릿 (받는 사람별 실제 문구는 utils/alimtalk.js — 비즈고 승인 문구와 동일)
@@ -40,18 +40,17 @@ export default function KakaoModal({ contract, initialTemplate = '기사배정',
   }, [contract.id, effectiveTarget]);
   const msg = buildAlimtalk(key, { contract, schedule: engineer, signUrl, customerToken });
   const message = msg.text;
-  const wrongChannel = ALIMTALK_TEMPLATES[key].channel !== brand; // 템플릿은 등록된 채널(브랜드)로만 발송 가능
   const needSign = template === '서명요청' && !signUrl;
 
   const handleSend = async () => {
     setSending(true);
     try {
+      let live = false;
       for (const phone of receiver.phones) {
-        await notifications.send({
+        const log = await notifications.send({
           contractId: contract.id,
           template,
           templateKey: key,
-          templateCode: msg.code,
           variables: msg.variables,
           buttons: msg.buttons,
           target: effectiveTarget,
@@ -60,9 +59,14 @@ export default function KakaoModal({ contract, initialTemplate = '기사배정',
           receiverPhone: phone,
           message,
         });
+        live = live || log.result === 'SENT';
       }
       const to = receiver.phones.length > 1 ? ` (${receiver.phones.join(', ')} 두 번호 모두)` : '';
-      alert(`${receiver.name}님에게${to} [${tpl.label}] 알림톡 발송을 요청했습니다.\n(현재는 테스트 모드로 실제 발송되지 않습니다)`);
+      alert(
+        live
+          ? `${receiver.name}님에게${to} [${tpl.label}] 알림톡을 보냈습니다.`
+          : `${receiver.name}님에게${to} [${tpl.label}] 알림톡 발송을 요청했습니다.\n(비즈고 연결 전이라 실제로는 발송되지 않았습니다)`,
+      );
       onClose();
     } catch (e) {
       handleError(e);
@@ -130,7 +134,6 @@ export default function KakaoModal({ contract, initialTemplate = '기사배정',
               <div key={b.name} className="kakao-bubble-btn" title={b.url}>{b.name}</div>
             ))}
           </div>
-          {wrongChannel && <p className="talk-warn">⚠ 이 알림톡은 {ALIMTALK_TEMPLATES[key].channel} 채널에만 등록되어 있습니다. {brand} 채널 템플릿이 등록되면 보낼 수 있습니다.</p>}
           {effectiveTarget === '기사' && !receiver.phones.length && (
             <p className="talk-warn">⚠ {engineer?.viaTeam || engineer?.assignType === 'team' ? '팀 배정은 팀원 개인 번호가 없어 보낼 수 없습니다. 기사를 직접 배정해 주세요.' : '기사 연락처가 없습니다. 설정 > 기사관리에서 휴대폰 번호를 입력해 주세요.'}</p>
           )}
@@ -142,7 +145,7 @@ export default function KakaoModal({ contract, initialTemplate = '기사배정',
           <button type="button" className="btn-cancel" onClick={onClose}>
             취소
           </button>
-          <button type="button" className="btn-confirm" onClick={handleSend} disabled={sending || !receiver.phones.length || wrongChannel || needSign}>
+          <button type="button" className="btn-confirm" onClick={handleSend} disabled={sending || !receiver.phones.length || needSign}>
             {sending ? '발송 중...' : `${effectiveTarget}에게 알림톡 발송`}
           </button>
         </div>

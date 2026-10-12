@@ -656,17 +656,15 @@ test('통계 시공기사별: 1차·2차 담당이 다른 계약은 금액을 �
   assert.ok(r1.jobs.find((j) => j.contractId === both.id).sharedWith, '기사 목록에는 공동 표시');
 });
 
-test('알림톡 발송 기록: 템플릿 키·코드·빈칸 값·버튼을 함께 저장 (비즈고 연동용)', async () => {
+test('알림톡 발송 기록: 비즈고 연결 전에는 기록만(MOCK), 템플릿 빈칸만 저장', async () => {
   const c = await admin.ok('contracts', 'create', { ...base, customerName: '알림고객', customerPhone: '010-5656-7878' });
   const log = await admin.ok('notifications', 'send', {
-    contractId: c.id, template: '서명요청', templateKey: '서명요청', templateCode: 'vb_cus_sign',
-    variables: { 고객명: '알림고객', 링크: 'abc' }, buttons: [{ name: '계약서 확인·서명', url: 'https://veritybase.vercel.app/sign/abc' }],
+    contractId: c.id, template: '서명요청', templateKey: '서명요청',
+    variables: { 고객명: '알림고객', ecode: 'abc', 엉뚱한값: 'x' }, buttons: [{ name: '계약서 확인·서명', url: 'https://veritybase.vercel.app/e/?q=abc' }],
     target: '고객', brand: '더좋은집', receiverName: '알림고객', receiverPhone: '010-5656-7878', message: '알림고객님, 계약 내용을 확인하시고 서명해 주세요.',
   });
-  assert.equal(log.templateCode, 'vb_cus_sign');
-  assert.deepEqual(log.variables, { 고객명: '알림고객', 링크: 'abc' });
-  assert.equal(log.buttons[0].url, 'https://veritybase.vercel.app/sign/abc');
-  assert.equal(log.result, 'MOCK', '아직은 테스트 모드');
+  assert.deepEqual(log.variables, { 고객명: '알림고객', ecode: 'abc' }, '템플릿에 있는 빈칸만');
+  assert.equal(log.result, 'MOCK', '키 없으면 기록만');
 });
 
 test('고객모바일: 이름+휴대폰 로그인, 알림톡 링크로 바로 로그인, 내 계약만·내부 정보 숨김, 직원 로그인과 따로', async () => {
@@ -745,9 +743,26 @@ test('비즈고 알림톡: 키는 Authorization 헤더로, 템플릿 자동 치�
     assert.notEqual(bad.status, 200);
     assert.match(bad.error.message, /A101/);
 
+    // 계약 화면 알림톡: 브랜드별 템플릿 코드가 있어야 실제 발송
+    process.env.BIZGO_API_KEY = 'test-key';
+    const c = await admin.ok('contracts', 'create', { ...base, customerName: '실발송', customerPhone: '010-7777-1212' });
+    const msg = { contractId: c.id, template: '계약완료', templateKey: '계약완료', variables: { 고객명: '실발송', ecode: 'CT' }, target: '고객', brand: '더좋은집', receiverName: '실발송', receiverPhone: '010-7777-1212', message: 'x' };
+    const noCode = await admin('notifications', 'send', msg);
+    assert.equal(noCode.status, 400);
+    assert.match(noCode.error.message, /템플릿 코드가 없습니다/);
+    await admin.ok('notifications', 'saveAlimtalkSettings', { brands: { 더좋은집: { channel: '@thegood7777', codes: { 계약완료: 'contract_good10' } } } });
+    const sentLog = await admin.ok('notifications', 'send', msg);
+    assert.equal(sentLog.result, 'SENT');
+    assert.equal(sentLog.templateCode, 'contract_good10');
+    const last = seen.filter((x) => x.url === '/api/comm/v1/send/omni').at(-1);
+    assert.deepEqual(last.body.messageFlow[0].alimtalk, { senderKey: 'SK123', templateCode: 'contract_good10', sendType: 'template' });
+    assert.deepEqual(last.body.destinations[0].replaceWords, { 고객명: '실발송', ecode: 'CT' });
+    assert.equal((await admin.ok('notifications', 'gatewayStatus')).settings.brands.더좋은집.codes.계약완료, 'contract_good10');
+
     const mgr = client();
     await mgr.ok('auth', 'login', 'engstatmgr', 'engstat1234');
     assert.equal((await mgr('notifications', 'gatewayStatus')).status, 403, '실장은 불가');
+    assert.equal((await mgr('notifications', 'saveAlimtalkSettings', { brands: {} })).status, 403);
   } finally {
     delete process.env.BIZGO_API_KEY;
     delete process.env.BIZGO_BASE_URL;
