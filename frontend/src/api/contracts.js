@@ -3,7 +3,7 @@
 //   GET/POST/PATCH/DELETE /api/contracts ...
 // ============================================================
 
-import { loadDb, saveDb, nextId, publicBaseUrl, clientInfo } from './runtime.js';
+import { loadDb, saveDb, nextId, publicBaseUrl, clientInfo, getSession, setSession } from './runtime.js';
 import { ApiError, authorize, clone, findContract, isLoginIdTaken, nowIso, visibleContracts } from './core.js';
 import { addHistory, assigneeOf, contractListView, contractView, hideAmounts } from './views.js';
 import { assertAssignable } from './schedule.js';
@@ -706,6 +706,19 @@ export const contracts = {
     saveDb(db);
   },
 
+  // 고객모바일 바로가기 링크 (알림톡 버튼용) — 누르면 이 고객으로 바로 로그인
+  //   계약마다 추측할 수 없는 고유 값 하나 (처음 요청할 때 만들어 저장)
+  async customerLink(id) {
+    const { db, user } = await authorize('contract.view');
+    const c = findContract(db, user, id);
+    if (!c.customerToken) {
+      c.customerToken = newToken();
+      saveDb(db);
+    }
+    const company = db.companies.find((x) => x.id === c.companyId);
+    return { token: c.customerToken, url: `${publicBaseUrl().replace(/\/+$/, '')}/${company?.code || ''}/c/${c.customerToken}` };
+  },
+
   // 계약서 보기: 고객에게 한 장으로 가는 계약 묶음 (첫 번째 = 요청한 계약 기준 서명 이미지 포함)
   async signBundle(id) {
     const { db, user } = await authorize('contract.view');
@@ -731,7 +744,7 @@ export const contracts = {
     if (c.deletedAt) throw new ApiError('휴지통에 있는 계약입니다.');
     if (c.esign?.status === ESIGN_STATUS.SIGNED) throw new ApiError('이미 서명이 완료된 계약입니다.');
     const list = signBundle(db, user, c);
-    const token = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const token = newToken();
     const together = list.length > 1 ? list.map((x) => x.category).join('·') : '';
     for (const x of list) {
       x.esign = { ...x.esign, status: ESIGN_STATUS.WAITING, token, requestedAt: nowIso(), requestedBy: user.id };
@@ -742,6 +755,8 @@ export const contracts = {
     return { token, url: signUrlOf(token), count: list.length };
   },
 };
+
+const newToken = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
 const signUrlOf = (token) => `${publicBaseUrl().replace(/\/+$/, '')}/sign/${token}`;
 
@@ -840,6 +855,103 @@ export const notifications = {
 // ============================================================
 // 통계/진행현황   GET /api/reports/contracts?dateType=&from=&to=
 // ============================================================
+
+// ============================================================
+// 고객모바일 (/{업체}/c) — 고객이 이름+휴대폰번호, 또는 알림톡 링크로 들어와 내 계약 확인
+//   직원 로그인과 같은 쿠키에 customer 칸만 따로 저장 (직원이 고객 링크를 열어도 직원 로그인 유지)
+//   보여주는 것: 진행상태·시공일정·담당기사·금액 요약·고객 참고사항·계약서(서명) — 내부 메모·입금 상세는 제외
+// ============================================================
+
+const nameKey = (s) => String(s || '').replace(/\s+/g, '');
+const ownedBy = (c, cust) =>
+  c.companyId === cust.companyId &&
+  !c.deletedAt &&
+  nameKey(c.customerName) === nameKey(cust.name) &&
+  [c.customerPhone, c.customerPhone2].some((p) => p && digitsOnly(p) === cust.phone);
+
+function customerContractView(db, c) {
+  const a = calcAmounts(c);
+  const waiting = c.esign?.status === ESIGN_STATUS.WAITING || c.esign?.status === ESIGN_STATUS.SIGNED;
+  return {
+    id: c.id,
+    no: numberOf(db, c),
+    brand: c.brand,
+    category: c.category,
+    workType: c.workType,
+    status: c.status,
+    completedDate: c.completedDate || '',
+    contractDate: c.contractDate,
+    address: formatAddress(c),
+    lineItems: (c.lineItems || []).map((l) => ({ name: l.name, qty: l.qty, detail: l.detail || '' })),
+    items: c.items || '',
+    customerNote: c.customerNote || '',
+    schedules: c.schedules.map((s) => ({
+      date: s.date || '',
+      time: s.time || '',
+      ampm: s.ampm || '',
+      assigneeName: assigneeOf(db, s).assigneeName.replace(/^\[팀\]\s*/, ''),
+      done: s.mobileStatus === '시공완료' || c.status === '시공완료',
+    })),
+    amounts: { total: a.total, discount: a.discount + a.voucher, actual: a.actual - a.canceled, deposit: a.byKind['계약금'] || 0, paid: a.paid - a.refund, balance: a.balance },
+    esign: { status: c.esign?.status || ESIGN_STATUS.NONE, token: waiting ? c.esign.token : null, signedAt: c.esign?.signedAt || null },
+  };
+}
+
+async function customerSession(db) {
+  const raw = (await getSession()) || {};
+  const cust = raw.customer;
+  if (!cust?.companyId || !cust.phone) throw new ApiError('로그인이 필요합니다.', 'UNAUTHORIZED');
+  if (!db.contracts.some((c) => ownedBy(c, cust))) throw new ApiError('로그인이 필요합니다.', 'UNAUTHORIZED');
+  return cust;
+}
+
+async function startCustomerSession(company, name, phone) {
+  const raw = (await getSession()) || {};
+  const { exp, ...keep } = raw; // eslint-disable-line no-unused-vars
+  await setSession({ ...keep, customer: { companyId: company.id, name: nameKey(name), phone: digitsOnly(phone) } });
+}
+
+export const customerApp = {
+  // 이름 + 휴대폰번호
+  async login(companyCode, name, phone) {
+    const db = await loadDb();
+    const company = db.companies.find((x) => x.code && x.code === String(companyCode || '').toLowerCase());
+    if (!company || !company.active) throw new ApiError('존재하지 않는 업체 주소입니다.');
+    if (!nameKey(name) || digitsOnly(phone).length < 10) throw new ApiError('이름과 휴대폰번호를 입력해 주세요.');
+    const cust = { companyId: company.id, name: nameKey(name), phone: digitsOnly(phone) };
+    if (!db.contracts.some((c) => ownedBy(c, cust))) throw new ApiError('이름과 휴대폰번호가 일치하는 계약이 없습니다.');
+    await startCustomerSession(company, name, phone);
+    return customerApp.me();
+  },
+
+  // 알림톡 링크 (/{업체}/c/{고유값}) — 계약의 고객으로 바로 로그인
+  async linkLogin(token) {
+    const db = await loadDb();
+    const c = token ? db.contracts.find((x) => x.customerToken === String(token) && !x.deletedAt) : null;
+    if (!c) throw new ApiError('유효하지 않은 링크입니다. 이름과 휴대폰번호로 로그인해 주세요.', 'NOT_FOUND');
+    const company = db.companies.find((x) => x.id === c.companyId);
+    if (!company || !company.active) throw new ApiError('사용이 정지된 업체입니다.');
+    await startCustomerSession(company, c.customerName, c.customerPhone);
+    return customerApp.me();
+  },
+
+  async me() {
+    const db = await loadDb();
+    const cust = await customerSession(db);
+    const company = db.companies.find((x) => x.id === cust.companyId);
+    const list = db.contracts
+      .filter((c) => ownedBy(c, cust))
+      .sort((x, y) => (y.contractDate || '').localeCompare(x.contractDate || '') || y.id - x.id)
+      .map((c) => customerContractView(db, c));
+    return { company: { name: company?.name || '', code: company?.code || '' }, customer: { name: db.contracts.find((c) => ownedBy(c, cust))?.customerName || '' }, contracts: list };
+  },
+
+  async logout() {
+    const raw = (await getSession()) || {};
+    const { exp, customer, ...keep } = raw; // eslint-disable-line no-unused-vars
+    await setSession(keep);
+  },
+};
 
 // 통계 시공기사별에서 여러 기사가 나눠 맡은 계약의 금액을 모으는 줄 이름
 export const SHARED_ROW = '여러 기사 공동 시공';

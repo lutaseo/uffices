@@ -199,6 +199,19 @@ export async function resolveCompanyId(client, session) {
   return { companyId: null };
 }
 
+// 고객모바일: 업체 주소 코드 / 고객 링크 → 업체 번호 (없으면 null)
+export async function companyIdForCustomer(client, name, args, session) {
+  if (name === 'customerApp.login') {
+    const r = await rows(client, `SELECT id FROM companies WHERE data->>'code' = $1`, [String(args[0] || '').toLowerCase()]);
+    return r[0] ? Number(r[0].id) : null;
+  }
+  if (name === 'customerApp.linkLogin') {
+    const r = await rows(client, `SELECT company_id FROM contracts WHERE data->>'customerToken' = $1`, [String(args[0] || '')]);
+    return r[0] ? Number(r[0].company_id) : null;
+  }
+  return session?.customer?.companyId ? Number(session.customer.companyId) : null;
+}
+
 // 서명 링크 → { companyId, contractId } (없으면 null 들)
 export async function contractByEsignToken(client, token) {
   const r = await rows(client, `SELECT id, company_id FROM contracts WHERE data->'esign'->>'token' = $1 ORDER BY id`, [String(token || '')]);

@@ -13,7 +13,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import * as services from '../frontend/src/api/services.js';
 import { setRuntimeAdapter } from '../frontend/src/api/runtime.js';
 import { ApiError } from '../frontend/src/api/core.js';
-import { getPool, loadSnapshot, persistChanges, resolveCompanyId, contractByEsignToken, fingerprint } from './pg.js';
+import { getPool, loadSnapshot, persistChanges, resolveCompanyId, contractByEsignToken, companyIdForCustomer, fingerprint } from './pg.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { bootstrap } from './bootstrap.js';
 import { COOKIE_NAME, decodeSession, encodeSession, parseCookies, sessionCookie } from './session.js';
@@ -71,6 +71,7 @@ const SERVICES = {
   engineerApp: services.engineerApp,
   scheduleSettings: services.scheduleSettings,
   imports: services.imports,
+  customerApp: services.customerApp,
 };
 const BLOCKED = new Set(['auth.resetDemoData']);
 
@@ -92,6 +93,10 @@ const READ_ONLY = new Set([
   'contracts.group',
   'contracts.signBundle',
   'esign.getByToken',
+  'customerApp.login',
+  'customerApp.linkLogin',
+  'customerApp.me',
+  'customerApp.logout',
   'notifications.history',
   'reports.contracts',
   'reports.engineers',
@@ -148,6 +153,13 @@ function ensureReady() {
   return ready;
 }
 
+// 로그인 만료 시: 직원 로그인과 고객모바일 로그인은 한 쿠키에 같이 있으므로 실패한 쪽만 지움
+function keepOtherLogin(ctx, service) {
+  const { exp, customer, ...staff } = ctx.session || {}; // eslint-disable-line no-unused-vars
+  const keep = service === 'customerApp' ? staff : customer ? { customer } : {};
+  return sessionCookie(Object.keys(keep).length ? encodeSession(keep) : '', { secure: ctx.secure });
+}
+
 // req: { body, headers }  → { status, headers, body }
 export async function handleRpc({ body, headers }) {
   const { service, method, args = [] } = body || {};
@@ -193,6 +205,8 @@ export async function handleRpc({ body, headers }) {
       const { companyId, contractId } = await contractByEsignToken(client, args[0]);
       scope = { companyId };
       if (name === 'esign.getByToken' && contractId) scope.signatureFor = contractId; // 서명 후 다시 열면 본인 서명 표시
+    } else if (service === 'customerApp') {
+      scope = { companyId: await companyIdForCustomer(client, name, args, ctx.session) }; // 고객모바일
     } else {
       const who = await resolveCompanyId(client, ctx.session);
       scope = who.isSuper ? { allCompanies: true } : { companyId: who.companyId };
@@ -225,7 +239,7 @@ export async function handleRpc({ body, headers }) {
     const extraHeaders = ctx.setCookie ? { 'Set-Cookie': ctx.setCookie } : {};
     if (error) {
       if (error instanceof ApiError) {
-        const cookieHeaders = error.code === 'UNAUTHORIZED' ? { 'Set-Cookie': sessionCookie('', { secure: ctx.secure }) } : extraHeaders;
+        const cookieHeaders = error.code === 'UNAUTHORIZED' ? { 'Set-Cookie': keepOtherLogin(ctx, service) } : extraHeaders;
         return json(STATUS[error.code] || 400, { error: { message: error.message, code: error.code } }, cookieHeaders);
       }
       throw error;

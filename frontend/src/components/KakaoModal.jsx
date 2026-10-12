@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { notifications } from '../api/index.js';
+import React, { useEffect, useState } from 'react';
+import { contracts as contractApi, notifications } from '../api/index.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { BRANDS } from '../constants.js';
 import { ALIMTALK_TEMPLATES, buildAlimtalk, templateKeyOf } from '../utils/alimtalk.js';
@@ -29,7 +29,16 @@ export default function KakaoModal({ contract, initialTemplate = '기사배정',
       ? { name: engineer?.engineerName || '', phones: [engineer?.engineerPhone].filter(Boolean) }
       : { name: contract.customerName, phones: [...new Set([contract.customerPhone, contract.customerPhone2].filter(Boolean))] };
   const key = templateKeyOf(template, effectiveTarget);
-  const msg = buildAlimtalk(key, { contract, schedule: engineer, signUrl });
+  // 고객모바일 바로가기 링크 (알림톡 '내 계약 확인' 버튼)
+  const [customerToken, setCustomerToken] = useState('');
+  useEffect(() => {
+    if (effectiveTarget !== '고객') return;
+    contractApi
+      .customerLink(contract.id)
+      .then((r) => setCustomerToken(r.token))
+      .catch(() => {});
+  }, [contract.id, effectiveTarget]);
+  const msg = buildAlimtalk(key, { contract, schedule: engineer, signUrl, customerToken });
   const message = msg.text;
   const wrongChannel = ALIMTALK_TEMPLATES[key].channel !== brand; // 템플릿은 등록된 채널(브랜드)로만 발송 가능
   const needSign = template === '서명요청' && !signUrl;
