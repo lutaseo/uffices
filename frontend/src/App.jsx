@@ -9,6 +9,7 @@ import { formatKoreanDate, today } from './utils/date.js';
 
 import LoginPage from './pages/LoginPage.jsx';
 import SignPage from './pages/SignPage.jsx';
+import CustomerApp from './pages/CustomerApp.jsx';
 import EngineerApp from './pages/EngineerApp.jsx';
 import ContractPage from './pages/ContractPage.jsx';
 import CustomerManagement from './components/CustomerManagement.jsx';
@@ -81,6 +82,9 @@ export default function App() {
   const sign = match('/sign/:token', route.path);
   if (sign) return <SignPage token={sign.token} />;
   if (legacy) return null;
+  // 고객모바일: 직원 로그인과 상관없이 (/{업체}/c, 알림톡 링크 /{업체}/c/{고유값})
+  const cust = route.base && (route.path === '/c' ? {} : match('/c/:token', route.path));
+  if (cust) return <CustomerApp companyCode={route.base} token={cust.token} />;
 
   if (loading) return <div className="page-loading">불러오는 중...</div>;
   if (!user) return <LoginPage companyCode={route.base} />;

@@ -668,3 +668,39 @@ test('알림톡 발송 기록: 템플릿 키·코드·빈칸 값·버튼을 함�
   assert.equal(log.buttons[0].url, 'https://veritybase.vercel.app/sign/abc');
   assert.equal(log.result, 'MOCK', '아직은 테스트 모드');
 });
+
+test('고객모바일: 이름+휴대폰 로그인, 알림톡 링크로 바로 로그인, 내 계약만·내부 정보 숨김, 직원 로그인과 따로', async () => {
+  const site = { ...base, customerName: '모바일 고객', customerPhone: '010-4242-1111', customerPhone2: '010-4242-2222', memo: '내부 메모', customerNote: '고객 안내' };
+  const a = await admin.ok('contracts', 'create', { ...site, category: '줄눈', totalAmount: 800000, payments: [{ date: '2026-09-27', kind: '계약금', method: '계좌이체', amount: 100000 }] });
+  await admin.ok('contracts', 'create', { ...site, category: '청소', totalAmount: 300000 });
+  await admin.ok('contracts', 'create', { ...site, customerName: '다른 고객', category: '줄눈' }); // 같은 번호·다른 이름 → 제외
+
+  const cust = client();
+  assert.equal((await cust('customerApp', 'me')).status, 401, '로그인 전');
+  assert.notEqual((await cust('customerApp', 'login', 'thegood', '모바일 고객', '010-0000-0000')).status, 200, '번호 틀리면 실패');
+  const me = await cust.ok('customerApp', 'login', 'THEGOOD', '모바일고객', '01042422222'); // 띄어쓰기·하이픈·연락처② 무관
+  assert.deepEqual(me.contracts.map((c) => c.category).sort(), ['줄눈', '청소']);
+  const j = me.contracts.find((c) => c.category === '줄눈');
+  assert.equal(j.amounts.balance, 700000);
+  assert.equal(j.amounts.deposit, 100000);
+  assert.equal(j.customerNote, '고객 안내');
+  assert.equal(j.memo, undefined, '내부 메모 없음');
+  assert.equal(j.payments, undefined, '입금 상세 없음');
+
+  // 직원: 알림톡용 링크 → 다른 기기에서 누르면 바로 로그인
+  const { token, url } = await admin.ok('contracts', 'customerLink', a.id);
+  assert.match(url, /\/thegood\/c\/[\w-]+$/);
+  assert.equal((await admin.ok('contracts', 'customerLink', a.id)).token, token, '같은 링크 유지');
+  const phone = client();
+  const viaLink = await phone.ok('customerApp', 'linkLogin', token);
+  assert.equal(viaLink.contracts.length, 2);
+  assert.notEqual((await client()('customerApp', 'linkLogin', 'wrong-token')).status, 200);
+
+  // 직원이 같은 브라우저에서 고객 링크를 열어도 직원 로그인 유지
+  await admin.ok('customerApp', 'linkLogin', token);
+  assert.equal((await admin.ok('auth', 'me')).user.loginId, 'admin');
+  await admin.ok('customerApp', 'logout');
+  assert.equal((await admin.ok('auth', 'me')).user.loginId, 'admin', '고객 로그아웃해도 직원은 그대로');
+  assert.equal((await phone('auth', 'me')).status, 401, '고객 로그인으로 직원 화면 불가');
+  assert.equal((await phone.ok('customerApp', 'me')).contracts.length, 2, '직원 확인 실패 후에도 고객 로그인 유지');
+});
