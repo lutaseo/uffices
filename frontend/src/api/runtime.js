@@ -26,5 +26,7 @@ export const clearSession = () => adapter.clearSession();
 export const publicBaseUrl = () => adapter.publicBaseUrl();
 export const clientInfo = () => adapter.clientInfo();
 export const resetDemoData = () => adapter.resetDemoData();
+// 알림톡 발송(비즈고) — 서버에서만. 브라우저 데모 모드는 '연결 안 됨'
+export const alimtalkGateway = () => adapter.alimtalk || null;
 
 export { nextId } from './seed.js';

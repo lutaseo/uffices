@@ -3,12 +3,12 @@
 //   GET/POST/PATCH/DELETE /api/contracts ...
 // ============================================================
 
-import { loadDb, saveDb, nextId, publicBaseUrl, clientInfo, getSession, setSession } from './runtime.js';
+import { loadDb, saveDb, nextId, publicBaseUrl, clientInfo, getSession, setSession, alimtalkGateway } from './runtime.js';
 import { ApiError, authorize, clone, findContract, isLoginIdTaken, nowIso, visibleContracts } from './core.js';
 import { addHistory, assigneeOf, contractListView, contractView, hideAmounts } from './views.js';
 import { assertAssignable } from './schedule.js';
 import { invalidateNumbers, numberOf } from './numbering.js';
-import { can } from '../auth/permissions.js';
+import { can, ROLES } from '../auth/permissions.js';
 import {
   APPROVAL_STATUS,
   ASSIGN_TYPES,
@@ -844,6 +844,35 @@ export const notifications = {
     db.notifications.push(log);
     saveDb(db);
     return clone(log);
+  },
+
+  // ---------------- 비즈고 연결 (관리자) ----------------
+  // 연결 상태: API Key 등록 여부 + 카카오 발신프로필(채널) 목록
+  async gatewayStatus() {
+    const { user } = await authorize();
+    if (user.role !== ROLES.ADMIN) throw new ApiError('관리자만 확인할 수 있습니다.', 'FORBIDDEN');
+    const gw = alimtalkGateway();
+    if (!gw) return { mode: 'demo', configured: false, senders: [], error: '데모 모드에서는 알림톡을 보낼 수 없습니다.' };
+    if (!gw.configured()) return { mode: 'server', configured: false, senders: [], error: 'Vercel 환경변수 BIZGO_API_KEY 가 없습니다.' };
+    try {
+      return { mode: 'server', configured: true, senders: await gw.listSenders(), error: '' };
+    } catch (e) {
+      return { mode: 'server', configured: true, senders: [], error: e.message, code: e.code || '' };
+    }
+  },
+
+  // 시험 발송: 승인된 템플릿 코드 + 빈칸 값으로 한 번호에 실제 발송
+  async testSend({ to, templateCode, replaceWords, channel } = {}) {
+    const { user } = await authorize();
+    if (user.role !== ROLES.ADMIN) throw new ApiError('관리자만 시험 발송할 수 있습니다.', 'FORBIDDEN');
+    const gw = alimtalkGateway();
+    if (!gw) throw new ApiError('데모 모드에서는 알림톡을 보낼 수 없습니다.');
+    try {
+      const r = await gw.sendAlimtalk({ to, templateCode: String(templateCode || '').trim(), replaceWords: replaceWords || {}, channel: channel || '', ref: `test-${user.companyId}` });
+      return { ok: true, msgKey: r.msgKey };
+    } catch (e) {
+      throw new ApiError(e.message || '발송에 실패했습니다.');
+    }
   },
 
   async history(contractId) {

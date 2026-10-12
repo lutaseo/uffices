@@ -13,6 +13,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import * as services from '../frontend/src/api/services.js';
 import { setRuntimeAdapter } from '../frontend/src/api/runtime.js';
 import { ApiError } from '../frontend/src/api/core.js';
+import { bizgoConfigured, listSenders, sendAlimtalk } from './bizgo.js';
 import { getPool, loadSnapshot, persistChanges, resolveCompanyId, contractByEsignToken, companyIdForCustomer, fingerprint } from './pg.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { bootstrap } from './bootstrap.js';
@@ -50,6 +51,8 @@ setRuntimeAdapter({
   async resetDemoData() {
     throw new ApiError('서버 모드에서는 데이터 초기화를 할 수 없습니다.', 'FORBIDDEN');
   },
+  // 비즈고 알림톡 (API Key 는 서버 환경변수에만)
+  alimtalk: { configured: bizgoConfigured, listSenders, sendAlimtalk },
 });
 
 // 호출 가능한 서비스/함수 목록 (그 외는 거부)
@@ -98,6 +101,8 @@ const READ_ONLY = new Set([
   'customerApp.me',
   'customerApp.logout',
   'notifications.history',
+  'notifications.gatewayStatus', // 비즈고 응답을 기다리는 동안 저장 잠금을 잡지 않게 (DB 는 안 바꿈)
+  'notifications.testSend',
   'reports.contracts',
   'reports.engineers',
   'schedules.list',
@@ -124,6 +129,8 @@ const LIGHT_TABLES = {
   'products.list': ['products'],
   'apartments.list': ['apartments'],
   'scheduleSettings.get': [],
+  'notifications.gatewayStatus': [],
+  'notifications.testSend': [],
 };
 
 // 입금 영수증 사진을 읽거나 바꾸는 요청 (첫 인자 = 계약 번호)
