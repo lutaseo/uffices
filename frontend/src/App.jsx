@@ -11,7 +11,7 @@ import LoginPage from './pages/LoginPage.jsx';
 import SignPage from './pages/SignPage.jsx';
 import CustomerApp from './pages/CustomerApp.jsx';
 import EngineerApp from './pages/EngineerApp.jsx';
-import ContractPage from './pages/ContractPage.jsx';
+import ContractPage, { resetContractListView } from './pages/ContractPage.jsx';
 import CustomerManagement from './components/CustomerManagement.jsx';
 import ScheduleManagement from './components/ScheduleManagement.jsx';
 import ProgressStatus from './components/ProgressStatus.jsx';
@@ -147,6 +147,14 @@ function MainLayout({ route }) {
     navigate(to);
   };
 
+  // 로고: 어느 화면에서든 메인화면(첫 메뉴) 처음 상태로 — 검색조건·쪽 번호 초기화, 같은 화면이어도 새로 그림
+  const [homeKey, setHomeKey] = useState(0);
+  const goHome = (to) => {
+    resetContractListView();
+    setHomeKey((k) => k + 1);
+    go(to);
+  };
+
   const handleLogout = async () => {
     await logout();
     navigate('/', { replace: true });
@@ -162,7 +170,7 @@ function MainLayout({ route }) {
   return (
     <div className="app-container">
       <header className="app-header">
-        <a className="brand-logo" {...linkProps(home, go)}>
+        <a className="brand-logo" {...linkProps(home, goHome)} title="메인화면">
           <span className="logo-box">VB</span>
           <span className="logo-text">{company ? `${company.name} VerityBase` : 'VerityBase 운영자'}</span>
         </a>
@@ -235,7 +243,7 @@ function MainLayout({ route }) {
         </div>
       )}
 
-      <main className="content">
+      <main className="content" key={homeKey}>
         {current?.key === 'contract' && <ContractPage route={route} />}
         {current?.key === 'customer' && <CustomerManagement route={route} />}
         {current?.key === 'schedule' && <ScheduleManagement />}
