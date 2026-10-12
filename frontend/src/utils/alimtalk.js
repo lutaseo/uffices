@@ -31,7 +31,7 @@ export const ALIMTALK_TEMPLATES = {
     label: '기사배정 안내 (고객용)',
     channel: '더좋은집',
     body: '#{고객명}님, 시공 담당 기사가 배정되었습니다.\n\n- 시공일 : #{시공일}\n- 시간 : #{시간}\n- 담당 기사 : #{기사명}',
-    buttons: [{ name: '내 계약 확인', url: `${ALIMTALK_BASE_URL}/thegood/c/#{링크}` }],
+    buttons: [{ name: '내 계약 확인', url: `${ALIMTALK_BASE_URL}/thegood/c/?q=#{링크}` }],
   },
   // 고객님께: 계약 완료
   계약완료: {
@@ -39,7 +39,7 @@ export const ALIMTALK_TEMPLATES = {
     label: '계약완료 안내',
     channel: '더좋은집',
     body: '#{고객명}님, 전자계약 작성이 정상적으로 완료되었습니다.\n감사합니다.',
-    buttons: [{ name: '내 계약 확인', url: `${ALIMTALK_BASE_URL}/thegood/c/#{링크}` }],
+    buttons: [{ name: '내 계약 확인', url: `${ALIMTALK_BASE_URL}/thegood/c/?q=#{링크}` }],
   },
   // 고객님께: 전자계약 서명 요청 (버튼 주소 끝이 고객마다 다름)
   서명요청: {
@@ -47,7 +47,7 @@ export const ALIMTALK_TEMPLATES = {
     label: '전자계약 서명요청',
     channel: '더좋은집',
     body: '#{고객명}님, 계약 내용을 확인하시고 서명해 주세요.\n아래 버튼을 누르면 계약서를 볼 수 있습니다.',
-    buttons: [{ name: '계약서 확인·서명', url: `${ALIMTALK_BASE_URL}/sign/#{서명링크}` }],
+    buttons: [{ name: '계약서 확인·서명', url: `${ALIMTALK_BASE_URL}/e/?q=#{서명링크}` }],
   },
 };
 

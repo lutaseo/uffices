@@ -12,6 +12,7 @@
 //   /{업체}/c  /{업체}/c/:고유값      (고객모바일 — 이름+휴대폰 / 알림톡 링크로 바로 로그인)
 //   /                    운영자 로그인      /admin  (운영자 업체 관리)
 //   /sign/:token         고객 전자서명 (로그인 불필요, 업체 코드 없음)
+//   /e/?q=토큰           = /sign/토큰 (알림톡 버튼용 — 예전 프로그램과 같은 모양)
 // ============================================================
 
 import { useEffect, useState } from 'react';
@@ -19,7 +20,7 @@ import { useEffect, useState } from 'react';
 const EVENT = 'uffice:navigate';
 
 // 업체 코드가 아닌 첫 주소 단어 (화면 이름)
-const PAGES = ['c', 'contracts', 'customers', 'schedule', 'progress', 'stats', 'admin', 'settings', 'me', 'engineer', 'sign', 'api', 'assets'];
+const PAGES = ['c', 'e', 'contracts', 'customers', 'schedule', 'progress', 'stats', 'admin', 'settings', 'me', 'engineer', 'sign', 'api', 'assets'];
 
 function split(pathname) {
   const clean = pathname.replace(/\/+$/, '') || '/';

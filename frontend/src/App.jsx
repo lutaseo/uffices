@@ -81,9 +81,12 @@ export default function App() {
   }, [legacy?.[1]]); // eslint-disable-line react-hooks/exhaustive-deps
   const sign = match('/sign/:token', route.path);
   if (sign) return <SignPage token={sign.token} />;
+  // 알림톡 버튼 링크 /e/?q=토큰 (예전 프로그램 템플릿과 같은 모양) → 계약서 확인·서명
+  if (route.path === '/e' && route.query.get('q')) return <SignPage token={route.query.get('q')} />;
   if (legacy) return null;
   // 고객모바일: 직원 로그인과 상관없이 (/{업체}/c, 알림톡 링크 /{업체}/c/{고유값})
-  const cust = route.base && (route.path === '/c' ? {} : match('/c/:token', route.path));
+  //   /{업체}/c/?q=고유값 도 같음 (알림톡 버튼 링크 모양)
+  const cust = route.base && (route.path === '/c' ? { token: route.query.get('q') || undefined } : match('/c/:token', route.path));
   if (cust) return <CustomerApp companyCode={route.base} token={cust.token} />;
 
   if (loading) return <div className="page-loading">불러오는 중...</div>;
