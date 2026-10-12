@@ -12,13 +12,17 @@ import { useRefreshOnReturn } from '../utils/useRefreshOnReturn.js';
 // 기사모바일: 기사 계정으로 로그인하면 이 화면만 보입니다 (휴대폰 화면 기준).
 export default function EngineerApp({ route }) {
   const { user, company, logout } = useAuth();
-  const tab = route?.path === '/engineer/off' ? 'off' : 'schedule';
-  const detail = route && match('/engineer/contract/:id', route.path);
+  const tab = route?.path === '/m/off' ? 'off' : 'schedule';
+  const detail = route && match('/m/contract/:id', route.path);
   // 기사 계정은 /engineer 주소만 사용
   useEffect(() => {
-    if (route && route.path !== '/engineer' && route.path !== '/engineer/off' && !detail) navigate('/engineer', { replace: true });
+    // 기사모바일 주소는 /{업체}/m — 예전 주소(/engineer...)로 오면 같은 화면의 새 주소로
+    if (route && route.path !== '/m' && route.path !== '/m/off' && !detail) {
+      const old = route.path.startsWith('/engineer') ? `/m${route.path.slice('/engineer'.length)}${window.location.search}` : '/m';
+      navigate(old, { replace: true });
+    }
   }, [route?.path]); // eslint-disable-line react-hooks/exhaustive-deps
-  const setTab = (t) => navigate(t === 'off' ? '/engineer/off' : '/engineer');
+  const setTab = (t) => navigate(t === 'off' ? '/m/off' : '/m');
 
   return (
     <div className="engineer-app">
@@ -199,7 +203,7 @@ function MySchedules() {
 
 // 일정 카드: 위쪽(현장·고객·내용)을 누르면 계약 상세로, 아래는 현장 보고
 function ScheduleCard({ s, onReported }) {
-  const open = () => navigateForward(`/engineer/contract/${s.contractId}?step=${s.stepIndex}`);
+  const open = () => navigateForward(`/m/contract/${s.contractId}?step=${s.stepIndex}`);
   return (
     <div className="engineer-card">
       <div className="engineer-card-link" role="button" tabIndex={0} onClick={open} onKeyDown={(e) => e.key === 'Enter' && open()}>
@@ -292,7 +296,7 @@ function ContractView({ id, step }) {
   useRefreshOnReturn(load);
 
   const back = (
-    <button type="button" className="btn-back-engineer" onClick={() => goBack('/engineer')}>
+    <button type="button" className="btn-back-engineer" onClick={() => goBack('/m')}>
       ‹ 내 일정
     </button>
   );
