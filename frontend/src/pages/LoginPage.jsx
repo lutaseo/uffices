@@ -64,7 +64,7 @@ export default function LoginPage({ companyCode = '' }) {
         </form>
 
         <div className="login-footer">
-          ⓘ 계정 발급 및 이용기간 문의는 운영자에게 연락해 주세요. &nbsp; ⓒ VerityBase. ALL RIGHTS RESERVEDD
+          ⓘ 계정 발급 및 이용기간 문의는 운영자에게 연락해 주세요. &nbsp; ⓒ VerityBase. ALL RIGHTS RESERVED
         </div>
 
         {API_MODE === 'demo' && (

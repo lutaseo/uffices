@@ -90,7 +90,16 @@ export default function SignPage({ token }) {
     }
   };
 
-  if (error) return <div className="sign-page"><div className="sign-card"><h2>서명 링크 오류</h2><p>{error}</p></div></div>;
+  if (error)
+    return (
+      <div className="sign-page">
+        <div className="sign-card">
+          <h2>계약서 링크 오류</h2>
+          <p>{error}</p>
+          <p className="sub-text">카카오 알림톡의 버튼을 다시 눌러 주시거나, 업체에 새 링크를 요청해 주세요.</p>
+        </div>
+      </div>
+    );
   if (!data) return <div className="page-loading">불러오는 중...</div>;
 
   return (

@@ -82,7 +82,8 @@ export default function App() {
   const sign = match('/sign/:token', route.path);
   if (sign) return <SignPage token={sign.token} />;
   // 알림톡 버튼 링크 /e/?q=토큰 (예전 프로그램 템플릿과 같은 모양) → 계약서 확인·서명
-  if (route.path === '/e' && route.query.get('q')) return <SignPage token={route.query.get('q')} />;
+  //   값이 비었거나 틀리면 직원 로그인 대신 '링크 오류' 안내
+  if (route.path === '/e') return <SignPage token={route.query.get('q') || ''} />;
   if (legacy) return null;
   // 고객모바일: 직원 로그인과 상관없이 (/{업체}/c, 알림톡 링크 /{업체}/c/{고유값})
   //   /{업체}/c/?q=고유값 도 같음 (알림톡 버튼 링크 모양)
