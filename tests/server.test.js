@@ -704,3 +704,53 @@ test('고객모바일: 이름+휴대폰 로그인, 알림톡 링크로 바로 �
   assert.equal((await phone('auth', 'me')).status, 401, '고객 로그인으로 직원 화면 불가');
   assert.equal((await phone.ok('customerApp', 'me')).contracts.length, 2, '직원 확인 실패 후에도 고객 로그인 유지');
 });
+
+test('비즈고 알림톡: 키는 Authorization 헤더로, 템플릿 자동 치환 형식, 발신프로필 자동 조회, 관리자만', async () => {
+  const http = await import('node:http');
+  const seen = [];
+  const mock = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (d) => (body += d));
+    req.on('end', () => {
+      seen.push({ method: req.method, url: req.url, auth: req.headers.authorization, body: body ? JSON.parse(body) : null });
+      res.setHeader('content-type', 'application/json');
+      if (req.headers.authorization !== 'test-key') return res.end(JSON.stringify({ common: { authCode: 'A101', authResult: 'invalid key' } }));
+      if (req.url.startsWith('/api/comm/v1/account/kakao/sender/profiles')) {
+        return res.end(JSON.stringify({ common: { authCode: 'A000' }, data: { code: 'A000', data: { channels: [{ senderKey: 'SK123', channelName: '더 좋은집', channelId: '@thegood7777', status: 'A' }] } } }));
+      }
+      res.end(JSON.stringify({ common: { authCode: 'A000' }, data: { code: 'A000', data: { msgKeys: ['MK1'] } } }));
+    });
+  });
+  await new Promise((r) => mock.listen(0, '127.0.0.1', r));
+  process.env.BIZGO_BASE_URL = `http://127.0.0.1:${mock.address().port}`;
+  try {
+    delete process.env.BIZGO_API_KEY;
+    assert.equal((await admin.ok('notifications', 'gatewayStatus')).configured, false, '키 없음');
+
+    process.env.BIZGO_API_KEY = 'test-key';
+    const st = await admin.ok('notifications', 'gatewayStatus');
+    assert.equal(st.configured, true);
+    assert.deepEqual(st.senders.map((s) => s.channelId), ['@thegood7777']);
+    assert.equal(st.senders[0].senderKey, 'SK123');
+
+    const r = await admin.ok('notifications', 'testSend', { to: '010-2222-3333', templateCode: 'togisa_start01', replaceWords: { 시공일: '2026-10-20' }, channel: '@thegood7777' });
+    assert.equal(r.msgKey, 'MK1');
+    const sent = seen.find((x) => x.url === '/api/comm/v1/send/omni');
+    assert.equal(sent.auth, 'test-key', '접두어 없이 키만');
+    assert.deepEqual(sent.body.destinations, [{ to: '01022223333', replaceWords: { 시공일: '2026-10-20' } }]);
+    assert.deepEqual(sent.body.messageFlow, [{ alimtalk: { senderKey: 'SK123', templateCode: 'togisa_start01', sendType: 'template' } }]);
+
+    process.env.BIZGO_API_KEY = 'wrong';
+    const bad = await admin('notifications', 'testSend', { to: '01022223333', templateCode: 'x' });
+    assert.notEqual(bad.status, 200);
+    assert.match(bad.error.message, /A101/);
+
+    const mgr = client();
+    await mgr.ok('auth', 'login', 'engstatmgr', 'engstat1234');
+    assert.equal((await mgr('notifications', 'gatewayStatus')).status, 403, '실장은 불가');
+  } finally {
+    delete process.env.BIZGO_API_KEY;
+    delete process.env.BIZGO_BASE_URL;
+    mock.close();
+  }
+});
