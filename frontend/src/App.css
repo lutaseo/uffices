@@ -4356,3 +4356,6 @@ input[type='month'] {
   min-width: 220px;
   display: inline-block;
 }
+.gw-report {
+  margin: 8px 0 12px;
+}

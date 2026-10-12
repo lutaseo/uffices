@@ -716,6 +716,9 @@ test('비즈고 알림톡: 키는 Authorization 헤더로, 템플릿 자동 치�
       if (req.url.startsWith('/api/comm/v1/account/kakao/sender/profiles')) {
         return res.end(JSON.stringify({ common: { authCode: 'A000' }, data: { code: 'A000', data: { channels: [{ senderKey: 'SK123', channelName: '더 좋은집', channelId: '@thegood7777', status: 'A' }] } } }));
       }
+      if (req.url.startsWith('/api/comm/v1/report/inquiry/')) {
+        return res.end(JSON.stringify({ common: { authCode: 'A000' }, data: { code: 'A000', data: { report: [{ msgKey: 'MK1', serviceType: 'ALIMTALK', reportCode: '30007', reportText: 'invalid sender key', reportTime: '2026-10-12T13:30:05+09:00' }] } } }));
+      }
       res.end(JSON.stringify({ common: { authCode: 'A000' }, data: { code: 'A000', data: { msgKeys: ['MK1'] } } }));
     });
   });
@@ -765,9 +768,25 @@ test('비즈고 알림톡: 키는 Authorization 헤더로, 템플릿 자동 치�
 
     // 발신프로필 키를 직접 넣으면 목록 조회 없이 그 키로
     const before = seen.length;
-    await sup.ok('notifications', 'testSend', { to: '01022223333', templateCode: 't1', replaceWords: {}, senderKey: 'SK-DIRECT' });
+    const direct = 'a'.repeat(20) + '0123456789abcdef0123';
+    await sup.ok('notifications', 'testSend', { to: '01022223333', templateCode: 't1', replaceWords: {}, senderKey: direct });
     assert.equal(seen.slice(before).filter((x) => x.url.includes('sender/profiles')).length, 0);
-    assert.equal(seen.at(-1).body.messageFlow[0].alimtalk.senderKey, 'SK-DIRECT');
+    assert.equal(seen.at(-1).body.messageFlow[0].alimtalk.senderKey, direct);
+
+    // 템플릿 코드를 발신프로필 키 칸에 잘못 넣으면 보내기 전에 거절
+    const sentCount = seen.length;
+    const wrongKey = await sup('notifications', 'testSend', { to: '01022223333', templateCode: 'togisa_start01', replaceWords: {}, senderKey: 'togisa_start01' });
+    assert.equal(wrongKey.status, 400);
+    assert.match(wrongKey.error.message, /발신프로필 키 형식/);
+    assert.equal(seen.length, sentCount, '비즈고에 보내지 않음');
+    assert.equal((await sup('notifications', 'saveAlimtalkSettings', { companyId: myCompanyId, brands: { 더좋은집: { senderKey: 'togisa_start01' } } })).status, 400);
+
+    // 도착 결과 조회: 리포트 코드 10000 아니면 실패
+    const rep = await sup.ok('notifications', 'testResult', 'MK1');
+    assert.equal(rep[0].reportCode, '30007');
+    assert.equal(rep[0].ok, false);
+    assert.equal(seen.at(-1).url, '/api/comm/v1/report/inquiry/MK1');
+    assert.equal((await admin('notifications', 'testResult', 'MK1')).status, 403);
 
     assert.equal((await admin('notifications', 'gatewayStatus')).status, 403, '업체 관리자는 불가');
     assert.equal((await admin('notifications', 'testSend', { to: '01022223333', templateCode: 'x' })).status, 403);

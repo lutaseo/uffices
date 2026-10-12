@@ -13,7 +13,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import * as services from '../frontend/src/api/services.js';
 import { setRuntimeAdapter } from '../frontend/src/api/runtime.js';
 import { ApiError } from '../frontend/src/api/core.js';
-import { bizgoConfigured, listSenders, sendAlimtalk } from './bizgo.js';
+import { bizgoConfigured, listSenders, sendAlimtalk, inquiryReport } from './bizgo.js';
 import { getPool, loadSnapshot, persistChanges, resolveCompanyId, contractByEsignToken, companyIdForCustomer, fingerprint } from './pg.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { bootstrap } from './bootstrap.js';
@@ -52,7 +52,7 @@ setRuntimeAdapter({
     throw new ApiError('서버 모드에서는 데이터 초기화를 할 수 없습니다.', 'FORBIDDEN');
   },
   // 비즈고 알림톡 (API Key 는 서버 환경변수에만)
-  alimtalk: { configured: bizgoConfigured, listSenders, sendAlimtalk },
+  alimtalk: { configured: bizgoConfigured, listSenders, sendAlimtalk, inquiryReport },
 });
 
 // 호출 가능한 서비스/함수 목록 (그 외는 거부)
@@ -103,6 +103,7 @@ const READ_ONLY = new Set([
   'notifications.history',
   'notifications.gatewayStatus', // 비즈고 응답을 기다리는 동안 저장 잠금을 잡지 않게 (DB 는 안 바꿈)
   'notifications.testSend',
+  'notifications.testResult',
   'reports.contracts',
   'reports.engineers',
   'schedules.list',
@@ -131,6 +132,7 @@ const LIGHT_TABLES = {
   'scheduleSettings.get': [],
   'notifications.gatewayStatus': [],
   'notifications.testSend': [],
+  'notifications.testResult': [],
   'notifications.saveAlimtalkSettings': [], // 업체 표만 바꿈 (운영자가 전체 업체 계약까지 읽지 않게)
 };
 
