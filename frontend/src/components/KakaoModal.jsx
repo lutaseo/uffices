@@ -2,30 +2,14 @@ import React, { useState } from 'react';
 import { notifications } from '../api/index.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { BRANDS } from '../constants.js';
-import { formatAddress } from '../utils/format.js';
+import { ALIMTALK_TEMPLATES, buildAlimtalk, templateKeyOf } from '../utils/alimtalk.js';
 import { backdrop } from '../utils/backdrop.js';
 
-// 템플릿 정의. 비즈고에 승인된 템플릿이 늘어나면 여기에 추가합니다.
+// 화면에서 고르는 템플릿 (받는 사람별 실제 문구는 utils/alimtalk.js — 비즈고 승인 문구와 동일)
 const TEMPLATES = {
-  기사배정: {
-    label: '기사배정 안내',
-    targets: ['고객', '기사'],
-    render: ({ brand, contract, engineer, target }) =>
-      target === '기사'
-        ? `[${brand}] ${engineer?.assigneeName || '기사'}님, 신규 시공 건이 배정되었습니다.\n일정: ${engineer?.date || '미정'} ${engineer?.time || (engineer?.ampm === 'AM' ? '오전' : engineer?.ampm === 'PM' ? '오후' : '')}\n현장: ${formatAddress(contract)}\n고객: ${contract.customerName} (${contract.customerPhone})`
-        : `[${brand}] ${contract.customerName}님, 담당 시공기사(${engineer?.assigneeName || '배정중'})님이 배정되었습니다.\n시공일정: ${engineer?.date || '미정'} ${engineer?.time || (engineer?.ampm === 'AM' ? '오전' : engineer?.ampm === 'PM' ? '오후' : '')}`,
-  },
-  계약완료: {
-    label: '계약완료 안내',
-    targets: ['고객'],
-    render: ({ brand, contract }) => `[${brand}] ${contract.customerName}님, 전자계약 작성이 정상적으로 완료되었습니다.`,
-  },
-  서명요청: {
-    label: '전자계약 서명요청',
-    targets: ['고객'],
-    render: ({ brand, contract, signUrl }) =>
-      `[${brand}] ${contract.customerName}님, 아래 링크에서 계약 내용을 확인하시고 서명해 주세요.\n${signUrl || '(서명요청 후 링크가 생성됩니다)'}`,
-  },
+  기사배정: { label: '기사배정 안내', targets: ['고객', '기사'] },
+  계약완료: { label: '계약완료 안내', targets: ['고객'] },
+  서명요청: { label: '전자계약 서명요청', targets: ['고객'] },
 };
 
 export default function KakaoModal({ contract, initialTemplate = '기사배정', initialTarget = '고객', initialStep = 0, initialBrand, signUrl, onClose }) {
@@ -44,7 +28,11 @@ export default function KakaoModal({ contract, initialTemplate = '기사배정',
     effectiveTarget === '기사'
       ? { name: engineer?.engineerName || '', phones: [engineer?.engineerPhone].filter(Boolean) }
       : { name: contract.customerName, phones: [...new Set([contract.customerPhone, contract.customerPhone2].filter(Boolean))] };
-  const message = tpl.render({ brand, contract, engineer, target: effectiveTarget, signUrl });
+  const key = templateKeyOf(template, effectiveTarget);
+  const msg = buildAlimtalk(key, { contract, schedule: engineer, signUrl });
+  const message = msg.text;
+  const wrongChannel = ALIMTALK_TEMPLATES[key].channel !== brand; // 템플릿은 등록된 채널(브랜드)로만 발송 가능
+  const needSign = template === '서명요청' && !signUrl;
 
   const handleSend = async () => {
     setSending(true);
@@ -53,6 +41,10 @@ export default function KakaoModal({ contract, initialTemplate = '기사배정',
         await notifications.send({
           contractId: contract.id,
           template,
+          templateKey: key,
+          templateCode: msg.code,
+          variables: msg.variables,
+          buttons: msg.buttons,
           target: effectiveTarget,
           brand,
           receiverName: receiver.name,
@@ -115,14 +107,33 @@ export default function KakaoModal({ contract, initialTemplate = '기사배정',
             <strong>수신자:</strong> {receiver.name || '-'} ({receiver.phones.join(', ') || '연락처 없음'})
             {receiver.phones.length > 1 && <span className="sub-text"> — 두 번호 모두 발송</span>}
           </p>
-          <div className="preview-text">{message}</div>
+          {/* 카카오톡에 실제로 보이는 모양 */}
+          <div className="kakao-bubble">
+            <div className="kakao-bubble-head">알림톡 도착</div>
+            {msg.title && (
+              <div className="kakao-bubble-emph">
+                <small>{msg.subtitle}</small>
+                <b>{msg.title}</b>
+              </div>
+            )}
+            <div className="kakao-bubble-body">{message}</div>
+            {msg.buttons.map((b) => (
+              <div key={b.name} className="kakao-bubble-btn" title={b.url}>{b.name}</div>
+            ))}
+          </div>
+          {wrongChannel && <p className="talk-warn">⚠ 이 알림톡은 {ALIMTALK_TEMPLATES[key].channel} 채널에만 등록되어 있습니다. {brand} 채널 템플릿이 등록되면 보낼 수 있습니다.</p>}
+          {effectiveTarget === '기사' && !receiver.phones.length && (
+            <p className="talk-warn">⚠ {engineer?.viaTeam || engineer?.assignType === 'team' ? '팀 배정은 팀원 개인 번호가 없어 보낼 수 없습니다. 기사를 직접 배정해 주세요.' : '기사 연락처가 없습니다. 설정 > 기사관리에서 휴대폰 번호를 입력해 주세요.'}</p>
+          )}
+          {needSign && <p className="talk-warn">⚠ 서명 링크가 아직 없습니다. 계약서 보기에서 '전자서명 요청하기'를 먼저 눌러 주세요.</p>}
+          {msg.missing.length > 0 && !needSign && <p className="talk-warn">⚠ 빈 칸: {msg.missing.join(', ')}</p>}
         </div>
 
         <div className="modal-actions">
           <button type="button" className="btn-cancel" onClick={onClose}>
             취소
           </button>
-          <button type="button" className="btn-confirm" onClick={handleSend} disabled={sending || !receiver.phones.length}>
+          <button type="button" className="btn-confirm" onClick={handleSend} disabled={sending || !receiver.phones.length || wrongChannel || needSign}>
             {sending ? '발송 중...' : `${effectiveTarget}에게 알림톡 발송`}
           </button>
         </div>

@@ -802,7 +802,8 @@ function bundleByToken(db, token) {
 // ============================================================
 
 export const notifications = {
-  async send({ contractId, template, target, brand, receiverName, receiverPhone, message }) {
+  // templateKey/templateCode/variables/buttons: 비즈고 알림톡 발송용 (utils/alimtalk.js 에서 만든 값)
+  async send({ contractId, template, templateKey, templateCode, variables, buttons, target, brand, receiverName, receiverPhone, message }) {
     const { db, user } = await authorize('notify.send');
     findContract(db, user, contractId);
     if (digitsOnly(receiverPhone).length < 10) throw new ApiError('수신자 연락처가 없습니다.');
@@ -812,6 +813,10 @@ export const notifications = {
       companyId: user.companyId,
       contractId,
       template,
+      templateKey: templateKey || '',
+      templateCode: templateCode || '',
+      variables: variables && typeof variables === 'object' ? variables : {},
+      buttons: Array.isArray(buttons) ? buttons.slice(0, 5) : [],
       target,
       brand,
       receiverName,
