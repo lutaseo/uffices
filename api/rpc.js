@@ -8,7 +8,10 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.status(200).send(JSON.stringify(await healthReport(), null, 2));
+    const report = await healthReport();
+    // 자동 깨우기(vercel.json crons, 매일 새벽 3시): Supabase 무료 요금제가 7일 동안 안 쓰면 일시정지되는 것 방지
+    if (/vercel-cron/i.test(String(req.headers['user-agent'] || ''))) console.log(`[자동 깨우기] DB연결: ${report.DB연결}`);
+    res.status(200).send(JSON.stringify(report, null, 2));
     return;
   }
   if (req.method !== 'POST') {

@@ -17,5 +17,11 @@
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/rpc",
+      "schedule": "7 18 * * *"
+    }
   ]
 }
