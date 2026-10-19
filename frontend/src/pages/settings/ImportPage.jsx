@@ -9,6 +9,7 @@ import { CATEGORIES } from '../../constants.js';
 // 설정 > 데이터 가져오기 (관리자 전용)
 //   1) 기사 목록 (엑셀/CSV: 이름, 아이디, 연락처)
 //   2) 예전 프로그램의 계약 '엑셀다운로드' 파일
+//   3) 직원 계정 (엑셀: 이름, 아이디, 비밀번호, 부서, 직급)
 const BATCH = 20; // 실서비스 DB 가 멀어도 한 번 요청이 시간 제한(60초) 안에 끝나도록 작게
 
 // 시간 초과·일시 오류면 잠시 뒤 더 작게 나눠 다시 시도 (이미 저장된 건은 서버가 건너뜀)
@@ -52,6 +53,7 @@ export default function ImportPage() {
       </div>
       <EngineerImport />
       <ContractImport />
+      <UserImport />
     </div>
   );
 }
@@ -248,6 +250,110 @@ function ContractImport() {
           {result.errors.slice(0, 50).map((e, i) => (
             <div key={i} className="text-red">· 예전 번호 {e.legacyNo} {e.customerName}: {e.message}</div>
           ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// 3) 직원 계정 — 시공팀은 기사모바일 계정, 나머지는 실장(기본 권한)
+function UserImport() {
+  const { handleError } = useAuth();
+  const [rows, setRows] = useState(null);
+  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const pick = async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    setResult(null);
+    try {
+      const wb = XLSX.read(await readFile(file), { type: 'array' });
+      const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '', raw: false });
+      const get = (r, ...keys) => String(keys.map((k) => r[k]).find((v) => String(v).trim()) || '').trim();
+      const list = data
+        .map((r) => ({
+          name: get(r, '이름', 'name'),
+          loginId: get(r, '아이디', 'ID', 'id', 'loginId'),
+          password: get(r, '비밀번호', '비번', 'password'),
+          department: get(r, '부서'),
+          position: get(r, '직급'),
+        }))
+        .filter((r) => r.name || r.loginId);
+      if (!list.length) throw new Error('첫 줄에 "이름, 아이디, 비밀번호, 부서, 직급" 제목이 있는지 확인해 주세요.');
+      setRows(list);
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const run = async () => {
+    setBusy(true);
+    try {
+      setResult(await imports.users(rows));
+      setRows(null);
+    } catch (err) {
+      handleError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="import-box">
+      <h3>3. 직원 계정</h3>
+      <p className="sub-text">
+        엑셀 첫 줄 제목: <b>이름, 아이디, 비밀번호, 부서, 직급</b>. 부서가 <b>시공팀</b>이면 기사모바일 계정(같은 이름의 기사에 연결, 없으면 새 기사), 나머지는 <b>실장 계정(기본 권한)</b>으로 만듭니다. 권한은 [사용자관리]에서 바꿔 주세요. 이미 있는 아이디는 건너뜁니다.
+      </p>
+      <label className="btn-file">
+        파일 선택
+        <input type="file" accept=".xlsx,.xls,.csv" onChange={pick} hidden />
+      </label>
+      {rows && (
+        <>
+          <div className="table-responsive import-preview">
+            <table className="customer-table">
+              <thead>
+                <tr>
+                  <th>이름</th>
+                  <th>아이디</th>
+                  <th>비밀번호</th>
+                  <th>부서/직급</th>
+                  <th>만들 계정</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i}>
+                    <td className="text-left">{r.name || '-'}</td>
+                    <td>{r.loginId || '-'}</td>
+                    <td>{'•'.repeat(Math.min(r.password.length, 8)) || '-'}</td>
+                    <td>{[r.department, r.position].filter(Boolean).join('/') || '-'}</td>
+                    <td>{r.department === '시공팀' ? '기사모바일' : '실장'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="import-actions">
+            <button type="button" className="btn-dark-lg sm" disabled={busy} onClick={run}>{busy ? '등록 중...' : `계정 ${rows.length}개 등록`}</button>
+            <button type="button" className="btn-dark-lg sm cancel" onClick={() => setRows(null)}>취소</button>
+          </div>
+        </>
+      )}
+      {result && (
+        <div className="import-result">
+          ✔ 실장 계정 {result.created}개 · 기사모바일 계정 {result.engineers}개 · 이미 있어 건너뜀 {result.skipped}개
+          {result.errors.length > 0 && (
+            <ul className="text-red">
+              {result.errors.map((x, i) => (
+                <li key={i}>
+                  {x.name}: {x.message}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </section>
