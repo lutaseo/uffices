@@ -104,6 +104,7 @@ const READ_ONLY = new Set([
   'notifications.gatewayStatus', // 비즈고 응답을 기다리는 동안 저장 잠금을 잡지 않게 (DB 는 안 바꿈)
   'notifications.testSend',
   'notifications.testResult',
+  'companies.termsSettings',
   'reports.contracts',
   'reports.engineers',
   'schedules.list',
@@ -133,7 +134,9 @@ const LIGHT_TABLES = {
   'notifications.gatewayStatus': [],
   'notifications.testSend': [],
   'notifications.testResult': [],
-  'notifications.saveAlimtalkSettings': [], // 업체 표만 바꿈 (운영자가 전체 업체 계약까지 읽지 않게)
+  'notifications.saveAlimtalkSettings': [],
+  'companies.termsSettings': [], // 계약조건: 업체 표만
+  'companies.saveContractTerms': [], // 업체 표만 바꿈 (운영자가 전체 업체 계약까지 읽지 않게)
 };
 
 // 입금 영수증 사진을 읽거나 바꾸는 요청 (첫 인자 = 계약 번호)

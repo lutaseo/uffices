@@ -20,6 +20,7 @@ import AccountManagement from './pages/AccountManagement.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 import ImportPage from './pages/settings/ImportPage.jsx';
 import AlimtalkSettings from './pages/settings/AlimtalkSettings.jsx';
+import ContractTermsSettings from './pages/settings/ContractTermsSettings.jsx';
 import { EngineerSettings, TeamSettings, ProductSettings, ApartmentSettings, ScheduleSettings } from './pages/settings/MasterSettings.jsx';
 
 // 메뉴 정의. 새 메뉴는 여기에 추가하고 주소(path)와 필요한 권한(perm)만 지정하면 됩니다.
@@ -42,6 +43,7 @@ const MENUS = [
   // 운영자 전용 (업체 관리자는 설정 > 사용자관리 에서 실장을 관리)
   { key: 'accounts', label: '업체/계정관리', icon: '🔑', visible: (u) => u.role === ROLES.SUPER, path: '/admin' },
   { key: 'alimtalk', label: '알림톡연결', icon: '💬', visible: (u) => u.role === ROLES.SUPER, path: '/admin/alimtalk' },
+  { key: 'terms', label: '계약조건', icon: '📄', visible: (u) => u.role === ROLES.SUPER, path: '/admin/terms' },
   {
     key: 'setting',
     label: '설정',
@@ -127,7 +129,7 @@ function MainLayout({ route }) {
     return !item.perm || can(item.perm);
   };
   const menus = MENUS.filter((m) => {
-    if (user.role === ROLES.SUPER) return m.key === 'accounts' || m.key === 'alimtalk' || m.key === 'setting';
+    if (user.role === ROLES.SUPER) return ['accounts', 'alimtalk', 'terms', 'setting'].includes(m.key);
     return m.always || allowed(m);
   })
     .map((m) => ({ ...m, subs: (m.subs || []).filter(allowed) }))
@@ -251,6 +253,7 @@ function MainLayout({ route }) {
         {current?.key === 'stats' && <StatsPage />}
         {current?.key === 'accounts' && <AccountManagement />}
         {current?.key === 'alimtalk' && <AlimtalkSettings />}
+        {current?.key === 'terms' && <ContractTermsSettings />}
         {current?.key === 'setting' && <SettingPage path={path} subs={current.subs} />}
       </main>
     </div>

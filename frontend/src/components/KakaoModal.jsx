@@ -13,8 +13,9 @@ const TEMPLATES = {
 };
 
 export default function KakaoModal({ contract, initialTemplate = '기사배정', initialTarget = '고객', initialStep = 0, initialBrand, signUrl, onClose }) {
-  const { handleError } = useAuth();
-  const [brand, setBrand] = useState(initialBrand || contract.brand || BRANDS[0]);
+  const { handleError, company } = useAuth();
+  const brands = company?.brands?.length ? company.brands : BRANDS; // 업체에 등록된 브랜드
+  const [brand, setBrand] = useState(initialBrand || contract.brand || brands[0]);
   const [template, setTemplate] = useState(initialTemplate);
   const [target, setTarget] = useState(initialTarget);
   const [step, setStep] = useState(initialStep);
@@ -88,7 +89,7 @@ export default function KakaoModal({ contract, initialTemplate = '기사배정',
         <div className="talk-select-section">
           <div className="form-group">
             <label>발송 브랜드</label>
-            <div className="radio-btn-group">{BRANDS.map((b) => tag('talkBrand', b, brand, setBrand))}</div>
+            <div className="radio-btn-group">{brands.map((b) => tag('talkBrand', b, brand, setBrand))}</div>
           </div>
           <div className="form-group">
             <label>알림톡 템플릿</label>
