@@ -23,7 +23,7 @@ import {
 } from './runtime.js';
 import { ROLES, DATA_SCOPES, permissionsOf, isOwnScopeOnly, ALL_PERMISSION_KEYS } from '../auth/permissions.js';
 import { digitsOnly, formatPhone } from '../utils/format.js';
-import { CATEGORIES, DEPARTMENTS } from '../constants.js';
+import { CATEGORIES, DEPARTMENTS, brandTerms, termsSource } from '../constants.js';
 import {
   ApiError,
   authorize,
@@ -205,6 +205,46 @@ export const companies = {
     if (c.periodStart > c.periodEnd) throw new ApiError('이용기간을 올바르게 입력해 주세요.');
     saveDb(db);
     return clone(c);
+  },
+
+  // ---------------- 계약조건 (운영자 전용) ----------------
+  // 업체별 · 브랜드별 지금 계약서에 쓰이는 조건 (입력 안 했으면 예전 고정 조건 또는 기본 조건)
+  async termsSettings() {
+    const { db, user } = await session();
+    if (user.role !== ROLES.SUPER) throw new ApiError('운영자만 볼 수 있습니다.', 'FORBIDDEN');
+    return {
+      categories: [...CATEGORIES],
+      companies: db.companies.map((c) => {
+        const brands = c.brands?.length ? c.brands : Object.keys(c.contractTerms || {});
+        return {
+          id: c.id,
+          name: c.name,
+          code: c.code,
+          brands: [...brands],
+          terms: Object.fromEntries(brands.map((b) => [b, clone(brandTerms(c, b))])),
+          saved: Object.fromEntries(brands.map((b) => [b, termsSource(c, b) === 'saved'])),
+          source: Object.fromEntries(brands.map((b) => [b, termsSource(c, b)])),
+        };
+      }),
+    };
+  },
+
+  // 브랜드 계약조건 저장. terms = 묶음 목록 ('[구분]' 첫 줄 + 항목들 / 구분 없는 묶음 = 중요 조항). 빈 목록이면 기본 조건으로
+  async saveContractTerms({ companyId, brand, terms } = {}) {
+    const { db, user } = await session();
+    if (user.role !== ROLES.SUPER) throw new ApiError('운영자만 바꿀 수 있습니다.', 'FORBIDDEN');
+    const c = db.companies.find((x) => x.id === Number(companyId));
+    if (!c) throw new ApiError('업체를 선택해 주세요.');
+    const b = String(brand || '').trim();
+    if (!b || (c.brands?.length && !c.brands.includes(b))) throw new ApiError('이 업체의 브랜드가 아닙니다.');
+    if (!Array.isArray(terms)) throw new ApiError('계약 조건 형식이 올바르지 않습니다.');
+    const clean = terms.map((t) => String(t ?? '').replace(/\r\n?/g, '\n').trim()).filter(Boolean);
+    if (clean.length > 30) throw new ApiError('조건 묶음은 30개까지 넣을 수 있습니다.');
+    if (clean.some((t) => t.length > 5000)) throw new ApiError('한 묶음은 5,000자까지 넣을 수 있습니다.');
+    c.contractTerms = { ...(c.contractTerms || {}), [b]: clean };
+    if (!clean.length) delete c.contractTerms[b];
+    saveDb(db);
+    return clone(brandTerms(c, b));
   },
 };
 

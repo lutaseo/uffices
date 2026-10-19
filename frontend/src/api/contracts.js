@@ -785,7 +785,13 @@ export const esign = {
       delete view.engineerNote;
       return view;
     });
-    return { contract: views[0], contracts: views, company: { name: company.name, ceo: company.ceo, bizNo: company.bizNo, address: company.address } };
+    const brand = list[0].brand;
+    return {
+      contract: views[0],
+      contracts: views,
+      // 계약 조건은 이 계약 브랜드 것만 (ContractDocument 가 brandTerms 로 계산)
+      company: { name: company.name, ceo: company.ceo, bizNo: company.bizNo, address: company.address, code: company.code, contractTerms: { [brand]: clone(company.contractTerms?.[brand] || []) } },
+    };
   },
 
   async sign(token, { signerName, signature, agreed }) {
@@ -797,7 +803,8 @@ export const esign = {
     if (!signature) throw new ApiError('서명을 해 주세요.');
     const info = await clientInfo(); // 서명 증빙: 접속 기기(서버에서는 IP 포함)
     const signedAt = nowIso();
-    const terms = contractTermsFor(list[0].brand, list.map((c) => c.category)); // 서명 당시 계약 조건 보관 (나중에 조건을 바꿔도 그대로)
+    const company = db.companies.find((x) => x.id === list[0].companyId);
+    const terms = contractTermsFor(company, list[0].brand, list.map((c) => c.category)); // 서명 당시 계약 조건 보관 (나중에 조건을 바꿔도 그대로)
     for (const c of list) {
       c.esign = { ...c.esign, status: ESIGN_STATUS.SIGNED, signerName: signerName.trim(), signature, signedAt, terms, ...info };
       c.updatedAt = signedAt;

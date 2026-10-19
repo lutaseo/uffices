@@ -11,6 +11,7 @@ import {
   WORK_STATUS,
 } from '../constants.js';
 import { presetRange } from '../utils/date.js';
+import { useAuth } from '../auth/AuthContext.jsx';
 import AptSearchInput from './AptSearchInput.jsx';
 
 export const EMPTY_FILTER = {
@@ -44,6 +45,8 @@ const PRESETS = [
 
 // 텍스트/날짜 입력은 [검색] 시 반영, 드롭다운은 선택 즉시 반영
 export default function SearchFilter({ filter, onSearch, staff = [], engineers = [], actions }) {
+  const { company } = useAuth();
+  const brands = company?.brands?.length ? company.brands : BRANDS; // 업체에 등록된 브랜드
   const [draft, setDraft] = useState(filter);
 
   const set = (name, value) => setDraft((prev) => ({ ...prev, [name]: value }));
@@ -140,7 +143,7 @@ export default function SearchFilter({ filter, onSearch, staff = [], engineers =
         </div>
 
         <div className="filter-row">
-          {select('brand', '브랜드선택', BRANDS)}
+          {select('brand', '브랜드선택', brands)}
           {select('category', '구분', CATEGORIES)}
           {select('sort', null, SORT_OPTIONS)}
           {select('receptionType', '접수형태', RECEPTION_TYPES)}

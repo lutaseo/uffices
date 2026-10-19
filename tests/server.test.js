@@ -575,6 +575,42 @@ test('계약 조건: 서명할 때 조건을 계약에 함께 보관 (나중에 
   assert.ok(Array.isArray(signed.esign.terms) && signed.esign.terms.length > 0, '서명 당시 조건 저장');
 });
 
+test('계약조건 (운영자 화면): 업체·브랜드별 저장, 구분에 맞는 조건만 서명 보관, 운영자만, 비우면 기본으로', async () => {
+  const sup = client();
+  await sup.ok('auth', 'login', 'super', 'super-test-1234');
+  const myCompanyId = (await admin.ok('auth', 'me')).user.companyId;
+  const st = await sup.ok('companies', 'termsSettings');
+  const mine = st.companies.find((x) => x.id === myCompanyId);
+  assert.ok(mine && mine.brands.includes(base.brand), '업체 브랜드 목록');
+  assert.ok(mine.terms[base.brand].length > 0, '입력 전에도 지금 쓰는 조건이 보임');
+
+  const terms = ['중요 조항: 갑과 을은 성실히 이행한다.', '[줄눈]\n*줄눈 AS 1년', '[청소]\n*청소 당일 검수'];
+  await sup.ok('companies', 'saveContractTerms', { companyId: myCompanyId, brand: base.brand, terms });
+  assert.equal((await admin('companies', 'saveContractTerms', { companyId: myCompanyId, brand: base.brand, terms })).status, 403, '업체 관리자는 불가');
+  assert.equal((await admin('companies', 'termsSettings')).status, 403);
+  assert.equal((await sup('companies', 'saveContractTerms', { companyId: myCompanyId, brand: '없는브랜드', terms })).status, 400);
+
+  // 줄눈 계약: 중요 조항 + [줄눈]만 서명 때 보관, 서명 화면에도 이 브랜드 조건 전달
+  const c = await admin.ok('contracts', 'create', { ...base, customerName: '조건고객', customerPhone: '010-4545-6767', category: '줄눈' });
+  const { token } = await admin.ok('contracts', 'requestSign', c.id);
+  const view = await client().ok('esign', 'getByToken', token);
+  assert.deepEqual(view.company.contractTerms[base.brand], terms);
+  await client().ok('esign', 'sign', token, { signerName: '조건고객', signature: 'data:image/png;base64,QQ==', agreed: true });
+  assert.deepEqual((await admin.ok('contracts', 'get', c.id)).esign.terms, [terms[0], terms[1]]);
+
+  // 나노코팅처럼 맞는 구분이 없으면 중요 조항만
+  const n = await admin.ok('contracts', 'create', { ...base, customerName: '코팅고객', customerPhone: '010-4545-8989', category: '나노코팅' });
+  const t2 = (await admin.ok('contracts', 'requestSign', n.id)).token;
+  await client().ok('esign', 'sign', t2, { signerName: '코팅고객', signature: 'data:image/png;base64,QQ==', agreed: true });
+  assert.deepEqual((await admin.ok('contracts', 'get', n.id)).esign.terms, [terms[0]]);
+
+  // 비우면 기본 조건으로, 서명한 계약서는 그대로
+  await sup.ok('companies', 'saveContractTerms', { companyId: myCompanyId, brand: base.brand, terms: [] });
+  const after = await sup.ok('companies', 'termsSettings');
+  assert.equal(after.companies.find((x) => x.id === myCompanyId).saved[base.brand], false);
+  assert.deepEqual((await admin.ok('contracts', 'get', c.id)).esign.terms, [terms[0], terms[1]]);
+});
+
 test('기사모바일 계약 상세: 본인 배정 계약만, 단가·내부 메모·이력은 숨김', async () => {
   const eng = client();
   await eng.ok('auth', 'login', 'gong', 'gong1234');

@@ -51,8 +51,10 @@ export const RECEIPT_TYPES = ['미발행', '현금영수증', '세금계산서',
 // 계약 단위 세금계산서 / 현금영수증 발행 상태
 export const ISSUE_STATUS = ['', '발행요청', '발행완료', '해당없음'];
 
-// 계약서 '계약 조건' (고정 — 바꿀 때는 여기를 수정)
-//   CONTRACT_TERMS_BY_BRAND 에 브랜드별 조건을 넣으면 그 브랜드 계약서에 사용, 없으면 기본 조건
+// 계약서 '계약 조건' — 운영자(super) > 계약조건 화면에서 업체·브랜드별로 입력 (company.contractTerms[브랜드])
+//   형식: 문자열 묶음 목록. '[구분]' 첫 줄 + 한 줄에 한 항목 → 그 구분 계약서에만 표시,
+//         '[구분]'으로 시작하지 않는 묶음(계약 당사자·대금 등 중요 조항)은 모든 계약서 맨 앞에 강조
+//   입력하지 않은 브랜드는 아래 기본(예전부터 쓰던 조건) 사용
 //   이미 서명한 계약서는 서명할 때의 조건이 계약에 함께 저장되어 바뀌지 않음
 export const DEFAULT_CONTRACT_TERMS = [
   '시공 일정은 고객과 협의하여 확정하며, 일정 변경은 시공 3일 전까지 요청해야 합니다.',
@@ -81,21 +83,35 @@ const THEGOOD_TERMS = [
 *본드, 녹, 페인트, 스티커자국 및 약품성 오염등은 청소만으로는 완벽한 제거가 힘듭니다. 가능한 최대한 제거 작업을 해드리오나, 청소팀이 손을대는 경우 '소비자 과실로 인한 하자처리 불가' 사항으로 청소 시 발견된 부분은 별도 표시 후 안내드립니다. (시공사의 하자 접수로 처리가 가능합니다.)`,
 ];
 
-export const CONTRACT_TERMS_BY_BRAND = {
-  더좋은집: THEGOOD_TERMS,
-  // 더스타트: ['…', '…'],
+// 화면에서 입력하기 전부터 쓰던 조건 (업체주소코드:브랜드) — 운영자가 저장하면 저장한 것이 우선
+const BUILTIN_TERMS = {
+  'thegood:더좋은집': THEGOOD_TERMS,
 };
 
 // '[줄눈]' 처럼 구분 이름으로 시작하는 조건 묶음
 export const termSection = (t) => (/^\[([^\]]+)\]/.exec(String(t)) || [])[1] || '';
 
-// 브랜드의 계약 조건. categories(그 계약서의 구분들)를 주면 해당 구분 묶음만 —
-//   맞는 묶음이 하나도 없으면(예: 나노코팅) 전체를 보여줌
-export function contractTermsFor(brand, categories = []) {
-  const list = CONTRACT_TERMS_BY_BRAND[brand]?.length ? CONTRACT_TERMS_BY_BRAND[brand] : DEFAULT_CONTRACT_TERMS;
+// 계약 조건이 어디서 오는지: 'saved'(운영자 입력) / 'builtin'(예전 고정 조건) / 'default'(기본 4줄)
+export function termsSource(company, brand) {
+  const saved = company?.contractTerms?.[brand];
+  if (Array.isArray(saved) && saved.some((t) => String(t).trim())) return 'saved';
+  return BUILTIN_TERMS[`${company?.code || ''}:${brand}`] ? 'builtin' : 'default';
+}
+
+// 업체·브랜드의 계약 조건 전체 (운영자 저장 > 예전 고정 조건 > 기본)
+export function brandTerms(company, brand) {
+  const src = termsSource(company, brand);
+  if (src === 'saved') return company.contractTerms[brand];
+  return src === 'builtin' ? BUILTIN_TERMS[`${company.code}:${brand}`] : DEFAULT_CONTRACT_TERMS;
+}
+
+// 그 계약서에 보일 조건. categories(계약서의 구분들)에 맞는 '[구분]' 묶음 + 중요 조항(구분 없는 묶음)
+//   맞는 구분 묶음이 없으면(예: 나노코팅) 중요 조항만, 중요 조항도 없으면 전체
+export function contractTermsFor(company, brand, categories = []) {
+  const list = brandTerms(company, brand);
   if (!categories.length || !list.some(termSection)) return list;
   const picked = list.filter((t) => !termSection(t) || categories.includes(termSection(t)));
-  return picked.some(termSection) ? picked : list;
+  return picked.length ? picked : list;
 }
 
 // 전자계약(서명) 상태
