@@ -3,12 +3,12 @@
 //   GET/POST/PATCH/DELETE /api/contracts ...
 // ============================================================
 
-import { loadDb, saveDb, nextId, publicBaseUrl, clientInfo, getSession, setSession, alimtalkGateway } from './runtime.js';
-import { ApiError, authorize, clone, findContract, isLoginIdTaken, nowIso, visibleContracts } from './core.js';
+import { loadDb, saveDb, nextId, publicBaseUrl, clientInfo, getSession, setSession, alimtalkGateway, hashPassword } from './runtime.js';
+import { ApiError, authorize, clone, findContract, isLoginIdTaken, nowIso, validatePassword, visibleContracts } from './core.js';
 import { addHistory, assigneeOf, contractListView, contractView, hideAmounts } from './views.js';
 import { assertAssignable } from './schedule.js';
 import { invalidateNumbers, numberOf } from './numbering.js';
-import { can, ROLES } from '../auth/permissions.js';
+import { can, ROLES, DATA_SCOPES, DEFAULT_MANAGER_PERMISSIONS } from '../auth/permissions.js';
 import {
   APPROVAL_STATUS,
   ASSIGN_TYPES,
@@ -24,6 +24,8 @@ import {
   WORK_TYPES,
   contractTermsFor,
   SIGN_TOGETHER,
+  DEPARTMENTS,
+  POSITIONS,
 } from '../constants.js';
 import { inRange, isDateKey, isoToDateKey, today } from '../utils/date.js';
 import { digitsOnly, formatAddress, formatPhone, won } from '../utils/format.js';
@@ -1193,6 +1195,81 @@ export const imports = {
       newEngineer(db, user, { name, loginId, phone: digitsOnly(row.phone).length >= 10 ? row.phone : '', categories: row.categories });
       result.created += 1;
     });
+    saveDb(db);
+    return result;
+  },
+
+  // 직원 계정 일괄 등록 (예전 프로그램 사용자 목록: 이름, 아이디, 비밀번호, 부서, 직급)
+  //   부서가 '시공팀'이면 기사모바일 계정 — 같은 아이디 또는 같은 이름의 기사에 아이디·비밀번호를 넣고, 없으면 기사로 새로 등록
+  //   그 외는 실장 계정 (기본 권한, 권한은 관리자가 사용자관리에서 조정). 이미 있는 아이디는 건너뜀
+  async users(rows = []) {
+    const { db, user } = authorizeImport(await authorize());
+    const result = { created: 0, engineers: 0, skipped: 0, errors: [] };
+    const bare = (n) => String(n || '').replace(/^[^)]*\)/, '').trim(); // '줄)김주하' → '김주하'
+    for (const row of rows.slice(0, IMPORT_BATCH_MAX)) {
+      const name = String(row.name || '').trim();
+      const loginId = String(row.loginId || '').trim();
+      const password = String(row.password || '');
+      const department = DEPARTMENTS.includes(String(row.department || '').trim()) ? String(row.department).trim() : '';
+      const position = POSITIONS.includes(String(row.position || '').trim()) ? String(row.position).trim() : '';
+      const fail = (message) => result.errors.push({ name: name || loginId, message });
+      if (!name || !loginId) {
+        fail('이름 또는 아이디가 비어 있습니다.');
+        continue;
+      }
+      if (!/^[a-zA-Z0-9_.-]{3,20}$/.test(loginId)) {
+        fail(`아이디 [${loginId}] 는 영문/숫자 3~20자가 아닙니다.`);
+        continue;
+      }
+      try {
+        validatePassword(password);
+      } catch (e) {
+        fail(`${e.message} (아이디 ${loginId})`);
+        continue;
+      }
+      if (department === '시공팀') {
+        const mine = db.engineers.filter((e) => e.companyId === user.companyId);
+        let eng = mine.find((e) => e.loginId === loginId) || mine.find((e) => bare(e.name) === name); // 같은 이름 기사면 아이디를 목록 것으로
+        if (!eng && isLoginIdTaken(db, loginId)) {
+          result.skipped += 1;
+          continue;
+        }
+        if (!eng) eng = newEngineer(db, user, { name, loginId });
+        else if (eng.loginId !== loginId) {
+          if (isLoginIdTaken(db, loginId, { exceptEngineerId: eng.id })) {
+            result.skipped += 1;
+            continue;
+          }
+          eng.loginId = loginId;
+        }
+        eng.passwordHash = await hashPassword(password);
+        result.engineers += 1;
+        continue;
+      }
+      if (isLoginIdTaken(db, loginId)) {
+        result.skipped += 1;
+        continue;
+      }
+      db.users.push({
+        id: nextId(db, 'users'),
+        loginId,
+        passwordHash: await hashPassword(password),
+        name,
+        phone: '',
+        role: ROLES.MANAGER,
+        companyId: user.companyId,
+        permissions: [...DEFAULT_MANAGER_PERMISSIONS],
+        dataScope: DATA_SCOPES.ALL,
+        teamId: null,
+        department,
+        position,
+        active: true,
+        createdBy: user.id,
+        createdAt: nowIso(),
+        lastLoginAt: null,
+      });
+      result.created += 1;
+    }
     saveDb(db);
     return result;
   },

@@ -611,6 +611,36 @@ test('계약조건 (운영자 화면): 업체·브랜드별 저장, 구분에 �
   assert.deepEqual((await admin.ok('contracts', 'get', c.id)).esign.terms, [terms[0], terms[1]]);
 });
 
+test('직원 계정 일괄 등록: 실장은 기본 권한, 시공팀은 기사모바일 계정, 중복·형식 오류는 건너뜀', async () => {
+  const rows = [
+    { name: '가져온실장', loginId: '0638', password: '0709', department: '상담팀', position: '실장' },
+    { name: '가져온기사', loginId: 'impeng', password: '5874', department: '시공팀', position: '' },
+    { name: '중복', loginId: 'admin', password: '1234', department: '본사', position: '' },
+    { name: '짧은비번', loginId: 'shortpw', password: '12', department: '', position: '' },
+  ];
+  await admin.ok('users', 'create', { loginId: 'impmgr', password: 'impmgr1234', name: '가져오기확인' });
+  const mgr = client();
+  await mgr.ok('auth', 'login', 'impmgr', 'impmgr1234');
+  assert.equal((await mgr('imports', 'users', rows)).status, 403, '관리자만');
+  const r = await admin.ok('imports', 'users', rows);
+  assert.equal(r.created, 1);
+  assert.equal(r.engineers, 1);
+  assert.equal(r.skipped, 1);
+  assert.equal(r.errors.length, 1);
+  const u = (await admin.ok('users', 'list')).find((x) => x.loginId === '0638');
+  assert.equal(u.role, 'MANAGER');
+  assert.equal(u.department, '상담팀');
+  assert.ok(u.permissions.includes('contract.view') && !u.permissions.includes('contract.amount'), '기본 권한');
+  const s1 = client();
+  assert.equal((await s1.ok('auth', 'login', '0638', '0709')).user.name, '가져온실장');
+  const s2 = client();
+  assert.equal((await s2.ok('auth', 'login', 'impeng', '5874')).user.role, 'ENGINEER');
+  // 다시 올려도 중복 안 됨
+  const again = await admin.ok('imports', 'users', rows.slice(0, 1));
+  assert.equal(again.created, 0);
+  assert.equal(again.skipped, 1);
+});
+
 test('기사모바일 계약 상세: 본인 배정 계약만, 단가·내부 메모·이력은 숨김', async () => {
   const eng = client();
   await eng.ok('auth', 'login', 'gong', 'gong1234');
