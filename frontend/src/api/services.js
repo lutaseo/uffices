@@ -423,6 +423,9 @@ export const engineers = masterTable('engineers', {
   normalize: async (d, db, user) => {
     const loginId = (d.loginId || '').trim();
     const existing = d.id ? db.engineers.find((e) => e.id === d.id) : null;
+    if (existing?.loginId && loginId !== existing.loginId && user.role !== ROLES.ADMIN) {
+      throw new ApiError('기사 아이디는 업체 관리자만 바꿀 수 있습니다.', 'FORBIDDEN');
+    }
     if (loginId) {
       if (!/^[a-zA-Z0-9_.-]{3,20}$/.test(loginId)) throw new ApiError('기사 아이디는 영문/숫자 3~20자로 입력해 주세요.');
       if (isLoginIdTaken(db, loginId, { exceptEngineerId: d.id })) throw new ApiError('이미 사용 중인 아이디입니다.');

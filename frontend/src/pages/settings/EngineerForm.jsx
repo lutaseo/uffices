@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { engineerOffs, engineers, teams } from '../../api/index.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
+import { ROLES } from '../../auth/permissions.js';
 import { CATEGORIES, OFF_LABEL } from '../../constants.js';
 import { WEEKDAYS, toDateKey } from '../../utils/date.js';
 import { digitsOnly } from '../../utils/format.js';
@@ -52,7 +53,8 @@ const toForm = (e) => {
 };
 
 export default function EngineerForm({ engineerId }) {
-  const { handleError } = useAuth();
+  const { handleError, user } = useAuth();
+  const canEditLoginId = user.role === ROLES.ADMIN; // 이미 정한 기사 아이디는 업체 관리자만 바꿀 수 있음
   const isNew = !engineerId;
   const [form, setForm] = useState(isNew ? toForm(null) : null);
   const [crewTeams, setCrewTeams] = useState([]);
@@ -123,12 +125,12 @@ export default function EngineerForm({ engineerId }) {
             <tr>
               <td className="label-col">기사 아이디</td>
               <td className="input-col">
-                {form.hasLoginId ? (
+                {form.hasLoginId && !canEditLoginId ? (
                   <span className="plain-value">{form.loginId}</span>
                 ) : (
                   <>
                     <input className="input-text" value={form.loginId} onChange={(e) => set('loginId', e.target.value.trim())} autoComplete="off" />
-                    <span className="sub-text"> 기사모바일 로그인용 (영문/숫자 3~20자)</span>
+                    <span className="sub-text"> 기사모바일 로그인용 (영문/숫자 3~20자){form.hasLoginId && ' · 바꾸면 기사는 새 아이디로 로그인합니다 (비밀번호는 그대로)'}</span>
                   </>
                 )}
               </td>
