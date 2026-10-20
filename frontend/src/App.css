@@ -1072,6 +1072,18 @@ body {
   font-size: 14px;
 }
 
+/* 로그인 화면 구분: 일반화면 / 기사모바일 */
+.login-kind {
+  display: inline-block;
+  margin: 0 0 8px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #1a6fe0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
 .login-form {
   display: flex;
   flex-direction: column;

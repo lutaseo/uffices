@@ -1188,7 +1188,7 @@ export const imports = {
         return;
       }
       let loginId = String(row.loginId || '').trim();
-      if (loginId && (!/^[a-zA-Z0-9_.-]{3,20}$/.test(loginId) || isLoginIdTaken(db, loginId))) {
+      if (loginId && (!/^[a-zA-Z0-9_.-]{3,20}$/.test(loginId) || isLoginIdTaken(db, loginId, { kind: 'engineer' }))) {
         result.errors.push({ name, message: `아이디 [${loginId}] 는 형식이 맞지 않거나 이미 사용 중이라 비워 두었습니다.` });
         loginId = '';
       }
@@ -1230,13 +1230,13 @@ export const imports = {
       if (department === '시공팀') {
         const mine = db.engineers.filter((e) => e.companyId === user.companyId);
         let eng = mine.find((e) => e.loginId === loginId) || mine.find((e) => bare(e.name) === name); // 같은 이름 기사면 아이디를 목록 것으로
-        if (!eng && isLoginIdTaken(db, loginId)) {
+        if (!eng && isLoginIdTaken(db, loginId, { kind: 'engineer' })) {
           result.skipped += 1;
           continue;
         }
         if (!eng) eng = newEngineer(db, user, { name, loginId });
         else if (eng.loginId !== loginId) {
-          if (isLoginIdTaken(db, loginId, { exceptEngineerId: eng.id })) {
+          if (isLoginIdTaken(db, loginId, { kind: 'engineer', exceptEngineerId: eng.id })) {
             result.skipped += 1;
             continue;
           }
@@ -1246,7 +1246,7 @@ export const imports = {
         result.engineers += 1;
         continue;
       }
-      if (isLoginIdTaken(db, loginId)) {
+      if (isLoginIdTaken(db, loginId, { kind: 'user' })) {
         result.skipped += 1;
         continue;
       }

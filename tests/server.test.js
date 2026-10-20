@@ -283,13 +283,33 @@ test('기사 아이디 변경: 업체 관리자만, 바꾼 아이디로 로그�
   assert.equal(moved.hasPassword, true, '비밀번호 유지');
   assert.equal((await client()('auth', 'login', 'oldengid', 'eng5151')).status, 400, '예전 아이디는 안 됨');
   assert.equal((await client().ok('auth', 'login', 'newengid', 'eng5151')).user.role, 'ENGINEER');
-  assert.equal((await admin('engineers', 'save', { ...moved, loginId: 'admin' })).status, 400, '다른 계정 아이디와 중복 불가');
+  await admin.ok('engineers', 'save', { name: '중복확인기사', phone: '010-5151-7373', loginId: 'dupengid', password: 'dup5151' });
+  assert.equal((await admin('engineers', 'save', { ...moved, loginId: 'dupengid' })).status, 400, '다른 기사와 같은 아이디는 불가');
 
   await admin.ok('users', 'create', { loginId: 'engsetmgr', password: 'engset1234', name: '기사관리실장', permissions: ['settings.manage'] });
   const mgr = client();
   await mgr.ok('auth', 'login', 'engsetmgr', 'engset1234');
   assert.equal((await mgr('engineers', 'save', { ...moved, loginId: 'mgrchanged' })).status, 403, '실장은 아이디 변경 불가');
   assert.equal((await mgr.ok('engineers', 'save', { ...moved, memo: '실장 메모' })).loginId, 'newengid', '다른 항목은 수정 가능');
+});
+
+test('로그인 주소로 구분: 기사 아이디와 직원 아이디가 같아도 됨 (/m 은 기사, 일반 화면은 직원 우선)', async () => {
+  await admin.ok('users', 'create', { loginId: 'twin0955', password: 'staff0955', name: '겸직직원' });
+  const e = await admin.ok('engineers', 'save', { name: '겸직기사', phone: '010-0955-0955', loginId: 'twin0955', password: 'eng0955' });
+  assert.equal(e.loginId, 'twin0955', '직원과 같은 아이디로 기사 등록 가능');
+  assert.equal((await admin('users', 'create', { loginId: 'twin0955', password: 'x12345', name: '중복직원' })).status, 400, '직원끼리는 중복 불가');
+
+  const staff = client();
+  assert.equal((await staff.ok('auth', 'login', 'twin0955', 'staff0955', '', 'staff')).user.role, 'MANAGER', '일반 화면 → 직원');
+  const eng = client();
+  assert.equal((await eng.ok('auth', 'login', 'twin0955', 'eng0955', '', 'engineer')).user.role, 'ENGINEER', '/m → 기사');
+  assert.equal((await client()('auth', 'login', 'twin0955', 'eng0955', '', 'staff')).status, 400, '일반 화면에서는 직원 비밀번호');
+  assert.equal((await client()('auth', 'login', 'twin0955', 'staff0955', '', 'engineer')).status, 400, '/m 에서는 기사 비밀번호');
+  // 직원 계정이 없는 기사 아이디는 일반 화면에서도 기사로 (예전처럼)
+  await admin.ok('engineers', 'save', { name: '기사만', phone: '010-0956-0956', loginId: 'onlyeng', password: 'only0956' });
+  assert.equal((await client().ok('auth', 'login', 'onlyeng', 'only0956', '', 'staff')).user.role, 'ENGINEER');
+  // /m 에서는 직원 계정으로 로그인 불가
+  assert.equal((await client()('auth', 'login', 'admin', 'admin1234', '', 'engineer')).status, 400);
 });
 
 test('서버 연결 점검(/api/rpc GET): 비밀값은 숨기고 설정·DB 상태만 표시', async () => {

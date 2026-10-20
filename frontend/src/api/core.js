@@ -27,12 +27,12 @@ export function validatePassword(pw) {
   if (!pw || pw.length < 4) throw new ApiError('비밀번호는 4자 이상이어야 합니다.');
 }
 
-// 로그인 아이디는 직원 계정과 기사 계정을 통틀어 유일해야 함
-export function isLoginIdTaken(db, loginId, { exceptUserId, exceptEngineerId } = {}) {
-  return (
-    db.users.some((u) => u.loginId === loginId && u.id !== exceptUserId) ||
-    db.engineers.some((e) => e.loginId === loginId && e.id !== exceptEngineerId)
-  );
+// 로그인 아이디는 같은 종류 안에서만 유일하면 됨 — 로그인 주소로 나눔
+//   kind 'user'  : 직원(관리자·실장) 계정끼리   → /업체주소 에서 로그인
+//   kind 'engineer': 기사 계정끼리              → /업체주소/m (기사모바일) 에서 로그인
+export function isLoginIdTaken(db, loginId, { kind, exceptUserId, exceptEngineerId } = {}) {
+  if (kind === 'engineer') return db.engineers.some((e) => e.loginId === loginId && e.id !== exceptEngineerId);
+  return db.users.some((u) => u.loginId === loginId && u.id !== exceptUserId);
 }
 
 export function companyAccessError(db, user) {

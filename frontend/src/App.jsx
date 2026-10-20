@@ -95,7 +95,7 @@ export default function App() {
   if (cust) return <CustomerApp companyCode={route.base} token={cust.token} />;
 
   if (loading) return <div className="page-loading">불러오는 중...</div>;
-  if (!user) return <LoginPage companyCode={route.base} />;
+  if (!user) return <LoginPage companyCode={route.base} engineer={route.path === '/m' || route.path.startsWith('/m/')} />;
   return <CompanyGate route={route} />;
 }
 
