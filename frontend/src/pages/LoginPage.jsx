@@ -2,15 +2,18 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { API_MODE, companies } from '../api/index.js';
 
-// companyCode: 업체 주소(veritybase.vercel.app/thegood)로 들어오면 그 업체 로그인 화면
-export default function LoginPage({ companyCode = '' }) {
+// companyCode: 업체 주소(veritybase.vercel.app/업체주소)로 들어오면 그 업체 로그인 화면
+// engineer: /업체주소/m 으로 들어오면 기사모바일 로그인 (기사 계정만). 아니면 일반화면 (관리자·실장)
+//   기사 아이디와 직원 아이디가 같아도 로그인하는 주소로 구분됨
+export default function LoginPage({ companyCode = '', engineer = false }) {
+  const memKey = engineer ? 'lastLoginId.engineer' : 'lastLoginId';
   const { login } = useAuth();
   const [company, setCompany] = useState(undefined); // undefined: 확인 중, null: 없는 주소
   useEffect(() => {
     if (!companyCode) return;
     companies.publicInfo(companyCode).then(setCompany).catch(() => setCompany(null));
   }, [companyCode]);
-  const [loginId, setLoginId] = useState(() => localStorage.getItem('lastLoginId') || '');
+  const [loginId, setLoginId] = useState(() => localStorage.getItem(memKey) || '');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -23,8 +26,8 @@ export default function LoginPage({ companyCode = '' }) {
     setSubmitting(true);
     setError('');
     try {
-      await login(loginId, password, companyCode);
-      localStorage.setItem('lastLoginId', loginId.trim());
+      await login(loginId, password, companyCode, engineer ? 'engineer' : 'staff');
+      localStorage.setItem(memKey, loginId.trim());
     } catch (err) {
       setError(err.message);
       setSubmitting(false);
@@ -37,7 +40,8 @@ export default function LoginPage({ companyCode = '' }) {
         <div className="login-left">
           <span className="logo-box large">VB</span>
           <h1>{company ? `${company.name} VerityBase` : 'VerityBase'}</h1>
-          <p className="login-sub">전자계약 · 시공일정 관리</p>
+          <p className="login-kind">{engineer ? '기사모바일' : '일반화면'}</p>
+          <p className="login-sub">{engineer ? '시공기사 전용 · 내 일정 확인과 완료 보고' : '전자계약 · 시공일정 관리 (관리자 · 실장)'}</p>
           {companyCode && company === null && <p className="login-error">존재하지 않는 업체 주소입니다 ({companyCode}). 주소를 확인해 주세요.</p>}
         </div>
 

@@ -76,34 +76,36 @@ async function checkPassword(db, rec, password) {
 
 export const auth = {
   // companyCode: 업체 주소(veritybase.vercel.app/thegood)에서 로그인하면 그 업체 계정만 허용
-  async login(loginId, password, companyCode) {
+  // kind: 'engineer' = 기사모바일(/업체주소/m) 로그인 → 기사 계정만
+  //       그 외(일반 화면 /업체주소) → 직원 계정, 그 아이디의 직원이 없으면 기사 계정 (예전처럼 일반 화면에서 들어온 기사)
+  async login(loginId, password, companyCode, kind) {
     const db = await loadDb();
     const id = String(loginId || '').trim();
     const code = String(companyCode || '').trim().toLowerCase();
     const company = code ? db.companies.find((c) => c.code === code) : null;
     if (code && !company) throw new ApiError('존재하지 않는 업체 주소입니다. 주소를 확인해 주세요.');
     const sameCompany = (rec) => !company || rec.companyId === company.id;
-    // 기사 계정 (기사모바일)
-    const engineer = db.engineers.find((e) => e.loginId === id && e.passwordHash && sameCompany(e));
-    if (engineer) {
-      await checkPassword(db, engineer, password);
-      if (!engineer.active) throw new ApiError('사용이 중지된 기사 계정입니다. 사무실에 문의해 주세요.');
-      const err = companyAccessError(db, engineerAsUser(engineer));
+    const user = kind === 'engineer' ? null : db.users.find((u) => u.loginId === id && sameCompany(u));
+    if (user) {
+      await checkPassword(db, user, password);
+      if (!user.active) throw new ApiError('사용이 중지된 계정입니다. 관리자에게 문의해 주세요.');
+      const err = companyAccessError(db, user);
       if (err) throw new ApiError(err);
-      engineer.lastLoginAt = nowIso();
+      user.lastLoginAt = nowIso();
       saveDb(db);
-      await setSession({ engineerId: engineer.id });
+      await setSession({ userId: user.id });
       return auth.me();
     }
-    const user = db.users.find((u) => u.loginId === id && sameCompany(u));
-    if (!user) throw new ApiError(LOGIN_FAIL_MSG);
-    await checkPassword(db, user, password);
-    if (!user.active) throw new ApiError('사용이 중지된 계정입니다. 관리자에게 문의해 주세요.');
-    const err = companyAccessError(db, user);
+    // 기사 계정 (기사모바일)
+    const engineer = db.engineers.find((e) => e.loginId === id && e.passwordHash && sameCompany(e));
+    if (!engineer) throw new ApiError(LOGIN_FAIL_MSG);
+    await checkPassword(db, engineer, password);
+    if (!engineer.active) throw new ApiError('사용이 중지된 기사 계정입니다. 사무실에 문의해 주세요.');
+    const err = companyAccessError(db, engineerAsUser(engineer));
     if (err) throw new ApiError(err);
-    user.lastLoginAt = nowIso();
+    engineer.lastLoginAt = nowIso();
     saveDb(db);
-    await setSession({ userId: user.id });
+    await setSession({ engineerId: engineer.id });
     return auth.me();
   },
 
@@ -255,7 +257,7 @@ export const companies = {
 async function buildUser(db, data) {
   const loginId = (data.loginId || '').trim();
   if (!/^[a-zA-Z0-9_.-]{3,20}$/.test(loginId)) throw new ApiError('아이디는 영문/숫자 3~20자로 입력해 주세요.');
-  if (isLoginIdTaken(db, loginId)) throw new ApiError('이미 사용 중인 아이디입니다.');
+  if (isLoginIdTaken(db, loginId, { kind: 'user' })) throw new ApiError('이미 사용 중인 아이디입니다.');
   if (!data.name?.trim()) throw new ApiError('이름을 입력해 주세요.');
   validatePassword(data.password);
   return {
@@ -428,7 +430,7 @@ export const engineers = masterTable('engineers', {
     }
     if (loginId) {
       if (!/^[a-zA-Z0-9_.-]{3,20}$/.test(loginId)) throw new ApiError('기사 아이디는 영문/숫자 3~20자로 입력해 주세요.');
-      if (isLoginIdTaken(db, loginId, { exceptEngineerId: d.id })) throw new ApiError('이미 사용 중인 아이디입니다.');
+      if (isLoginIdTaken(db, loginId, { kind: 'engineer', exceptEngineerId: d.id })) throw new ApiError('이미 사용 중인 기사 아이디입니다.');
     }
     let passwordHash = existing?.passwordHash || null;
     if (d.password) {
