@@ -276,6 +276,22 @@ test('기사관리: 담당시공 여러 개, 주소(우편번호·상세), 예�
   assert.equal(offs.length, 1);
 });
 
+test('기사 아이디 변경: 업체 관리자만, 바꾼 아이디로 로그인(비밀번호 그대로), 실장은 불가', async () => {
+  const e = await admin.ok('engineers', 'save', { name: '아이디변경기사', phone: '010-5151-6262', loginId: 'oldengid', password: 'eng5151' });
+  const moved = await admin.ok('engineers', 'save', { ...e, loginId: 'newengid' });
+  assert.equal(moved.loginId, 'newengid');
+  assert.equal(moved.hasPassword, true, '비밀번호 유지');
+  assert.equal((await client()('auth', 'login', 'oldengid', 'eng5151')).status, 400, '예전 아이디는 안 됨');
+  assert.equal((await client().ok('auth', 'login', 'newengid', 'eng5151')).user.role, 'ENGINEER');
+  assert.equal((await admin('engineers', 'save', { ...moved, loginId: 'admin' })).status, 400, '다른 계정 아이디와 중복 불가');
+
+  await admin.ok('users', 'create', { loginId: 'engsetmgr', password: 'engset1234', name: '기사관리실장', permissions: ['settings.manage'] });
+  const mgr = client();
+  await mgr.ok('auth', 'login', 'engsetmgr', 'engset1234');
+  assert.equal((await mgr('engineers', 'save', { ...moved, loginId: 'mgrchanged' })).status, 403, '실장은 아이디 변경 불가');
+  assert.equal((await mgr.ok('engineers', 'save', { ...moved, memo: '실장 메모' })).loginId, 'newengid', '다른 항목은 수정 가능');
+});
+
 test('서버 연결 점검(/api/rpc GET): 비밀값은 숨기고 설정·DB 상태만 표시', async () => {
   const r = await healthReport();
   assert.equal(r.DB연결, '정상');
