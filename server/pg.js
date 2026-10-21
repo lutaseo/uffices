@@ -92,6 +92,12 @@ export async function loadSnapshot(client, scope) {
       readOnly.add(key);
     }
   }
+  // 수정 로그 화면: 이 업체의 최근 기록 (읽기 전용)
+  if (scope.auditLogs && scope.companyId) {
+    db.auditLogs = (
+      await rows(client, `SELECT id, created_at, data FROM audit_logs WHERE company_id = $1 ORDER BY created_at DESC, id DESC LIMIT 3000`, [scope.companyId])
+    ).map((r) => ({ ...r.data, id: Number(r.id), at: new Date(r.created_at).toISOString() }));
+  }
   // 목록 변경 확인(listCached): 계약 전체 대신 담당자별 건수·마지막 수정·번호 합만 (트래픽 절약)
   //   COLLATE "C" — 시각 문자열을 화면 코드(자바스크립트)와 같은 글자 순서로 비교
   if (scope.contractSummary && scope.companyId) {
@@ -146,8 +152,10 @@ export function fingerprint(db) {
   return fp;
 }
 
+// 반환: 바뀐 행 목록 [{ table, before(이전 JSON 문자열 | null), after(행 | null) }] — 수정 로그용
 export async function persistChanges(client, before, after, readOnly) {
   const fp = before && before.__fingerprint ? before : fingerprint(before);
+  const changes = [];
   for (const key of TABLE_KEYS) {
     if (readOnly.has(key)) continue;
     const table = TABLE_MAP[key];
@@ -170,6 +178,7 @@ export async function persistChanges(client, before, after, readOnly) {
       }
       const json = JSON.stringify(row);
       if (prev.get(row.id) === json) continue;
+      changes.push({ table: key, before: prev.get(row.id) ?? null, after: row });
       ids.push(row.id);
       companyIds.push(key === 'companies' ? row.id : row.companyId ?? null);
       datas.push(json);
@@ -184,6 +193,7 @@ export async function persistChanges(client, before, after, readOnly) {
       );
     }
     const removed = [...prev.keys()].filter((id) => !nextIds.has(id));
+    removed.forEach((id) => changes.push({ table: key, before: prev.get(id), after: null }));
     if (removed.length) {
       await client.query(`DELETE FROM ${table} WHERE id = ANY($1::bigint[])`, [removed]);
       if (isContracts) await client.query(`DELETE FROM contract_signatures WHERE contract_id = ANY($1::bigint[])`, [removed]);
@@ -195,6 +205,16 @@ export async function persistChanges(client, before, after, readOnly) {
       [JSON.stringify(after.seq)],
     );
   }
+  return changes;
+}
+
+// 수정 로그 저장 + 2주 지난 기록 지우기 (그 업체 것만, 색인으로 빠름)
+export async function saveAuditLog(client, companyId, entry, keepDays) {
+  await client.query(`INSERT INTO audit_logs (company_id, data) VALUES ($1, $2::jsonb)`, [companyId ?? null, JSON.stringify(entry)]);
+  await client.query(`DELETE FROM audit_logs WHERE company_id IS NOT DISTINCT FROM $1 AND created_at < now() - make_interval(days => $2)`, [
+    companyId ?? null,
+    keepDays,
+  ]);
 }
 
 // 요청 전에 로그인한 사람의 업체를 알아냄

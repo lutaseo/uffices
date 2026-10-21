@@ -16,7 +16,7 @@ import { ROLES } from '../frontend/src/auth/permissions.js';
 // 잠금 번호 (예전 세션 잠금 20260927 과 다른 번호 — 남아 있는 옛 잠금에 걸리지 않게)
 const LOCK_KEY = 20261001;
 // 표 구조(SCHEMA_SQL)를 바꾸면 이 번호를 올림 → 다음 서버 시작 때 한 번만 다시 적용
-export const DDL_VERSION = 2;
+export const DDL_VERSION = 3; // 3: 수정 로그(audit_logs)
 
 // 표 구조가 이미 최신이고 계정도 있으면 아무것도 하지 않음 (잠금·ALTER 없이 즉시 통과)
 async function alreadyReady(client) {

@@ -47,6 +47,16 @@ CREATE INDEX IF NOT EXISTS contracts_esign_token_idx ON contracts ((data->'esign
 -- 입금 영수증 사진 (용량이 커서 계약별로 필요할 때만 읽음)
 CREATE INDEX IF NOT EXISTS payment_receipts_contract_idx ON payment_receipts ((data->>'contractId'));
 
+-- 수정 로그 (누가 언제 무엇을 바꿨는지 · 최근 2주만 보관)
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id bigserial PRIMARY KEY,
+  company_id bigint,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  data jsonb NOT NULL
+);
+CREATE INDEX IF NOT EXISTS audit_logs_company_time_idx ON audit_logs (company_id, created_at DESC);
+ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
+
 -- 브라우저에서 Supabase 로 직접 접근하지 못하도록 차단 (서버만 접근)
 ALTER TABLE meta ENABLE ROW LEVEL SECURITY;
 DO $$
