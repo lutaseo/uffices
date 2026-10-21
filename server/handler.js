@@ -14,7 +14,8 @@ import * as services from '../frontend/src/api/services.js';
 import { setRuntimeAdapter } from '../frontend/src/api/runtime.js';
 import { ApiError } from '../frontend/src/api/core.js';
 import { bizgoConfigured, listSenders, sendAlimtalk, inquiryReport } from './bizgo.js';
-import { getPool, loadSnapshot, persistChanges, resolveCompanyId, contractByEsignToken, companyIdForCustomer, fingerprint } from './pg.js';
+import { getPool, loadSnapshot, persistChanges, saveAuditLog, resolveCompanyId, contractByEsignToken, companyIdForCustomer, fingerprint } from './pg.js';
+import { AUDIT_KEEP_DAYS, buildAuditEntry } from '../frontend/src/api/audit.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { bootstrap } from './bootstrap.js';
 import { COOKIE_NAME, decodeSession, encodeSession, parseCookies, sessionCookie } from './session.js';
@@ -60,6 +61,7 @@ const SERVICES = {
   auth: services.auth,
   companies: services.companies,
   users: services.users,
+  auditLogs: services.auditLogs,
   engineers: services.engineers,
   teams: services.teams,
   products: services.products,
@@ -105,6 +107,7 @@ const READ_ONLY = new Set([
   'notifications.testSend',
   'notifications.testResult',
   'companies.termsSettings',
+  'auditLogs.list',
   'reports.contracts',
   'reports.engineers',
   'schedules.list',
@@ -136,6 +139,7 @@ const LIGHT_TABLES = {
   'notifications.testResult': [],
   'notifications.saveAlimtalkSettings': [],
   'companies.termsSettings': [], // 계약조건: 업체 표만
+  'auditLogs.list': [], // 수정 로그: 로그 표만 (scope.auditLogs)
   'companies.saveContractTerms': [], // 업체 표만 바꿈 (운영자가 전체 업체 계약까지 읽지 않게)
 };
 
@@ -164,6 +168,33 @@ function ensureReady() {
     });
   }
   return ready;
+}
+
+// 수정 로그 한 줄 저장 (실패해도 본 저장은 그대로 — SAVEPOINT 로 분리)
+async function writeAuditLog(client, { name, session, db, scope, changes }) {
+  let actor;
+  if (session?.userId) {
+    const u = db.users.find((x) => x.id === session.userId);
+    actor = { id: session.userId, kind: 'user', name: u?.name || '', loginId: u?.loginId || '', role: u?.role || '' };
+  } else if (session?.engineerId) {
+    const e = db.engineers.find((x) => x.id === session.engineerId);
+    actor = { id: session.engineerId, kind: 'engineer', name: e?.name || '', loginId: e?.loginId || '', role: 'ENGINEER' };
+  } else {
+    actor = { id: null, kind: 'customer', name: '고객', loginId: '', role: 'CUSTOMER' };
+  }
+  const entry = buildAuditEntry({ action: name, actor, changes, db });
+  if (!entry) return;
+  const first = changes[0];
+  const row = first.after || (typeof first.before === 'string' ? JSON.parse(first.before) : first.before) || {};
+  const companyId = scope.companyId ?? (first.table === 'companies' ? row.id : row.companyId) ?? null;
+  await client.query('SAVEPOINT audit_log');
+  try {
+    await saveAuditLog(client, companyId, entry, AUDIT_KEEP_DAYS);
+    await client.query('RELEASE SAVEPOINT audit_log');
+  } catch (e) {
+    await client.query('ROLLBACK TO SAVEPOINT audit_log').catch(() => {});
+    console.error('[수정 로그] 저장 실패:', e.message);
+  }
 }
 
 // 로그인 만료 시: 직원 로그인과 고객모바일 로그인은 한 쿠키에 같이 있으므로 실패한 쪽만 지움
@@ -226,12 +257,14 @@ export async function handleRpc({ body, headers }) {
       if (LIGHT_TABLES[name]) scope.tables = LIGHT_TABLES[name];
       if (name === 'contracts.get' || name === 'contracts.signBundle') scope.signatureFor = args[0]; // 계약서 보기일 때만 서명 이미지 로드
       if (RECEIPT_CALLS.has(name)) scope.receiptsFor = args[0]; // 이 계약의 영수증 사진만 로드
+      if (name === 'auditLogs.list') scope.auditLogs = true; // 수정 로그 화면
       if (SLIM_CALLS.has(name) && readOnlyCall) scope.slimContracts = true; // 목록: 긴 글·변경이력은 읽지 않음
     }
     // 계약 목록 '바뀌었나' 확인: 먼저 계약 요약만 읽어 보고, 바뀌었을 때만 계약 전체를 다시 읽음 (트래픽 절약)
     const quickCheck = name === 'contracts.listCached' && args[1] && scope.companyId;
     const fullScope = { ...scope };
     if (quickCheck) Object.assign(scope, { tables: ['teams'], contractSummary: true });
+    const sessionAtStart = ctx.session; // 수정 로그: 요청한 사람
     const tLoad = Date.now();
     let { db, readOnly } = await loadSnapshot(client, scope);
     let loadMs = Date.now() - tLoad;
@@ -259,7 +292,10 @@ export async function handleRpc({ body, headers }) {
     }
 
     // 업무 코드가 저장(saveDb)한 내용만 반영. (예: 로그인 실패 횟수는 오류여도 저장됨)
-    if (!readOnlyCall) await persistChanges(client, before, ctx.committed, readOnly);
+    if (!readOnlyCall) {
+      const changes = await persistChanges(client, before, ctx.committed, readOnly);
+      if (!error && changes.length) await writeAuditLog(client, { name, session: sessionAtStart, db, scope, changes });
+    }
     await client.query('COMMIT');
     // 느린 요청 기록 (Vercel 로그에서 '[느림]' 으로 검색) — 다음에 느릴 때 원인을 바로 찾기 위함
     const totalMs = Date.now() - startedAt;
