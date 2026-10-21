@@ -415,7 +415,26 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
           </tbody>
         </table>
 
-        {/* ---------------- 2. 시공내역 · 금액 ---------------- */}
+        {/* ---------------- 2. 시공 구분 (먼저 골라야 아래 상품 목록이 그 구분 것으로 나옴) ---------------- */}
+        <h3 className="form-section-title">&gt; 시공 구분</h3>
+        <table className="form-grid-table">
+          <tbody>
+            <tr>
+              <td className="label-col">구분</td>
+              <td className="input-col">{radios('category', CATEGORIES)}</td>
+            </tr>
+            <tr>
+              <td className="label-col">시공종류</td>
+              <td className="input-col">{radios('workType', WORK_TYPES)}</td>
+            </tr>
+            <tr>
+              <td className="label-col">접수형태</td>
+              <td className="input-col">{radios('receptionType', RECEPTION_TYPES)}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* ---------------- 3. 시공내역 · 금액 ---------------- */}
         <h3 className="form-section-title">&gt; 시공내역 · 금액</h3>
         <table className="form-grid-table">
           <tbody>
@@ -558,23 +577,10 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
           </tbody>
         </table>
 
-        {/* ---------------- 3. 시공정보 ---------------- */}
+        {/* ---------------- 4. 시공정보 (일정·담당) ---------------- */}
         <h3 className="form-section-title">&gt; 시공정보</h3>
         <table className="form-grid-table">
           <tbody>
-            <tr>
-              <td className="label-col">구분</td>
-              <td className="input-col" colSpan={5}>{radios('category', CATEGORIES)}</td>
-            </tr>
-            <tr>
-              <td className="label-col">시공종류</td>
-              <td className="input-col" colSpan={5}>{radios('workType', WORK_TYPES)}</td>
-            </tr>
-            <tr>
-              <td className="label-col">접수형태</td>
-              <td className="input-col" colSpan={5}>{radios('receptionType', RECEPTION_TYPES)}</td>
-            </tr>
-
             {form.schedules.map((s, i) => {
               const slot = slotOf(s, settings);
               const selectedOff = s.assignType === ASSIGN_TYPES.ENGINEER && s.engineerId && s.date ? offOf(s.engineerId, s.date) : null;
