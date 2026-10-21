@@ -8,7 +8,7 @@ import { ApiError, authorize, clone, findContract, isLoginIdTaken, nowIso, valid
 import { addHistory, assigneeOf, contractListView, contractView, hideAmounts } from './views.js';
 import { assertAssignable } from './schedule.js';
 import { invalidateNumbers, numberOf } from './numbering.js';
-import { can, ROLES, DATA_SCOPES, DEFAULT_MANAGER_PERMISSIONS } from '../auth/permissions.js';
+import { can, ROLES, DATA_SCOPES, DEFAULT_MANAGER_PERMISSIONS, isOwnScopeOnly } from '../auth/permissions.js';
 import {
   APPROVAL_STATUS,
   ASSIGN_TYPES,
@@ -423,16 +423,28 @@ export const contracts = {
   //   version: 볼 수 있는 계약 수·최근 수정시각·번호합 + 기사/직원 이름 + 내 권한 — 하나라도 바뀌면 달라짐
   async listCached(filters = {}, knownVersion = '') {
     const { db, user } = await authorize('contract.view');
-    const all = visibleContracts(db, user);
+    // 서버는 처음에 계약 요약(db.contractSummary)만 읽음 — 그대로면 계약 전체를 읽지 않고 끝냄
+    let count = 0;
     let maxUpd = '';
     let idSum = 0;
-    all.forEach((c) => {
-      if ((c.updatedAt || '') > maxUpd) maxUpd = c.updatedAt || '';
-      idSum += c.id;
-    });
+    if (db.contractSummary) {
+      db.contractSummary
+        .filter((s) => !isOwnScopeOnly(user) || s.ownerId === String(user.id))
+        .forEach((s) => {
+          count += s.count;
+          if (s.maxUpd > maxUpd) maxUpd = s.maxUpd;
+          idSum += s.idSum;
+        });
+    } else {
+      visibleContracts(db, user).forEach((c) => {
+        count += 1;
+        if ((c.updatedAt || '') > maxUpd) maxUpd = c.updatedAt || '';
+        idSum += c.id;
+      });
+    }
     const names = (list) => list.map((x) => `${x.id}:${x.name}`).join(',');
     const version = [
-      all.length,
+      count,
       maxUpd,
       idSum,
       shortHash(names(db.engineers) + '|' + names(db.teams || []) + '|' + names(db.users)),
@@ -441,8 +453,10 @@ export const contracts = {
       shortHash(JSON.stringify(filters)),
     ].join('/');
     if (knownVersion && knownVersion === version) return { version, unchanged: true };
+    if (db.contractSummary) throw new ApiError('계약 전체를 다시 읽어야 합니다.', 'NEED_FULL_LOAD'); // 서버가 전체를 읽고 다시 실행
     return { version, rows: await contracts.list(filters) };
   },
+
 
   async get(id) {
     const { db, user } = await authorize('contract.view');

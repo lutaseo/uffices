@@ -92,6 +92,18 @@ export async function loadSnapshot(client, scope) {
       readOnly.add(key);
     }
   }
+  // 목록 변경 확인(listCached): 계약 전체 대신 담당자별 건수·마지막 수정·번호 합만 (트래픽 절약)
+  //   COLLATE "C" — 시각 문자열을 화면 코드(자바스크립트)와 같은 글자 순서로 비교
+  if (scope.contractSummary && scope.companyId) {
+    db.contractSummary = (
+      await rows(
+        client,
+        `SELECT data->>'ownerId' AS owner, count(*)::int AS n, max(data->>'updatedAt' COLLATE "C") AS upd, coalesce(sum(id), 0)::bigint AS ids
+           FROM contracts WHERE company_id = $1 GROUP BY 1`,
+        [scope.companyId],
+      )
+    ).map((r) => ({ ownerId: r.owner, count: Number(r.n), maxUpd: r.upd || '', idSum: Number(r.ids) }));
+  }
   if (scope.signatureFor && db.contracts.length) {
     const id = Number(scope.signatureFor);
     const sig = await rows(client, `SELECT image FROM contract_signatures WHERE contract_id = $1 AND company_id = $2`, [id, scope.companyId]);

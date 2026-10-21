@@ -554,6 +554,25 @@ test('목록 변경 확인(listCached): 그대로면 목록 없이 응답, 수�
   assert.ok(other.rows, '검색 조건이 다르면 새 목록');
   const mine = await manager.ok('contracts', 'listCached', {}, first.version);
   assert.ok(mine.rows, '다른 계정은 같은 확인표를 써도 새 목록');
+
+  // 빠른 확인(계약 요약만 읽기)과 전체 읽기가 같은 확인표를 만들어야 함
+  const base1 = await admin.ok('contracts', 'listCached', {}, '');
+  assert.equal((await admin.ok('contracts', 'listCached', {}, base1.version)).unchanged, true, '전체 → 빠른 확인 일치');
+  const mine2 = await manager.ok('contracts', 'listCached', {}, '');
+  assert.equal((await manager.ok('contracts', 'listCached', {}, mine2.version)).unchanged, true, '본인 건만 보는 실장도 일치');
+  // 입금 등록도 변경으로 잡힘
+  const target = base1.rows.find((r) => !r.deletedAt);
+  await admin.ok('contracts', 'addPayment', target.id, { date: '2026-10-01', kind: '잔금', method: '현금', amount: 1000 });
+  const afterPay = await admin.ok('contracts', 'listCached', {}, base1.version);
+  assert.ok(afterPay.rows, '입금 후 새 목록');
+  assert.equal((await admin.ok('contracts', 'listCached', {}, afterPay.version)).unchanged, true);
+  // 다른 사람이 등록한 계약은 본인 건만 보는 실장의 목록을 바꾸지 않음
+  const mineNow = await manager.ok('contracts', 'listCached', {}, '');
+  await admin.ok('contracts', 'create', { ...base, customerName: '남의계약', customerPhone: '010-8282-9393' });
+  const mineAfter = await manager.ok('contracts', 'listCached', {}, mineNow.version);
+  const isOwn = (await manager.ok('auth', 'me')).user.dataScope === 'own';
+  if (isOwn) assert.equal(mineAfter.unchanged, true, '본인 건만 보는 실장은 그대로');
+  else assert.ok(mineAfter.rows);
 });
 
 test('줄눈·청소 한 장 계약서: 같은 고객(이름+전화)·같은 브랜드끼리 한 링크로 서명, 코팅·다른 브랜드·이미 서명한 건은 따로', async () => {

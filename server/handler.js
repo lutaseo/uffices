@@ -228,9 +228,13 @@ export async function handleRpc({ body, headers }) {
       if (RECEIPT_CALLS.has(name)) scope.receiptsFor = args[0]; // 이 계약의 영수증 사진만 로드
       if (SLIM_CALLS.has(name) && readOnlyCall) scope.slimContracts = true; // 목록: 긴 글·변경이력은 읽지 않음
     }
+    // 계약 목록 '바뀌었나' 확인: 먼저 계약 요약만 읽어 보고, 바뀌었을 때만 계약 전체를 다시 읽음 (트래픽 절약)
+    const quickCheck = name === 'contracts.listCached' && args[1] && scope.companyId;
+    const fullScope = { ...scope };
+    if (quickCheck) Object.assign(scope, { tables: ['teams'], contractSummary: true });
     const tLoad = Date.now();
-    const { db, readOnly } = await loadSnapshot(client, scope);
-    const loadMs = Date.now() - tLoad;
+    let { db, readOnly } = await loadSnapshot(client, scope);
+    let loadMs = Date.now() - tLoad;
     const before = readOnlyCall ? null : fingerprint(db); // 저장 비교용 지문 (읽기 전용은 생략)
     ctx.committed = db;
 
@@ -240,6 +244,18 @@ export async function handleRpc({ body, headers }) {
       result = await store.run(ctx, () => fn(...args));
     } catch (e) {
       error = e;
+    }
+    if (quickCheck && error?.code === 'NEED_FULL_LOAD') {
+      const t2 = Date.now();
+      ({ db, readOnly } = await loadSnapshot(client, fullScope));
+      loadMs += Date.now() - t2;
+      ctx.committed = db;
+      error = null;
+      try {
+        result = await store.run(ctx, () => fn(...args));
+      } catch (e) {
+        error = e;
+      }
     }
 
     // 업무 코드가 저장(saveDb)한 내용만 반영. (예: 로그인 실패 횟수는 오류여도 저장됨)
