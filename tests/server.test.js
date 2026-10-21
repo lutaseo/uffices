@@ -372,7 +372,17 @@ test('실물 계약서 사진: 추가·보기·삭제, 최대 10장, 계약 수�
 
   const eng = client();
   await eng.ok('auth', 'login', 'gong', 'gong1234', '', 'engineer');
-  assert.notEqual((await eng('contracts', 'paperPhotos', c.id)).status, 200, '기사는 볼 수 없음');
+  assert.notEqual((await eng('contracts', 'paperPhotos', c.id)).status, 200, '기사는 사무실용 기능으로는 못 봄');
+  assert.equal((await eng('engineerApp', 'paperPhotos', c.id)).status, 403, '배정 안 된 계약은 못 봄');
+  // 기사에게 배정하면 기사모바일에서 보기 가능
+  const gongId = (await admin.ok('engineers', 'list')).find((e) => e.loginId === 'gong').id;
+  const cur = await admin.ok('contracts', 'get', c.id);
+  await admin.ok('contracts', 'update', c.id, { ...cur, schedules: [{ date: '2027-04-12', time: '09:00', assignType: 'engineer', engineerId: gongId }] });
+  const mine = await eng.ok('engineerApp', 'contract', c.id);
+  assert.equal(mine.contracts.find((x) => x.id === c.id).paperPhotoCount, 1);
+  const seen = await eng.ok('engineerApp', 'paperPhotos', c.id);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].image, img);
 });
 
 test('서버 연결 점검(/api/rpc GET): 비밀값은 숨기고 설정·DB 상태만 표시', async () => {

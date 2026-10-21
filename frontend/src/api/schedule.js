@@ -336,6 +336,7 @@ function engineerContractView(db, me, c) {
     items: c.items || '',
     customerNote: c.customerNote || '',
     engineerNote: c.engineerNote || '',
+    paperPhotoCount: c.paperPhotoCount || 0, // 실물 계약서 사진 수 (사진은 paperPhotos 로 따로)
     amounts: { actual: a.actual - a.canceled, paid: a.paid - a.refund, balance: a.balance }, // 현장 잔금 수령용 요약
     schedules: c.schedules.map((s, i) => ({
       stepIndex: i,
@@ -381,6 +382,19 @@ export const engineerApp = {
       .sort((x, y) => x.id - y.id)
       .map((c) => engineerContractView(db, user, c));
     return { selectedId: base.id, contracts };
+  },
+
+  // 실물(종이) 계약서 사진 — 본인에게 배정된 계약만 (보기 전용)
+  async paperPhotos(contractId) {
+    const { db, user } = await authorizeEngineer();
+    const c = db.contracts.find((x) => x.id === Number(contractId));
+    if (!c || c.companyId !== user.companyId || c.deletedAt || !c.schedules.some((s) => isMine(user, s))) {
+      throw new ApiError('본인에게 배정된 계약이 아닙니다.', 'FORBIDDEN');
+    }
+    return (db.paymentReceipts || [])
+      .filter((r) => r.contractId === c.id && r.kind === 'contractPaper')
+      .sort((x, y) => x.id - y.id)
+      .map((r) => ({ id: r.id, image: r.image }));
   },
 
   // 기사 현장 보고 → 계약서 '모바일웹 ①②③' 에 표시

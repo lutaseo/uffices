@@ -314,7 +314,7 @@ function cleanReceipts(db, c) {
 
 // ---------------- 실물(종이) 계약서 사진 ----------------
 //   영수증 사진과 같은 표(paymentReceipts)에 kind 'contractPaper' 로 저장 — 계약 목록에는 싣지 않고 열 때만 읽음
-//   사무실(계약 보기 권한)만 보고, 기사·고객 화면에는 나오지 않음
+//   사무실(계약 보기 권한)과 배정된 기사(기사모바일, 보기만)가 봄 — 고객 화면에는 나오지 않음
 //   나중에 사진에서 고객명·연락처를 읽어 채우는 기능(글자 인식)도 이 사진을 씀
 const PAPER_KIND = 'contractPaper';
 export const PAPER_PHOTOS_MAX = 10;
