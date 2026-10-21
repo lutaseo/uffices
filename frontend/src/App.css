@@ -4474,3 +4474,132 @@ input[type='month'] {
   display: inline-block;
   margin: 0;
 }
+
+/* 계약 목록: 실물 계약서 표시 (전자서명 표시 옆, 누르면 바로 크게 보기) */
+.paper-chip {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  padding: 1px 8px;
+  border: 1px solid #d6c7a1;
+  border-radius: 10px;
+  background: #fbf7ec;
+  color: #6b5a2e;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.paper-chip:hover {
+  border-color: #b49a5a;
+}
+
+/* 계약 상세: 실물 계약서 사진 줄 */
+.paper-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.paper-thumb {
+  position: relative;
+  width: 72px;
+  height: 96px;
+  border: 1px solid #dce1e8;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #f7f7f7;
+}
+.paper-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: zoom-in;
+}
+.paper-thumb button {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 0 0 0 6px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 14px;
+  line-height: 22px;
+  padding: 0;
+  cursor: pointer;
+}
+.paper-add {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid #c7d2e0;
+  border-radius: 4px;
+  background: #fff;
+  color: #333;
+  font-size: 13px;
+  cursor: pointer;
+}
+.paper-add:hover {
+  border-color: #1a6fe0;
+  color: #1a6fe0;
+}
+.paper-add.busy {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+/* 사진 크게 보기 (좌우 넘김) */
+.photo-viewer .photo-viewer-head {
+  margin-bottom: 8px;
+}
+.photo-viewer .photo-viewer-body {
+  position: relative;
+  text-align: center;
+}
+.photo-viewer .receipt-full {
+  max-height: 75vh;
+}
+.photo-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 56px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 30px;
+  line-height: 56px;
+  cursor: pointer;
+}
+.photo-nav.prev {
+  left: 4px;
+}
+.photo-nav.next {
+  right: 4px;
+}
+
+@media screen and (max-width: 768px) {
+  .paper-chip {
+    padding: 4px 10px; /* 손가락으로 누르기 쉽게 */
+    font-size: 13px;
+  }
+  .paper-thumb {
+    width: 64px;
+    height: 86px;
+  }
+  .paper-add {
+    height: 36px;
+  }
+}
+.photo-viewer a.btn-dark-lg {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}

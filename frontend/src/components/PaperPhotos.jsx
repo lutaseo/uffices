@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { contracts as contractApi } from '../api/index.js';
 import { compressImage } from '../utils/image.js';
-import { backdrop } from '../utils/backdrop.js';
+import PhotoViewer from './PhotoViewer.jsx';
 
 export const PAPER_MAX = 10; // 계약 1건당 실물 계약서 사진 최대 장수 (서버와 같음)
 
@@ -54,7 +54,7 @@ export default function PaperPhotos({ contractId, savedCount = 0, value, onChang
       )}
       {saved.map((r) => (
         <span key={`s${r.id}`} className="pay-thumb">
-          <img src={r.image} alt="실물 계약서 사진" onClick={() => setView(r.image)} />
+          <img src={r.image} alt="실물 계약서 사진" onClick={() => setView(saved.indexOf(r))} />
           {!readOnly && (
             <button type="button" title="사진 삭제" onClick={() => onChange({ ...v, remove: [...v.remove, r.id] })}>
               ×
@@ -64,7 +64,7 @@ export default function PaperPhotos({ contractId, savedCount = 0, value, onChang
       ))}
       {v.add.map((img, i) => (
         <span key={`a${i}`} className="pay-thumb new">
-          <img src={img} alt="새 실물 계약서 사진" onClick={() => setView(img)} />
+          <img src={img} alt="새 실물 계약서 사진" onClick={() => setView(saved.length + i)} />
           <button type="button" title="사진 빼기" onClick={() => onChange({ ...v, add: v.add.filter((_, j) => j !== i) })}>
             ×
           </button>
@@ -76,18 +76,7 @@ export default function PaperPhotos({ contractId, savedCount = 0, value, onChang
           <input type="file" accept="image/*" multiple onChange={pick} hidden />
         </label>
       )}
-      {view && (
-        <div className="modal-overlay" {...backdrop(() => setView(null))}>
-          <div className="customer-reg-modal receipt-modal" onMouseDown={(e) => e.stopPropagation()}>
-            <img className="receipt-full" src={view} alt="실물 계약서 사진" />
-            <div className="form-bottom-btns">
-              <button type="button" className="btn-dark-lg sm cancel" onClick={() => setView(null)}>
-                닫기
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {view != null && <PhotoViewer images={[...saved.map((r) => r.image), ...v.add]} start={view} title="실물 계약서" onClose={() => setView(null)} />}
     </span>
   );
 }

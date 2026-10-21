@@ -11,7 +11,9 @@ import PaymentModal from '../components/PaymentModal.jsx';
 import DiscountModal from '../components/DiscountModal.jsx';
 import { backdrop } from '../utils/backdrop.js';
 import ContractViewModal from '../components/ContractViewModal.jsx';
-import PaperPhotos from '../components/PaperPhotos.jsx';
+import { PAPER_MAX } from '../components/PaperPhotos.jsx';
+import PhotoViewer from '../components/PhotoViewer.jsx';
+import { compressImage } from '../utils/image.js';
 
 const CIRCLED = ['①', '②', '③'];
 const TABS = ['계약정보', '계약자', '시공관리', '상담내역'];
@@ -175,14 +177,12 @@ export default function ContractDetail({ contractId, onBack, onEdit, onNewWork, 
               {selected.customerNote && <span className="sub-text"> (계약서에 고객에게 표시됨)</span>}
             </td>
           </tr>
-          {selected.paperPhotoCount > 0 && (
-            <tr>
-              <th>실물 계약서</th>
-              <td colSpan={5}>
-                <PaperView key={selected.id} contract={selected} />
-              </td>
-            </tr>
-          )}
+          <tr>
+            <th>실물 계약서</th>
+            <td colSpan={5}>
+              <PaperPanel key={`${selected.id}:${selected.paperPhotoCount || 0}`} contract={selected} canEdit={can('contract.edit') && !selected.deletedAt} onChanged={load} />
+            </td>
+          </tr>
         </tbody>
       </table>
     </>
@@ -797,8 +797,72 @@ export default function ContractDetail({ contractId, onBack, onEdit, onNewWork, 
   );
 }
 
-// 계약 상세: 실물 계약서 사진 보기 (추가·삭제는 계약 수정에서)
-function PaperView({ contract }) {
-  const [value, setValue] = useState({ saved: null, add: [], remove: [] });
-  return <PaperPhotos contractId={contract.id} savedCount={contract.paperPhotoCount} value={value} onChange={setValue} readOnly />;
+// 계약 상세: 실물 계약서 사진 — 작성한 사람이 다시 확인하는 용도라 들어오자마자 작은 사진이 보이고, 여기서 바로 추가·삭제
+function PaperPanel({ contract, canEdit, onChanged }) {
+  const count = contract.paperPhotoCount || 0;
+  const [photos, setPhotos] = useState(count ? null : []);
+  const [view, setView] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!count) return;
+    contractApi
+      .paperPhotos(contract.id)
+      .then(setPhotos)
+      .catch(() => setPhotos([]));
+  }, [contract.id, count]);
+
+  const add = async (e) => {
+    const files = [...e.target.files];
+    e.target.value = '';
+    if (!files.length) return;
+    const room = PAPER_MAX - count;
+    if (files.length > room) alert(`실물 계약서 사진은 계약 1건당 ${PAPER_MAX}장까지 올릴 수 있습니다. 앞의 ${Math.max(room, 0)}장만 올립니다.`);
+    setBusy(true);
+    try {
+      for (const f of files.slice(0, Math.max(room, 0))) {
+        const img = await compressImage(f, { maxSize: 2000, quality: 0.85 });
+        await contractApi.setPaperPhotos(contract.id, { add: [img] }); // 용량 한도 때문에 한 장씩
+      }
+      onChanged();
+    } catch (err) {
+      alert(err.message);
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async (id) => {
+    if (!window.confirm('이 사진을 지울까요?')) return;
+    try {
+      await contractApi.setPaperPhotos(contract.id, { remove: [id] });
+      onChanged();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  return (
+    <div className="paper-panel">
+      {count === 0 && <span className="sub-text">올린 사진이 없습니다.</span>}
+      {count > 0 && !photos && <span className="sub-text">사진 불러오는 중...</span>}
+      {(photos || []).map((r, i) => (
+        <span key={r.id} className="paper-thumb">
+          <img src={r.image} alt={`실물 계약서 ${i + 1}`} onClick={() => setView(i)} />
+          {canEdit && (
+            <button type="button" title="사진 삭제" onClick={() => remove(r.id)}>
+              ×
+            </button>
+          )}
+        </span>
+      ))}
+      {canEdit && count < PAPER_MAX && (
+        <label className={`paper-add ${busy ? 'busy' : ''}`}>
+          {busy ? '올리는 중...' : '📷 사진 추가'}
+          <input type="file" accept="image/*" multiple onChange={add} hidden disabled={busy} />
+        </label>
+      )}
+      {view != null && photos && <PhotoViewer images={photos.map((r) => r.image)} start={view} title={`${contract.customerName} 실물 계약서`} onClose={() => setView(null)} />}
+    </div>
+  );
 }

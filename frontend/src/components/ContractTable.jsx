@@ -1,4 +1,5 @@
 import React from 'react';
+import PaperChip from './PaperChip.jsx';
 import { calcAmounts, itemsSummary, kindBreakdown, timeLabel } from '../utils/contract.js';
 import { formatAddress, won } from '../utils/format.js';
 import { ESIGN_STATUS } from '../constants.js';
@@ -105,6 +106,7 @@ export default function ContractTable({ contracts, selectedIds, onToggle, onTogg
                   </div>
                   <div className="sub-text">{item.customerPhone}</div>
                   <span className={`esign-chip ${ESIGN_CLASS[item.esign?.status] || ''}`}>{item.esign?.status}</span>
+                  <PaperChip contract={item} />
                 </td>
                 <td data-label="아파트명" className="text-left apt-cell">
                   <div>{formatAddress(item)}</div>
