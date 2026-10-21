@@ -4416,27 +4416,3 @@ input[type='month'] {
     grid-template-columns: 1fr;
   }
 }
-
-/* 설정 > 수정로그 */
-.audit-filter {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin: 8px 0 14px;
-}
-.audit-filter .input-text {
-  width: auto;
-}
-.audit-table td {
-  vertical-align: top;
-}
-.audit-item + .audit-item {
-  margin-top: 6px;
-}
-.audit-item ul {
-  margin: 2px 0 0 18px;
-  padding: 0;
-  color: #555;
-  font-size: 13px;
-}

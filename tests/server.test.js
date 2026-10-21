@@ -312,37 +312,6 @@ test('로그인 주소로 구분: 기사 아이디와 직원 아이디가 같아
   assert.equal((await client()('auth', 'login', 'admin', 'admin1234', '', 'engineer')).status, 400);
 });
 
-test('수정로그: 누가 무엇을 바꿨는지 기록, 관리자만 조회, 로그인은 기록 안 함, 2주 지난 기록은 지움', async () => {
-  const { getPool } = await import('../server/pg.js');
-  const companyId = (await admin.ok('auth', 'me')).user.companyId;
-  const c = await admin.ok('contracts', 'create', { ...base, customerName: '로그고객', customerPhone: '010-1212-3434' });
-  const full = await admin.ok('contracts', 'get', c.id);
-  await admin.ok('contracts', 'update', c.id, { ...full, customerPhone: '010-1212-9999', memo: '로그 확인' });
-  await client().ok('auth', 'login', 'admin', 'admin1234');
-
-  const { rows } = await admin.ok('auditLogs', 'list', { q: '로그고객' });
-  const edit = rows.find((r) => r.action === '계약 수정');
-  assert.ok(edit, '계약 수정 기록');
-  assert.equal(edit.actor.loginId, 'admin');
-  const item = edit.items.find((i) => i.target.startsWith('계약 로그고객') && i.fields);
-  assert.ok(item.fields.some((f) => f.label === '연락처①' && f.from === '010-1212-3434' && f.to === '010-1212-9999'), '바뀐 값');
-  assert.ok(item.fields.some((f) => f.label === '메모'));
-  assert.ok(rows.some((r) => r.action === '계약 등록'));
-  const all = (await admin.ok('auditLogs', 'list', {})).rows;
-  assert.ok(!all.some((r) => r.call === 'auth.login'), '로그인은 기록 안 함');
-
-  await admin.ok('users', 'create', { loginId: 'logviewmgr', password: 'logview1234', name: '로그실장' });
-  const mgr = client();
-  await mgr.ok('auth', 'login', 'logviewmgr', 'logview1234');
-  assert.equal((await mgr('auditLogs', 'list', {})).status, 403, '실장은 조회 불가');
-
-  // 2주 지난 기록은 다음 저장 때 지워짐
-  await getPool().query(`INSERT INTO audit_logs (company_id, created_at, data) VALUES ($1, now() - interval '15 days', '{"action":"옛기록","items":[]}'::jsonb)`, [companyId]);
-  await admin.ok('contracts', 'update', c.id, { ...(await admin.ok('contracts', 'get', c.id)), memo: '로그 확인2' });
-  const { rows: left } = await getPool().query(`SELECT count(*)::int AS n FROM audit_logs WHERE company_id = $1 AND data->>'action' = '옛기록'`, [companyId]);
-  assert.equal(left[0].n, 0);
-});
-
 test('서버 연결 점검(/api/rpc GET): 비밀값은 숨기고 설정·DB 상태만 표시', async () => {
   const r = await healthReport();
   assert.equal(r.DB연결, '정상');

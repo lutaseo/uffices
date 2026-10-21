@@ -44,7 +44,6 @@ const proxy = (service) =>
 
 export const SERVICE_NAMES = [
   'auth',
-  'auditLogs',
   'companies',
   'users',
   'engineers',

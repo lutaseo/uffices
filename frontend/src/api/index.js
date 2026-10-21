@@ -34,5 +34,4 @@ export const {
   scheduleSettings,
   imports,
   customerApp,
-  auditLogs,
 } = impl;

@@ -24,7 +24,6 @@ import {
 import { ROLES, DATA_SCOPES, permissionsOf, isOwnScopeOnly, ALL_PERMISSION_KEYS } from '../auth/permissions.js';
 import { digitsOnly, formatPhone } from '../utils/format.js';
 import { CATEGORIES, DEPARTMENTS, brandTerms, termsSource } from '../constants.js';
-import { AUDIT_KEEP_DAYS, auditText } from './audit.js';
 import {
   ApiError,
   authorize,
@@ -42,29 +41,6 @@ import {
 export { ApiError } from './core.js';
 export { contracts, esign, notifications, reports, imports, customerApp } from './contracts.js';
 export { schedules, engineerOffs, engineerApp, scheduleSettings } from './schedule.js';
-
-// ============================================================
-// 수정 로그 (설정 > 수정로그, 업체 관리자) — 최근 2주, 서버가 저장할 때 자동 기록
-//   데모 모드(브라우저)에서는 기록하지 않음
-// ============================================================
-export const auditLogs = {
-  async list({ from = '', to = '', actor = '', q = '' } = {}) {
-    const { db, user } = await session();
-    if (user.role !== ROLES.ADMIN) throw new ApiError('업체 관리자만 볼 수 있습니다.', 'FORBIDDEN');
-    const since = new Date(Date.now() - AUDIT_KEEP_DAYS * 86400000).toISOString();
-    const text = String(q || '').trim();
-    const rows = (db.auditLogs || []).filter((r) => {
-      if (r.at < since) return false;
-      const day = new Date(Date.parse(r.at) + 9 * 3600000).toISOString().slice(0, 10); // 한국 날짜
-      if (from && day < from) return false;
-      if (to && day > to) return false;
-      if (actor && `${r.actor?.kind}:${r.actor?.id}` !== actor) return false;
-      if (text && !`${r.actor?.name} ${r.action} ${auditText(r)}`.includes(text)) return false;
-      return true;
-    });
-    return { keepDays: AUDIT_KEEP_DAYS, demo: !db.auditLogs, rows: clone(rows.slice(0, 1000)) };
-  },
-};
 
 // ============================================================
 // 인증   POST /api/auth/login, POST /api/auth/logout, GET /api/auth/me
