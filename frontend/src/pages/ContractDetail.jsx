@@ -11,6 +11,7 @@ import PaymentModal from '../components/PaymentModal.jsx';
 import DiscountModal from '../components/DiscountModal.jsx';
 import { backdrop } from '../utils/backdrop.js';
 import ContractViewModal from '../components/ContractViewModal.jsx';
+import PaperPhotos from '../components/PaperPhotos.jsx';
 
 const CIRCLED = ['①', '②', '③'];
 const TABS = ['계약정보', '계약자', '시공관리', '상담내역'];
@@ -174,6 +175,14 @@ export default function ContractDetail({ contractId, onBack, onEdit, onNewWork, 
               {selected.customerNote && <span className="sub-text"> (계약서에 고객에게 표시됨)</span>}
             </td>
           </tr>
+          {selected.paperPhotoCount > 0 && (
+            <tr>
+              <th>실물 계약서</th>
+              <td colSpan={5}>
+                <PaperView key={selected.id} contract={selected} />
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </>
@@ -786,4 +795,10 @@ export default function ContractDetail({ contractId, onBack, onEdit, onNewWork, 
       {viewId && <ContractViewModal contractId={viewId} onClose={() => setViewId(null)} onChanged={load} />}
     </div>
   );
+}
+
+// 계약 상세: 실물 계약서 사진 보기 (추가·삭제는 계약 수정에서)
+function PaperView({ contract }) {
+  const [value, setValue] = useState({ saved: null, add: [], remove: [] });
+  return <PaperPhotos contractId={contract.id} savedCount={contract.paperPhotoCount} value={value} onChange={setValue} readOnly />;
 }

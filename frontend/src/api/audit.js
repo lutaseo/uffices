@@ -17,6 +17,7 @@ const ACTIONS = {
   'contracts.updatePayment': '입금 수정',
   'contracts.removePayment': '입금 삭제',
   'contracts.paymentPhotos': '영수증 사진',
+  'contracts.setPaperPhotos': '실물 계약서 사진',
   'contracts.setDiscount': '할인 적용',
   'contracts.setApproval': '계약 승인',
   'contracts.requestSign': '서명 요청',
@@ -64,7 +65,7 @@ const TABLES = {
   apartments: (r) => `아파트 ${r.name || ''}`,
   companies: (r) => `업체 설정 ${r.name || ''}`,
   notifications: (r) => `알림톡 ${r.template || ''} → ${r.receiverName || ''}`,
-  paymentReceipts: () => '입금 영수증 사진',
+  paymentReceipts: (r) => (r.kind === 'contractPaper' ? '실물 계약서 사진' : '입금 영수증 사진'),
 };
 
 // 항목 이름 (없는 항목은 영문 이름 그대로)
