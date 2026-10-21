@@ -312,6 +312,37 @@ test('로그인 주소로 구분: 기사 아이디와 직원 아이디가 같아
   assert.equal((await client()('auth', 'login', 'admin', 'admin1234', '', 'engineer')).status, 400);
 });
 
+test('수정로그: 누가 무엇을 바꿨는지 기록, 관리자만 조회, 로그인은 기록 안 함, 2주 지난 기록은 지움', async () => {
+  const { getPool } = await import('../server/pg.js');
+  const companyId = (await admin.ok('auth', 'me')).user.companyId;
+  const c = await admin.ok('contracts', 'create', { ...base, customerName: '로그고객', customerPhone: '010-1212-3434' });
+  const full = await admin.ok('contracts', 'get', c.id);
+  await admin.ok('contracts', 'update', c.id, { ...full, customerPhone: '010-1212-9999', memo: '로그 확인' });
+  await client().ok('auth', 'login', 'admin', 'admin1234');
+
+  const { rows } = await admin.ok('auditLogs', 'list', { q: '로그고객' });
+  const edit = rows.find((r) => r.action === '계약 수정');
+  assert.ok(edit, '계약 수정 기록');
+  assert.equal(edit.actor.loginId, 'admin');
+  const item = edit.items.find((i) => i.target.startsWith('계약 로그고객') && i.fields);
+  assert.ok(item.fields.some((f) => f.label === '연락처①' && f.from === '010-1212-3434' && f.to === '010-1212-9999'), '바뀐 값');
+  assert.ok(item.fields.some((f) => f.label === '메모'));
+  assert.ok(rows.some((r) => r.action === '계약 등록'));
+  const all = (await admin.ok('auditLogs', 'list', {})).rows;
+  assert.ok(!all.some((r) => r.call === 'auth.login'), '로그인은 기록 안 함');
+
+  await admin.ok('users', 'create', { loginId: 'logviewmgr', password: 'logview1234', name: '로그실장' });
+  const mgr = client();
+  await mgr.ok('auth', 'login', 'logviewmgr', 'logview1234');
+  assert.equal((await mgr('auditLogs', 'list', {})).status, 403, '실장은 조회 불가');
+
+  // 2주 지난 기록은 다음 저장 때 지워짐
+  await getPool().query(`INSERT INTO audit_logs (company_id, created_at, data) VALUES ($1, now() - interval '15 days', '{"action":"옛기록","items":[]}'::jsonb)`, [companyId]);
+  await admin.ok('contracts', 'update', c.id, { ...(await admin.ok('contracts', 'get', c.id)), memo: '로그 확인2' });
+  const { rows: left } = await getPool().query(`SELECT count(*)::int AS n FROM audit_logs WHERE company_id = $1 AND data->>'action' = '옛기록'`, [companyId]);
+  assert.equal(left[0].n, 0);
+});
+
 test('서버 연결 점검(/api/rpc GET): 비밀값은 숨기고 설정·DB 상태만 표시', async () => {
   const r = await healthReport();
   assert.equal(r.DB연결, '정상');
@@ -554,6 +585,25 @@ test('목록 변경 확인(listCached): 그대로면 목록 없이 응답, 수�
   assert.ok(other.rows, '검색 조건이 다르면 새 목록');
   const mine = await manager.ok('contracts', 'listCached', {}, first.version);
   assert.ok(mine.rows, '다른 계정은 같은 확인표를 써도 새 목록');
+
+  // 빠른 확인(계약 요약만 읽기)과 전체 읽기가 같은 확인표를 만들어야 함
+  const base1 = await admin.ok('contracts', 'listCached', {}, '');
+  assert.equal((await admin.ok('contracts', 'listCached', {}, base1.version)).unchanged, true, '전체 → 빠른 확인 일치');
+  const mine2 = await manager.ok('contracts', 'listCached', {}, '');
+  assert.equal((await manager.ok('contracts', 'listCached', {}, mine2.version)).unchanged, true, '본인 건만 보는 실장도 일치');
+  // 입금 등록도 변경으로 잡힘
+  const target = base1.rows.find((r) => !r.deletedAt);
+  await admin.ok('contracts', 'addPayment', target.id, { date: '2026-10-01', kind: '잔금', method: '현금', amount: 1000 });
+  const afterPay = await admin.ok('contracts', 'listCached', {}, base1.version);
+  assert.ok(afterPay.rows, '입금 후 새 목록');
+  assert.equal((await admin.ok('contracts', 'listCached', {}, afterPay.version)).unchanged, true);
+  // 다른 사람이 등록한 계약은 본인 건만 보는 실장의 목록을 바꾸지 않음
+  const mineNow = await manager.ok('contracts', 'listCached', {}, '');
+  await admin.ok('contracts', 'create', { ...base, customerName: '남의계약', customerPhone: '010-8282-9393' });
+  const mineAfter = await manager.ok('contracts', 'listCached', {}, mineNow.version);
+  const isOwn = (await manager.ok('auth', 'me')).user.dataScope === 'own';
+  if (isOwn) assert.equal(mineAfter.unchanged, true, '본인 건만 보는 실장은 그대로');
+  else assert.ok(mineAfter.rows);
 });
 
 test('줄눈·청소 한 장 계약서: 같은 고객(이름+전화)·같은 브랜드끼리 한 링크로 서명, 코팅·다른 브랜드·이미 서명한 건은 따로', async () => {
