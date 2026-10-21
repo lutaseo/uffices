@@ -10,6 +10,7 @@ import {
 import { useAuth } from '../auth/AuthContext.jsx';
 import MoneyInput from '../components/MoneyInput.jsx';
 import PaymentPhotos from '../components/PaymentPhotos.jsx';
+import PaperPhotos from '../components/PaperPhotos.jsx';
 import EngineerPicker from '../components/EngineerPicker.jsx';
 import AptSearchInput from '../components/AptSearchInput.jsx';
 import { ROLES } from '../auth/permissions.js';
@@ -128,6 +129,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
   const [offs, setOffs] = useState([]);
   const [customerResults, setCustomerResults] = useState(null);
   const [viewOpen, setViewOpen] = useState(false);
+  const [paper, setPaper] = useState({ saved: null, add: [], remove: [] }); // 실물 계약서 사진 (저장 뒤 올림)
 
   useEffect(() => {
     if (!isEdit && prefillFrom) {
@@ -236,7 +238,15 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
           photoError = err.message;
         }
       }
-      if (photoError) alert(`계약은 저장되었지만 영수증 사진 일부를 올리지 못했습니다.\n${photoError}\n계약 상세의 입금 [수정]에서 다시 첨부해 주세요.`);
+      // 실물 계약서 사진: 지울 것 먼저, 새 사진은 한 장씩 (요청 용량 한도 때문)
+      try {
+        const removeIds = paper.remove.filter((id) => id != null);
+        if (removeIds.length) saved = await contractApi.setPaperPhotos(saved.id, { remove: removeIds });
+        for (const img of paper.add) saved = await contractApi.setPaperPhotos(saved.id, { add: [img] });
+      } catch (err) {
+        photoError = `${photoError ? `${photoError}\n` : ''}실물 계약서 사진: ${err.message}`;
+      }
+      if (photoError) alert(`계약은 저장되었지만 사진 일부를 올리지 못했습니다.\n${photoError}\n계약 수정에서 다시 첨부해 주세요.`);
       else alert(isEdit ? '저장되었습니다.' : `계약이 등록되었습니다. (No.${saved.no})`);
       onClose(saved, isEdit);
     } catch (err) {
@@ -275,7 +285,8 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
               <td className="label-col">브랜드<span className="star">*</span></td>
               <td className="input-col">
                 {radios('brand', brands)}
-                <span className="info-guide">ⓘ 타업체 수주 또는 내부 구분이 필요할 때 브랜드로 구분합니다.</span>
+                <PaperPhotos contractId={contractId} savedCount={contract?.paperPhotoCount || 0} value={paper} onChange={setPaper} />
+                <span className="info-guide">ⓘ 타업체 수주 또는 내부 구분이 필요할 때 브랜드로 구분합니다. 종이에 쓴 계약서는 사진으로 올려 두세요.</span>
               </td>
             </tr>
             <tr>

@@ -258,8 +258,8 @@ function normalizePayment(p, id) {
 const RECEIPT_MAX = 3 * 1024 * 1024; // 사진 1장 최대 약 3MB (화면에서 줄여서 올림)
 
 function checkReceiptImage(img) {
-  if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(String(img))) throw new ApiError('영수증은 사진 파일(jpg, png)만 첨부할 수 있습니다.');
-  if (img.length > RECEIPT_MAX) throw new ApiError('영수증 사진이 너무 큽니다. 다시 찍거나 작은 사진으로 올려 주세요.');
+  if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(String(img))) throw new ApiError('사진 파일(jpg, png)만 첨부할 수 있습니다.');
+  if (img.length > RECEIPT_MAX) throw new ApiError('사진이 너무 큽니다. 다시 찍거나 작은 사진으로 올려 주세요.');
 }
 
 const RECEIPTS_PER_PAYMENT = 5; // 입금 1건당 사진 최대 장수
@@ -309,8 +309,16 @@ function syncReceiptCounts(db, c) {
 function cleanReceipts(db, c) {
   if (!db.paymentReceipts) return;
   const ids = new Set((c.payments || []).map((p) => p.id));
-  db.paymentReceipts = db.paymentReceipts.filter((r) => r.contractId !== c.id || ids.has(r.paymentId));
+  db.paymentReceipts = db.paymentReceipts.filter((r) => r.contractId !== c.id || r.kind === PAPER_KIND || ids.has(r.paymentId));
 }
+
+// ---------------- 실물(종이) 계약서 사진 ----------------
+//   영수증 사진과 같은 표(paymentReceipts)에 kind 'contractPaper' 로 저장 — 계약 목록에는 싣지 않고 열 때만 읽음
+//   사무실(계약 보기 권한)만 보고, 기사·고객 화면에는 나오지 않음
+//   나중에 사진에서 고객명·연락처를 읽어 채우는 기능(글자 인식)도 이 사진을 씀
+const PAPER_KIND = 'contractPaper';
+export const PAPER_PHOTOS_MAX = 10;
+const paperPhotosOf = (db, c) => (db.paymentReceipts || []).filter((r) => r.contractId === c.id && r.kind === PAPER_KIND);
 
 // 같은 계약 묶음: 같은 계약자 + 같은 현장(아파트/동/호)의 시공들
 const groupKey = (c) => [c.customerId, c.aptName, c.dong, c.ho].join('|');
@@ -635,6 +643,36 @@ export const contracts = {
     }
     const changes = diffContract(db, before, c);
     if (changes.length) addHistory(c, user, '할인 적용', changes);
+    c.updatedAt = nowIso();
+    saveDb(db);
+    return contractView(c, user, db);
+  },
+
+  // 실물 계약서 사진 보기
+  async paperPhotos(id) {
+    const { db, user } = await authorize('contract.view');
+    const c = findContract(db, user, id);
+    return paperPhotosOf(db, c)
+      .sort((a, b) => a.id - b.id)
+      .map((r) => ({ id: r.id, image: r.image, createdAt: r.createdAt }));
+  },
+
+  // 실물 계약서 사진 추가/삭제 (add: 새 사진 data URL 들, remove: 지울 사진 번호)
+  async setPaperPhotos(id, { add = [], remove = [] } = {}) {
+    const { db, user } = await authorize('contract.edit');
+    const c = findContract(db, user, id);
+    db.paymentReceipts = db.paymentReceipts || [];
+    const before = paperPhotosOf(db, c).length;
+    const removeIds = new Set((Array.isArray(remove) ? remove : []).map(Number));
+    if (removeIds.size) db.paymentReceipts = db.paymentReceipts.filter((r) => !(r.contractId === c.id && r.kind === PAPER_KIND && removeIds.has(r.id)));
+    const list = (Array.isArray(add) ? add : []).filter(Boolean);
+    if (paperPhotosOf(db, c).length + list.length > PAPER_PHOTOS_MAX) throw new ApiError(`실물 계약서 사진은 계약 1건당 ${PAPER_PHOTOS_MAX}장까지 올릴 수 있습니다.`);
+    list.forEach((img) => {
+      checkReceiptImage(img);
+      db.paymentReceipts.push({ id: nextId(db, 'paymentReceipts'), companyId: user.companyId, contractId: c.id, paymentId: null, kind: PAPER_KIND, image: img, createdAt: nowIso() });
+    });
+    c.paperPhotoCount = paperPhotosOf(db, c).length;
+    if (c.paperPhotoCount !== before) addHistory(c, user, '실물 계약서 사진', [{ label: '사진', from: `${before}장`, to: `${c.paperPhotoCount}장` }]);
     c.updatedAt = nowIso();
     saveDb(db);
     return contractView(c, user, db);

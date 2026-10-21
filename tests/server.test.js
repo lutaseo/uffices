@@ -347,6 +347,34 @@ test('수정로그: 누가 무엇을 바꿨는지 기록, 관리자만 조회, �
   assert.equal(left[0].n, 0);
 });
 
+test('실물 계약서 사진: 추가·보기·삭제, 최대 10장, 계약 수정·입금 변경에도 유지, 기사는 못 봄', async () => {
+  const img = 'data:image/jpeg;base64,' + Buffer.from('paper-contract').toString('base64');
+  const c = await admin.ok('contracts', 'create', { ...base, customerName: '종이계약', customerPhone: '010-5656-7878' });
+  let v = await admin.ok('contracts', 'setPaperPhotos', c.id, { add: [img, img] });
+  assert.equal(v.paperPhotoCount, 2);
+  const list = await admin.ok('contracts', 'paperPhotos', c.id);
+  assert.equal(list.length, 2);
+  assert.equal(list[0].image, img);
+
+  // 계약 수정(입금 줄 바뀜)에도 실물 계약서 사진은 그대로
+  const full = await admin.ok('contracts', 'get', c.id);
+  await admin.ok('contracts', 'update', c.id, { ...full, payments: [{ kind: '계약금', method: '현금', amount: 10000, date: '2026-10-01' }] });
+  await admin.ok('contracts', 'update', c.id, { ...(await admin.ok('contracts', 'get', c.id)), payments: [] });
+  assert.equal((await admin.ok('contracts', 'paperPhotos', c.id)).length, 2, '입금 정리 때 지워지지 않음');
+  assert.equal((await admin.ok('contracts', 'get', c.id)).paperPhotoCount, 2);
+
+  v = await admin.ok('contracts', 'setPaperPhotos', c.id, { remove: [list[0].id] });
+  assert.equal(v.paperPhotoCount, 1);
+  const tooMany = await admin('contracts', 'setPaperPhotos', c.id, { add: Array(10).fill(img) });
+  assert.equal(tooMany.status, 400, '최대 10장');
+  assert.equal((await admin('contracts', 'setPaperPhotos', c.id, { add: ['not-an-image'] })).status, 400);
+  assert.ok((await admin.ok('contracts', 'get', c.id)).history.some((h) => h.action === '실물 계약서 사진'));
+
+  const eng = client();
+  await eng.ok('auth', 'login', 'gong', 'gong1234', '', 'engineer');
+  assert.notEqual((await eng('contracts', 'paperPhotos', c.id)).status, 200, '기사는 볼 수 없음');
+});
+
 test('서버 연결 점검(/api/rpc GET): 비밀값은 숨기고 설정·DB 상태만 표시', async () => {
   const r = await healthReport();
   assert.equal(r.DB연결, '정상');

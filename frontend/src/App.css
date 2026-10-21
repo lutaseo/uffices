@@ -4440,3 +4440,37 @@ input[type='month'] {
   color: #555;
   font-size: 13px;
 }
+
+/* 계약 등록·수정: 브랜드 옆 실물 계약서 사진 — 옆 글자 크기에 맞춰 작게 */
+.paper-photos {
+  margin-left: 12px;
+  vertical-align: middle;
+}
+.paper-photos .btn-pay-photo {
+  height: 22px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: normal;
+  border-style: solid;
+  border-color: #c7d2e0;
+  color: #444;
+  background: #fff;
+}
+.paper-photos .btn-pay-photo:hover {
+  border-color: #1a6fe0;
+  color: #1a6fe0;
+}
+.paper-photos .pay-thumb {
+  width: 22px;
+  height: 22px;
+}
+.paper-photos .pay-thumb button {
+  width: 12px;
+  height: 12px;
+  font-size: 10px;
+  line-height: 12px;
+}
+.paper-photos .btn-receipt {
+  display: inline-block;
+  margin: 0;
+}
