@@ -8,6 +8,7 @@ import { won } from '../utils/format.js';
 import OffModal from '../components/OffModal.jsx';
 import { goBack, match, navigate, navigateForward } from '../router.js';
 import { useRefreshOnReturn } from '../utils/useRefreshOnReturn.js';
+import PhotoViewer from '../components/PhotoViewer.jsx';
 
 // 기사모바일: 기사 계정으로 로그인하면 이 화면만 보입니다 (휴대폰 화면 기준).
 export default function EngineerApp({ route }) {
@@ -338,6 +339,14 @@ function ContractView({ id, step }) {
             <th>고객 참고사항</th>
             <td colSpan={5} className="pre-wrap">{c.customerNote}</td>
           </tr>
+          {c.paperPhotoCount > 0 && (
+            <tr>
+              <th>실물 계약서</th>
+              <td colSpan={5}>
+                <EngineerPaper key={c.id} contract={c} />
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
 
@@ -588,6 +597,29 @@ function MyOffs() {
           onClose={() => setTarget(null)}
         />
       )}
+    </div>
+  );
+}
+
+// 기사모바일 계약 상세: 실물 계약서 사진 (보기만) — 들어오면 작은 사진이 바로, 누르면 크게·좌우로 넘김
+function EngineerPaper({ contract }) {
+  const [photos, setPhotos] = useState(null);
+  const [view, setView] = useState(null);
+  useEffect(() => {
+    engineerApp
+      .paperPhotos(contract.id)
+      .then(setPhotos)
+      .catch(() => setPhotos([]));
+  }, [contract.id]);
+  if (!photos) return <span className="sub-text">사진 불러오는 중...</span>;
+  return (
+    <div className="paper-panel">
+      {photos.map((r, i) => (
+        <span key={r.id} className="paper-thumb">
+          <img src={r.image} alt={`실물 계약서 ${i + 1}`} onClick={() => setView(i)} />
+        </span>
+      ))}
+      {view != null && <PhotoViewer images={photos.map((r) => r.image)} start={view} title={`${contract.customerName} 실물 계약서`} onClose={() => setView(null)} />}
     </div>
   );
 }

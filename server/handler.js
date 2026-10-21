@@ -116,6 +116,7 @@ const READ_ONLY = new Set([
   'engineerApp.mySchedules',
   'engineerApp.myOffs',
   'engineerApp.contract',
+  'engineerApp.paperPhotos',
   'contracts.receipt',
   'companies.publicInfo',
   'scheduleSettings.get',
@@ -145,7 +146,7 @@ const LIGHT_TABLES = {
 };
 
 // 입금 영수증 사진을 읽거나 바꾸는 요청 (첫 인자 = 계약 번호)
-const RECEIPT_CALLS = new Set(['contracts.receipt', 'contracts.addPayment', 'contracts.updatePayment', 'contracts.removePayment', 'contracts.update', 'contracts.paymentPhotos', 'contracts.paperPhotos', 'contracts.setPaperPhotos']);
+const RECEIPT_CALLS = new Set(['contracts.receipt', 'contracts.addPayment', 'contracts.updatePayment', 'contracts.removePayment', 'contracts.update', 'contracts.paymentPhotos', 'contracts.paperPhotos', 'contracts.setPaperPhotos', 'engineerApp.paperPhotos']);
 
 // 계약 목록·통계: 저장하지 않는 요청이라 계약의 긴 글·변경이력 없이 읽어도 됨
 const SLIM_CALLS = new Set(['contracts.list', 'contracts.listCached', 'reports.contracts', 'reports.engineers']);
