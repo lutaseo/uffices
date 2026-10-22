@@ -282,6 +282,7 @@ function UserImport() {
           password: get(r, '비밀번호', '비번', 'password'),
           department: get(r, '부서'),
           position: get(r, '직급'),
+          phone: get(r, '연락처', '휴대폰', '전화번호'),
         }))
         .filter((r) => r.name || r.loginId);
       if (!list.length) throw new Error('첫 줄에 "이름, 아이디, 비밀번호, 부서, 직급" 제목이 있는지 확인해 주세요.');
@@ -307,7 +308,7 @@ function UserImport() {
     <section className="import-box">
       <h3>3. 직원 계정</h3>
       <p className="sub-text">
-        엑셀 첫 줄 제목: <b>이름, 아이디, 비밀번호, 부서, 직급</b>. 부서가 <b>시공팀</b>이면 기사모바일 계정(같은 이름의 기사에 연결, 없으면 새 기사), 나머지는 <b>실장 계정(기본 권한)</b>으로 만듭니다. 권한은 [사용자관리]에서 바꿔 주세요. 이미 있는 아이디는 건너뜁니다.
+        엑셀 첫 줄 제목: <b>이름, 아이디, 비밀번호, 부서, 직급</b> (연락처는 있으면). 부서가 <b>시공팀</b>이면 기사모바일 계정(같은 이름의 기사에 연결, 없으면 새 기사), 나머지는 <b>실장 계정(기본 권한)</b>으로 만듭니다. 권한은 [사용자관리]에서 바꿔 주세요. 이미 있는 아이디는 건너뜁니다.
       </p>
       <label className="btn-file">
         파일 선택
