@@ -207,14 +207,9 @@ function MainLayout({ route }) {
 
       <div className="sub-header">
         <div className="quick-btn-group">
-          {can('customer.edit') && (
-            <a className="btn-quick blue" {...linkProps('/customers?new=1', go)}>
-              👤 계약자 등록
-            </a>
-          )}
           {can('contract.create') && (
-            <a className="btn-quick primary" {...linkProps('/contracts/new', go)}>
-              ✏️ 빠른계약등록
+            <a className="btn-quick blue" {...linkProps('/contracts/new', go)}>
+              + 계약 등록
             </a>
           )}
         </div>
