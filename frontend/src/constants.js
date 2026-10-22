@@ -4,6 +4,7 @@ export const BRANDS = ['더좋은집', '더스타트'];
 
 // 구분 (품목)
 export const CATEGORIES = ['줄눈', '청소', '탄성', '새집증후군', '나노코팅', '기타'];
+export const PRODUCT_KINDS = ['패키지', '추가시공품목', '무료시공']; // 상품 구분
 
 // 고객에게 계약서 한 장으로 묶어 보내는 구분 (같은 계약자·현장일 때). 그 외(나노코팅 등)는 따로
 export const SIGN_TOGETHER = ['줄눈', '청소'];

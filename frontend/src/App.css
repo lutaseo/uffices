@@ -4615,3 +4615,15 @@ a.btn-quick.blue:hover {
   background: #155bb8;
   border-color: #155bb8;
 }
+
+/* 데이터 가져오기 > 상품 목록 붙여넣기 칸 */
+.import-paste {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 8px 0;
+  padding: 8px;
+  font-size: 13px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  resize: vertical;
+}

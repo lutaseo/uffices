@@ -5,11 +5,13 @@ import { useAuth } from '../../auth/AuthContext.jsx';
 import { categoriesFromName, mapLegacyRow, parseLegacyHtml } from '../../utils/legacyImport.js';
 import { won } from '../../utils/format.js';
 import { CATEGORIES } from '../../constants.js';
+import { parseProductText } from '../../utils/productImport.js';
 
 // 설정 > 데이터 가져오기 (관리자 전용)
 //   1) 기사 목록 (엑셀/CSV: 이름, 아이디, 연락처)
 //   2) 예전 프로그램의 계약 '엑셀다운로드' 파일
 //   3) 직원 계정 (엑셀: 이름, 아이디, 비밀번호, 부서, 직급)
+//   4) 상품 목록 (예전 프로그램 상품 화면 복사·붙여넣기, 또는 엑셀: 상품명, 구분, 품목, 상세품목, 노출여부)
 const BATCH = 20; // 실서비스 DB 가 멀어도 한 번 요청이 시간 제한(60초) 안에 끝나도록 작게
 
 // 시간 초과·일시 오류면 잠시 뒤 더 작게 나눠 다시 시도 (이미 저장된 건은 서버가 건너뜀)
@@ -54,6 +56,7 @@ export default function ImportPage() {
       <EngineerImport />
       <ContractImport />
       <UserImport />
+      <ProductImport />
     </div>
   );
 }
@@ -354,6 +357,122 @@ function UserImport() {
               ))}
             </ul>
           )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// 4) 상품 목록 — 예전 프로그램 상품 화면을 통째로 복사해 붙여넣거나, 엑셀 파일
+function ProductImport() {
+  const { handleError } = useAuth();
+  const [text, setText] = useState('');
+  const [rows, setRows] = useState(null);
+  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const preview = (list, hint) => {
+    setResult(null);
+    if (!list.length) return alert(hint);
+    setRows(list);
+  };
+
+  const fromText = () => preview(parseProductText(text), '상품 줄을 찾지 못했습니다. 예전 프로그램 상품 목록의 [번호 ~ 노출여부] 칸을 그대로 복사해 붙여넣어 주세요.');
+
+  const pick = async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const wb = XLSX.read(await readFile(file), { type: 'array' });
+      const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '', raw: false });
+      const get = (r, ...keys) => String(keys.map((k) => r[k]).find((v) => String(v).trim()) || '').trim();
+      const list = data
+        .map((r) => ({
+          name: get(r, '상품명', 'name'),
+          kind: get(r, '구분'),
+          category: get(r, '품목'),
+          detail: get(r, '상세품목'),
+          freeDetail: get(r, '무료시공내역'),
+          price: get(r, '가격', '금액'),
+          visible: !/^(n|no|아니오|숨김|비활성)$/i.test(get(r, '노출여부', '활성화')),
+        }))
+        .filter((r) => r.name);
+      preview(list, '첫 줄에 "상품명, 구분, 품목, 상세품목, 노출여부" 제목이 있는지 확인해 주세요.');
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const run = async () => {
+    setBusy(true);
+    const sum = { created: 0, skipped: 0, errors: [] };
+    try {
+      for (let i = 0; i < rows.length; i += 100) {
+        const r = await imports.products(rows.slice(i, i + 100));
+        sum.created += r.created;
+        sum.skipped += r.skipped;
+        sum.errors.push(...r.errors);
+      }
+      setRows(null);
+      setText('');
+    } catch (err) {
+      handleError(err);
+    } finally {
+      setResult(sum);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="import-box">
+      <h3>4. 상품 목록</h3>
+      <p className="sub-text">
+        예전 프로그램 상품 목록 화면을 <b>번호부터 노출여부까지 통째로 복사</b>해 아래에 붙여넣거나, 엑셀(첫 줄 제목: <b>상품명, 구분, 품목, 상세품목, 노출여부</b>)을 고르세요. 노출여부 N 은 비활성으로 들어가고, 품목이 비어 있으면 상품명으로 짐작합니다. 가격은 0 으로 들어가니 [상품관리]에서 넣어 주세요. 같은 상품명·상세품목은 건너뜁니다.
+      </p>
+      <textarea className="import-paste" rows={5} value={text} onChange={(e) => setText(e.target.value)} placeholder="여기에 붙여넣기" />
+      <div className="import-actions">
+        <button type="button" className="btn-dark-lg sm" disabled={!text.trim()} onClick={fromText}>붙여넣은 내용 미리보기</button>
+        <label className="btn-file">
+          엑셀 파일 선택
+          <input type="file" accept=".xlsx,.xls,.csv" onChange={pick} hidden />
+        </label>
+      </div>
+      {rows && (
+        <>
+          <div className="table-responsive import-preview">
+            <table className="customer-table">
+              <thead>
+                <tr>
+                  <th>상품명</th>
+                  <th>구분</th>
+                  <th>품목</th>
+                  <th>상세품목</th>
+                  <th>노출</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i}>
+                    <td className="text-left">{r.name}</td>
+                    <td>{r.kind || '-'}</td>
+                    <td>{r.category || <span className="sub-text">(짐작)</span>}</td>
+                    <td className="text-left">{r.detail.length > 60 ? `${r.detail.slice(0, 60)}…` : r.detail || '-'}</td>
+                    <td>{r.visible ? 'Y' : <span className="text-red">N</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="import-actions">
+            <button type="button" className="btn-dark-lg sm" disabled={busy} onClick={run}>{busy ? '등록 중...' : `상품 ${rows.length}개 등록`}</button>
+            <button type="button" className="btn-dark-lg sm cancel" onClick={() => setRows(null)}>취소</button>
+          </div>
+        </>
+      )}
+      {result && (
+        <div className="import-result">
+          ✔ 상품 {result.created}개 등록 · 이미 있어 건너뜀 {result.skipped}개
         </div>
       )}
     </section>

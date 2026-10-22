@@ -769,6 +769,33 @@ test('직원 계정 일괄 등록: 실장은 기본 권한, 시공팀은 기사�
   assert.equal(again.skipped, 1);
 });
 
+test('상품 일괄 등록: 붙여넣은 목록을 상품으로, 빈 품목은 짐작, 노출 N 은 비활성, 다시 올려도 중복 없음', async () => {
+  const tag = Date.now() % 100000;
+  const rows = [
+    { name: `가져온패키지${tag}`, kind: '패키지', category: '줄눈', detail: '욕실 2곳 바닥', visible: true },
+    { name: `가져온코팅${tag}`, kind: '추가시공품목', category: '', detail: '샤워부스 유리 코팅', visible: false },
+    { name: `이상한구분${tag}`, kind: '없는구분', category: '없는품목', detail: '', visible: 'Y' },
+  ];
+  const mgr = client();
+  await mgr.ok('auth', 'login', 'impmgr', 'impmgr1234');
+  assert.equal((await mgr('imports', 'products', rows)).status, 403, '관리자만');
+  const r = await admin.ok('imports', 'products', rows);
+  assert.equal(r.created, 3);
+  const list = (await admin.ok('products', 'list', { includeInactive: true })).filter((p) => p.name.endsWith(String(tag)));
+  const by = (n) => list.find((p) => p.name.startsWith(n));
+  assert.equal(by('가져온패키지').category, '줄눈');
+  assert.equal(by('가져온패키지').price, 0);
+  assert.equal(by('가져온코팅').category, '나노코팅', '빈 품목은 이름·내용으로 짐작');
+  assert.equal(by('가져온코팅').visible, false);
+  assert.equal(by('이상한구분').kind, '패키지');
+  assert.equal(by('이상한구분').category, '줄눈');
+  const visible = await admin.ok('products', 'list');
+  assert.ok(!visible.some((p) => p.name === `가져온코팅${tag}`), '노출 N 은 계약서 상품목록에 안 보임');
+  const again = await admin.ok('imports', 'products', rows);
+  assert.equal(again.created, 0);
+  assert.equal(again.skipped, 3);
+});
+
 test('기사모바일 계약 상세: 본인 배정 계약만, 단가·내부 메모·이력은 숨김', async () => {
   const eng = client();
   await eng.ok('auth', 'login', 'gong', 'gong1234');

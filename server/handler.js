@@ -134,6 +134,7 @@ const LIGHT_TABLES = {
   'engineers.list': [],
   'teams.list': ['teams'],
   'products.list': ['products'],
+  'imports.products': ['products'],
   'apartments.list': ['apartments'],
   'scheduleSettings.get': [],
   'notifications.gatewayStatus': [],

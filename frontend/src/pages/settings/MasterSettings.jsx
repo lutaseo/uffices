@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { apartments, engineers, products, scheduleSettings, teams } from '../../api/index.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
-import { CATEGORIES, DEFAULT_SCHEDULE_SETTINGS } from '../../constants.js';
+import { CATEGORIES, DEFAULT_SCHEDULE_SETTINGS, PRODUCT_KINDS } from '../../constants.js';
 import { formatPhone, won } from '../../utils/format.js';
 import Pagination from '../../components/Pagination.jsx';
 import { backdrop } from '../../utils/backdrop.js';
@@ -9,8 +9,6 @@ import { goBack, match, navigate, navigateForward } from '../../router.js';
 import { REGIONS, SIDO_LIST } from '../../utils/regions.js';
 import EngineerForm from './EngineerForm.jsx';
 import { resetAptCache } from '../../components/AptSearchInput.jsx';
-
-export const PRODUCT_KINDS = ['패키지', '추가시공품목', '무료시공'];
 
 const PAGE_SIZE = 20;
 
