@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import * as XLSX from 'xlsx';
-import { imports } from '../../api/index.js';
+import { apartments, imports } from '../../api/index.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { categoriesFromName, mapLegacyRow, parseLegacyHtml } from '../../utils/legacyImport.js';
 import { won } from '../../utils/format.js';
 import { CATEGORIES } from '../../constants.js';
 import { parseProductText } from '../../utils/productImport.js';
+import { normalizeSido, parseApartmentText } from '../../utils/apartmentImport.js';
 
 // 설정 > 데이터 가져오기 (관리자 전용)
 //   1) 기사 목록 (엑셀/CSV: 이름, 아이디, 연락처)
 //   2) 예전 프로그램의 계약 '엑셀다운로드' 파일
 //   3) 직원 계정 (엑셀: 이름, 아이디, 비밀번호, 부서, 직급)
 //   4) 상품 목록 (예전 프로그램 상품 화면 복사·붙여넣기, 또는 엑셀: 상품명, 구분, 품목, 상세품목, 노출여부)
+//   5) 아파트 목록 (예전 프로그램 아파트 화면 복사·붙여넣기, 또는 엑셀: 시도, 시군구, 아파트명)
 const BATCH = 20; // 실서비스 DB 가 멀어도 한 번 요청이 시간 제한(60초) 안에 끝나도록 작게
 
 // 시간 초과·일시 오류면 잠시 뒤 더 작게 나눠 다시 시도 (이미 저장된 건은 서버가 건너뜀)
@@ -57,6 +59,7 @@ export default function ImportPage() {
       <ContractImport />
       <UserImport />
       <ProductImport />
+      <ApartmentImport />
     </div>
   );
 }
@@ -474,6 +477,106 @@ function ProductImport() {
       {result && (
         <div className="import-result">
           ✔ 상품 {result.created}개 등록 · 이미 있어 건너뜀 {result.skipped}개
+        </div>
+      )}
+    </section>
+  );
+}
+
+// 5) 아파트 목록 — 예전 프로그램 아파트 화면을 통째로 복사해 붙여넣거나, 엑셀
+function ApartmentImport() {
+  const { handleError } = useAuth();
+  const [text, setText] = useState('');
+  const [rows, setRows] = useState(null);
+  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const preview = (list, hint) => {
+    setResult(null);
+    if (!list.length) return alert(hint);
+    setRows(list);
+  };
+
+  const fromText = () => preview(parseApartmentText(text), '아파트 줄을 찾지 못했습니다. 예전 프로그램 아파트 목록의 [번호, 지역(시도 / 시군구), 아파트명] 칸을 그대로 복사해 붙여넣어 주세요.');
+
+  const pick = async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const wb = XLSX.read(await readFile(file), { type: 'array' });
+      const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '', raw: false });
+      const get = (r, ...keys) => String(keys.map((k) => r[k]).find((v) => String(v).trim()) || '').trim();
+      const list = data
+        .map((r) => {
+          const [sido = '', sigungu = ''] = get(r, '지역').split('/').map((x) => x.trim());
+          return { sido: normalizeSido(get(r, '시도') || sido), sigungu: get(r, '시군구') || sigungu, name: get(r, '아파트명', '아파트', '단지명', 'name') };
+        })
+        .filter((r) => r.name);
+      preview(list, '첫 줄에 "시도, 시군구, 아파트명" 제목이 있는지 확인해 주세요.');
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const run = async () => {
+    setBusy(true);
+    try {
+      setResult(await apartments.importMany(rows));
+      setRows(null);
+      setText('');
+    } catch (err) {
+      handleError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="import-box">
+      <h3>5. 아파트 목록</h3>
+      <p className="sub-text">
+        예전 프로그램 아파트 목록 화면을 <b>번호부터 아파트명까지 통째로 복사</b>해 붙여넣거나, 엑셀(첫 줄 제목: <b>시도, 시군구, 아파트명</b>)을 고르세요. 이미 있는 아파트(띄어쓰기 무시 같은 이름)는 지역이 비어 있으면 지역만 채우고, 아니면 건너뜁니다.
+      </p>
+      <textarea className="import-paste" rows={5} value={text} onChange={(e) => setText(e.target.value)} placeholder="여기에 붙여넣기" />
+      <div className="import-actions">
+        <button type="button" className="btn-dark-lg sm" disabled={!text.trim()} onClick={fromText}>붙여넣은 내용 미리보기</button>
+        <label className="btn-file">
+          엑셀 파일 선택
+          <input type="file" accept=".xlsx,.xls,.csv" onChange={pick} hidden />
+        </label>
+      </div>
+      {rows && (
+        <>
+          <div className="table-responsive import-preview">
+            <table className="customer-table">
+              <thead>
+                <tr>
+                  <th>시도</th>
+                  <th>시군구</th>
+                  <th>아파트명</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i}>
+                    <td>{r.sido || '-'}</td>
+                    <td>{r.sigungu || '-'}</td>
+                    <td className="text-left">{r.name}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="import-actions">
+            <button type="button" className="btn-dark-lg sm" disabled={busy} onClick={run}>{busy ? '등록 중...' : `아파트 ${rows.length}개 등록`}</button>
+            <button type="button" className="btn-dark-lg sm cancel" onClick={() => setRows(null)}>취소</button>
+          </div>
+        </>
+      )}
+      {result && (
+        <div className="import-result">
+          ✔ 새로 등록 {result.created}개 · 지역 채움 {result.updated}개 · 이미 있어 건너뜀 {result.skipped}개
         </div>
       )}
     </section>

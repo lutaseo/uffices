@@ -46,6 +46,7 @@ const ACTIONS = {
   'products.remove': '상품 삭제',
   'apartments.save': '아파트 저장',
   'apartments.remove': '아파트 삭제',
+  'apartments.importMany': '아파트 가져오기',
   'scheduleSettings.save': '일정관리설정 저장',
   'imports.engineers': '기사 가져오기',
   'imports.contracts': '계약 가져오기',
