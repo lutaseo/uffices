@@ -1252,8 +1252,9 @@ export const imports = {
     return result;
   },
 
-  // 직원 계정 일괄 등록 (예전 프로그램 사용자 목록: 이름, 아이디, 비밀번호, 부서, 직급)
-  //   부서가 '시공팀'이면 기사모바일 계정 — 같은 아이디 또는 같은 이름의 기사에 아이디·비밀번호를 넣고, 없으면 기사로 새로 등록
+  // 직원 계정 일괄 등록 (예전 프로그램 사용자 목록: 이름, 아이디, 비밀번호, 부서, 직급[, 연락처])
+  //   부서가 '시공팀'이면 기사모바일 계정 — 같은 아이디 또는 같은 이름('줄)' 같은 머리글 빼고)의 기사에 아이디·비밀번호를 넣고, 없으면 기사로 새로 등록
+  //   연락처는 새 기사이거나 기사 연락처가 비어 있을 때만 넣음
   //   그 외는 실장 계정 (기본 권한, 권한은 관리자가 사용자관리에서 조정). 이미 있는 아이디는 건너뜀
   async users(rows = []) {
     const { db, user } = authorizeImport(await authorize());
@@ -1265,6 +1266,7 @@ export const imports = {
       const password = String(row.password || '');
       const department = DEPARTMENTS.includes(String(row.department || '').trim()) ? String(row.department).trim() : '';
       const position = POSITIONS.includes(String(row.position || '').trim()) ? String(row.position).trim() : '';
+      const phone = digitsOnly(row.phone).length >= 10 && !/^0100000/.test(digitsOnly(row.phone)) ? String(row.phone).trim() : ''; // 010-0000-0000 같은 빈 번호는 버림
       const fail = (message) => result.errors.push({ name: name || loginId, message });
       if (!name || !loginId) {
         fail('이름 또는 아이디가 비어 있습니다.');
@@ -1282,12 +1284,12 @@ export const imports = {
       }
       if (department === '시공팀') {
         const mine = db.engineers.filter((e) => e.companyId === user.companyId);
-        let eng = mine.find((e) => e.loginId === loginId) || mine.find((e) => bare(e.name) === name); // 같은 이름 기사면 아이디를 목록 것으로
+        let eng = mine.find((e) => e.loginId === loginId) || mine.find((e) => bare(e.name) === bare(name)); // 같은 이름 기사면 아이디를 목록 것으로
         if (!eng && isLoginIdTaken(db, loginId, { kind: 'engineer' })) {
           result.skipped += 1;
           continue;
         }
-        if (!eng) eng = newEngineer(db, user, { name, loginId });
+        if (!eng) eng = newEngineer(db, user, { name, loginId, phone });
         else if (eng.loginId !== loginId) {
           if (isLoginIdTaken(db, loginId, { kind: 'engineer', exceptEngineerId: eng.id })) {
             result.skipped += 1;
@@ -1295,6 +1297,7 @@ export const imports = {
           }
           eng.loginId = loginId;
         }
+        if (phone && !eng.phone) eng.phone = formatPhone(phone);
         eng.passwordHash = await hashPassword(password);
         result.engineers += 1;
         continue;

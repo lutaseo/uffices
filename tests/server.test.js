@@ -745,6 +745,7 @@ test('직원 계정 일괄 등록: 실장은 기본 권한, 시공팀은 기사�
     { name: '가져온기사', loginId: 'impeng', password: '5874', department: '시공팀', position: '' },
     { name: '중복', loginId: 'admin', password: '1234', department: '본사', position: '' },
     { name: '짧은비번', loginId: 'shortpw', password: '12', department: '', position: '' },
+    { name: '청)이관기사', loginId: 'importeng2', password: '1234', department: '시공팀', position: '', phone: '010-0000-0000' },
   ];
   await admin.ok('users', 'create', { loginId: 'impmgr', password: 'impmgr1234', name: '가져오기확인' });
   const mgr = client();
@@ -752,7 +753,12 @@ test('직원 계정 일괄 등록: 실장은 기본 권한, 시공팀은 기사�
   assert.equal((await mgr('imports', 'users', rows)).status, 403, '관리자만');
   const r = await admin.ok('imports', 'users', rows);
   assert.equal(r.created, 1);
-  assert.equal(r.engineers, 1);
+  assert.equal(r.engineers, 2);
+  const moved = (await admin.ok('engineers', 'list', { includeInactive: true })).filter((e) => e.name === '청)이관기사');
+  assert.equal(moved.length, 1, "머리글('청)')이 붙은 이름도 같은 기사로 찾아 새로 만들지 않음");
+  assert.equal(moved[0].loginId, 'importeng2');
+  const s3 = client();
+  assert.equal((await s3.ok('auth', 'login', 'importeng2', '1234', '', 'engineer')).user.role, 'ENGINEER');
   assert.equal(r.skipped, 1);
   assert.equal(r.errors.length, 1);
   const u = (await admin.ok('users', 'list')).find((x) => x.loginId === '0638');
