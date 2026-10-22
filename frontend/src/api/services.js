@@ -70,31 +70,11 @@ export const auditLogs = {
 // 인증   POST /api/auth/login, POST /api/auth/logout, GET /api/auth/me
 // ============================================================
 
-// 로그인 연속 실패 시 잠금 (무차별 대입 방지)
-const MAX_LOGIN_FAIL = 5;
-const LOCK_MINUTES = 10;
+// 비밀번호 확인 — 연속으로 틀려도 잠그지 않음 (업체 요청으로 로그인 잠김 기능 없앰)
 const LOGIN_FAIL_MSG = '아이디 또는 비밀번호가 올바르지 않습니다.';
 
-function assertNotLocked(rec) {
-  if (rec?.lockedUntil && rec.lockedUntil > nowIso()) {
-    const until = new Date(rec.lockedUntil).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-    throw new ApiError(`비밀번호를 ${MAX_LOGIN_FAIL}회 잘못 입력해 ${until}까지 로그인이 잠겼습니다.`);
-  }
-}
-
 async function checkPassword(db, rec, password) {
-  assertNotLocked(rec);
-  if (await verifyPassword(password, rec.passwordHash)) {
-    rec.loginFailCount = 0;
-    rec.lockedUntil = null;
-    return;
-  }
-  rec.loginFailCount = (rec.loginFailCount || 0) + 1;
-  if (rec.loginFailCount >= MAX_LOGIN_FAIL) {
-    rec.lockedUntil = new Date(Date.now() + LOCK_MINUTES * 60000).toISOString();
-    rec.loginFailCount = 0;
-  }
-  saveDb(db); // 실패 횟수는 로그인 실패여도 저장
+  if (await verifyPassword(password, rec.passwordHash)) return;
   throw new ApiError(LOGIN_FAIL_MSG);
 }
 
