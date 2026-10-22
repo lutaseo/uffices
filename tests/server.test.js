@@ -193,11 +193,10 @@ test('전자서명: 링크 조회(내부정보 제외) → 서명 → 이미지�
   assert.ok(list.every((c) => !c.esign?.signature), '목록에는 서명 이미지 없음');
 });
 
-test('로그인 5회 실패 시 잠금, 로그아웃 후 차단', async () => {
+test('로그인 여러 번 실패해도 잠기지 않음, 로그아웃 후 차단', async () => {
   const bad = client();
-  for (let i = 0; i < 5; i++) assert.equal((await bad('auth', 'login', 'manager', 'wrong')).status, 400);
-  const r = await bad('auth', 'login', 'manager', 'manager1234');
-  assert.match(r.error.message, /잠겼습니다/);
+  for (let i = 0; i < 6; i++) assert.equal((await bad('auth', 'login', 'manager', 'wrong')).status, 400);
+  assert.equal((await bad.ok('auth', 'login', 'manager', 'manager1234')).user.loginId, 'manager', '틀린 뒤에도 바로 로그인');
 
   await admin.ok('auth', 'logout');
   assert.equal((await admin('contracts', 'list', {})).status, 401);
