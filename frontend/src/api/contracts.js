@@ -26,6 +26,7 @@ import {
   SIGN_TOGETHER,
   DEPARTMENTS,
   POSITIONS,
+  PRODUCT_KINDS,
 } from '../constants.js';
 import { inRange, isDateKey, isoToDateKey, today } from '../utils/date.js';
 import { digitsOnly, formatAddress, formatPhone, won } from '../utils/format.js';
@@ -1320,6 +1321,45 @@ export const imports = {
         createdAt: nowIso(),
         lastLoginAt: null,
       });
+      result.created += 1;
+    }
+    saveDb(db);
+    return result;
+  },
+
+  // 상품 일괄 등록 (예전 프로그램 상품 목록: 상품명, 구분, 품목, 상세품목, 노출여부)
+  //   같은 상품명·상세품목이 이미 있으면 건너뜀 (다시 올려도 중복 없음). 가격은 없어서 0 — [상품관리]에서 입력
+  //   품목이 비어 있으면 상품명·상세품목으로 짐작 (코팅·오염방지 → 나노코팅, 청소, 탄성, 그 외 줄눈)
+  async products(rows = []) {
+    const { db, user } = authorizeImport(await authorize('settings.manage'));
+    const result = { created: 0, skipped: 0, errors: [] };
+    const key = (name, detail) => `${String(name).trim()}\u0000${String(detail || '').trim()}`;
+    const have = new Set(db.products.filter((p) => p.companyId === user.companyId).map((p) => key(p.name, p.detail)));
+    const guess = (text) => (/코팅|오염방지/.test(text) ? '나노코팅' : /청소/.test(text) ? '청소' : /탄성/.test(text) ? '탄성' : '줄눈');
+    for (const row of rows.slice(0, IMPORT_BATCH_MAX)) {
+      const name = String(row.name || '').trim();
+      const detail = String(row.detail || '').trim();
+      if (!name) continue;
+      if (have.has(key(name, detail))) {
+        result.skipped += 1;
+        continue;
+      }
+      const kind = PRODUCT_KINDS.includes(String(row.kind || '').trim()) ? String(row.kind).trim() : PRODUCT_KINDS[0];
+      const cat = String(row.category || '').trim();
+      const visible = !(row.visible === false || /^(n|no|아니오|숨김|비활성)$/i.test(String(row.visible ?? '').trim()));
+      db.products.push({
+        id: nextId(db, 'products'),
+        companyId: user.companyId,
+        createdAt: nowIso(),
+        name,
+        kind,
+        category: CATEGORIES.includes(cat) ? cat : guess(`${name} ${detail}`),
+        detail,
+        freeDetail: String(row.freeDetail || '').trim(),
+        price: Math.max(0, Number(String(row.price ?? '').replace(/[^\d.]/g, '')) || 0),
+        visible,
+      });
+      have.add(key(name, detail));
       result.created += 1;
     }
     saveDb(db);

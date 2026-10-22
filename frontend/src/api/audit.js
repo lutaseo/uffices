@@ -50,6 +50,7 @@ const ACTIONS = {
   'imports.engineers': '기사 가져오기',
   'imports.contracts': '계약 가져오기',
   'imports.users': '직원 계정 가져오기',
+  'imports.products': '상품 가져오기',
   'notifications.send': '알림톡 발송',
 };
 
