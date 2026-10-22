@@ -802,6 +802,26 @@ test('상품 일괄 등록: 붙여넣은 목록을 상품으로, 빈 품목은 �
   assert.equal(again.skipped, 3);
 });
 
+test('아파트 일괄 등록: 새 아파트 등록, 지역 빈 아파트는 지역만 채움, 같은 이름(띄어쓰기 무시)은 건너뜀', async () => {
+  const tag = Date.now() % 100000;
+  await admin.ok('apartments', 'save', { sido: '', sigungu: '', name: `지역없는단지${tag}` });
+  const rows = [
+    { sido: '경기도', sigungu: '성남시 수정구', name: `새단지${tag}` },
+    { sido: '강원특별자치도', sigungu: '강릉시', name: `지역없는 단지${tag}` },
+    { sido: '경기도', sigungu: '성남시 수정구', name: `새 단지${tag}` },
+  ];
+  const mgr = client();
+  await mgr.ok('auth', 'login', 'impmgr', 'impmgr1234');
+  assert.equal((await mgr('apartments', 'importMany', rows)).status, 403, '관리자만');
+  const r = await admin.ok('apartments', 'importMany', rows);
+  assert.deepEqual(r, { created: 1, updated: 1, skipped: 1 });
+  const list = (await admin.ok('apartments', 'list')).filter((a) => a.name.endsWith(String(tag)));
+  assert.equal(list.length, 2);
+  const filled = list.find((a) => a.name.startsWith('지역없는'));
+  assert.deepEqual([filled.sido, filled.sigungu], ['강원특별자치도', '강릉시']);
+  assert.deepEqual(await admin.ok('apartments', 'importMany', rows), { created: 0, updated: 0, skipped: 3 }, '다시 올려도 중복 없음');
+});
+
 test('기사모바일 계약 상세: 본인 배정 계약만, 단가·내부 메모·이력은 숨김', async () => {
   const eng = client();
   await eng.ok('auth', 'login', 'gong', 'gong1234');

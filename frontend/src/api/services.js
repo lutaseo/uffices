@@ -554,6 +554,34 @@ export const apartments = {
     saveDb(db);
     return { created: names.length };
   },
+
+  // 아파트 일괄 등록 (예전 프로그램 아파트 목록: 시도, 시군구, 아파트명) — 업체 관리자만
+  //   같은 이름(띄어쓰기 무시)이 이미 있으면: 지역이 비어 있으면 지역만 채우고, 아니면 건너뜀
+  async importMany(rows = []) {
+    const { db, user } = await authorize('settings.manage');
+    if (user.role !== ROLES.ADMIN) throw new ApiError('데이터 가져오기는 업체 관리자만 할 수 있습니다.', 'FORBIDDEN');
+    const result = { created: 0, updated: 0, skipped: 0 };
+    const key = (n) => String(n || '').replace(/\s+/g, '');
+    for (const row of rows.slice(0, 500)) {
+      const name = String(row.name || '').trim();
+      if (!name) continue;
+      const sido = String(row.sido || '').trim();
+      const sigungu = String(row.sigungu || '').trim();
+      const same = db.apartments.filter((a) => a.companyId === user.companyId && key(a.name) === key(name));
+      const blank = same.find((a) => !a.sido && !a.sigungu);
+      if (same.some((a) => (a.sido || '') === sido && (a.sigungu || '') === sigungu)) result.skipped += 1;
+      else if (blank && (sido || sigungu)) {
+        Object.assign(blank, { sido, sigungu, updatedAt: nowIso() });
+        result.updated += 1;
+      } else if (same.length && !sido && !sigungu) result.skipped += 1;
+      else {
+        db.apartments.push({ id: nextId(db, 'apartments'), companyId: user.companyId, sido, sigungu, name, createdAt: nowIso() });
+        result.created += 1;
+      }
+    }
+    saveDb(db);
+    return result;
+  },
 };
 
 // ============================================================
