@@ -4603,3 +4603,15 @@ input[type='month'] {
   align-items: center;
   justify-content: center;
 }
+
+/* 상단 [+ 계약 등록]: 링크 기본 글자색(inherit)에 덮이지 않게 흰 글씨 고정 */
+a.btn-quick.blue {
+  color: #fff;
+  font-size: 13px;
+  padding: 7px 16px;
+  border-radius: 4px;
+}
+a.btn-quick.blue:hover {
+  background: #155bb8;
+  border-color: #155bb8;
+}
