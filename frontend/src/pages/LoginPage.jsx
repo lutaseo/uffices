@@ -3,17 +3,41 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { API_MODE, companies } from '../api/index.js';
 
 // companyCode: 업체 주소(veritybase.vercel.app/업체주소)로 들어오면 그 업체 로그인 화면
-// engineer: /업체주소/m 으로 들어오면 기사모바일 로그인 (기사 계정만). 아니면 일반화면 (관리자·실장)
+// kind: 로그인 주소별 화면
+//   'engineer' /업체주소/m  기사모바일 (기사 계정만)
+//   'manager'  /업체주소/t  상담실장 (직원 계정만, 로그인 뒤 화면은 일반화면과 같음)
+//   'staff'    /업체주소    일반화면 (관리자·실장, 없으면 기사)
 //   기사 아이디와 직원 아이디가 같아도 로그인하는 주소로 구분됨
-export default function LoginPage({ companyCode = '', engineer = false }) {
-  const memKey = engineer ? 'lastLoginId.engineer' : 'lastLoginId';
+const KINDS = {
+  engineer: { label: '기사모바일', sub: '시공기사 전용 · 내 일정 확인과 완료 보고' },
+  manager: { label: '상담실장', sub: '상담 실장 전용 · 계약 등록과 상담 관리' },
+  staff: { label: '일반화면', sub: '전자계약 · 시공일정 관리 (관리자 · 실장)' },
+};
+// 예전에 기억해 두던 아이디는 지움 (아이디 자동 저장 기능 없앰 — 같은 기기를 여럿이 쓰는 경우)
+try {
+  ['lastLoginId', 'lastLoginId.engineer'].forEach((k) => localStorage.removeItem(k));
+} catch {
+  // 저장소를 못 쓰는 브라우저면 지울 것도 없음
+}
+const ENTRY_KEY = 'loginEntry';
+// 마지막으로 로그인한 주소 종류 (로그아웃 뒤 같은 로그인 화면으로 돌아가기용)
+export function loginEntry() {
+  try {
+    return localStorage.getItem(ENTRY_KEY) || 'staff';
+  } catch {
+    return 'staff';
+  }
+}
+
+export default function LoginPage({ companyCode = '', kind = 'staff' }) {
+  const { label, sub: subText } = KINDS[kind] || KINDS.staff;
   const { login } = useAuth();
   const [company, setCompany] = useState(undefined); // undefined: 확인 중, null: 없는 주소
   useEffect(() => {
     if (!companyCode) return;
     companies.publicInfo(companyCode).then(setCompany).catch(() => setCompany(null));
   }, [companyCode]);
-  const [loginId, setLoginId] = useState(() => localStorage.getItem(memKey) || '');
+  const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -26,8 +50,12 @@ export default function LoginPage({ companyCode = '', engineer = false }) {
     setSubmitting(true);
     setError('');
     try {
-      await login(loginId, password, companyCode, engineer ? 'engineer' : 'staff');
-      localStorage.setItem(memKey, loginId.trim());
+      await login(loginId, password, companyCode, kind);
+      try {
+        localStorage.setItem(ENTRY_KEY, kind);
+      } catch {
+        // 저장 안 되는 브라우저면 로그아웃 뒤 일반 로그인 화면으로
+      }
     } catch (err) {
       setError(err.message);
       setSubmitting(false);
@@ -40,8 +68,8 @@ export default function LoginPage({ companyCode = '', engineer = false }) {
         <div className="login-left">
           <span className="logo-box large">VB</span>
           <h1>{company ? `${company.name} VerityBase` : 'VerityBase'}</h1>
-          <p className="login-kind">{engineer ? '기사모바일' : '일반화면'}</p>
-          <p className="login-sub">{engineer ? '시공기사 전용 · 내 일정 확인과 완료 보고' : '전자계약 · 시공일정 관리 (관리자 · 실장)'}</p>
+          <p className="login-kind">{label}</p>
+          <p className="login-sub">{subText}</p>
           {companyCode && company === null && <p className="login-error">존재하지 않는 업체 주소입니다 ({companyCode}). 주소를 확인해 주세요.</p>}
         </div>
 

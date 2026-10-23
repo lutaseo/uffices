@@ -20,7 +20,7 @@ export function AuthProvider({ children }) {
     refresh();
   }, [refresh]);
 
-  // kind 'engineer': 기사모바일(/업체주소/m) 로그인 — 기사 계정만
+  // kind 'engineer': 기사모바일(/업체주소/m) 로그인 — 기사 계정만, 'manager': 상담실장(/업체주소/t) — 직원 계정만
   const login = useCallback(async (loginId, password, companyCode, kind) => {
     const { user, company } = await auth.login(loginId, password, companyCode, kind);
     setState({ user, company, loading: false });

@@ -7,7 +7,7 @@ import { API_MODE } from './api/index.js';
 import { ROLES, ROLE_LABELS } from './auth/permissions.js';
 import { formatKoreanDate, today } from './utils/date.js';
 
-import LoginPage from './pages/LoginPage.jsx';
+import LoginPage, { loginEntry } from './pages/LoginPage.jsx';
 import SignPage from './pages/SignPage.jsx';
 import CustomerApp from './pages/CustomerApp.jsx';
 import EngineerApp from './pages/EngineerApp.jsx';
@@ -98,7 +98,10 @@ export default function App() {
   if (cust) return <CustomerApp companyCode={route.base} token={cust.token} />;
 
   if (loading) return <div className="page-loading">불러오는 중...</div>;
-  if (!user) return <LoginPage companyCode={route.base} engineer={route.path === '/m' || route.path.startsWith('/m/')} />;
+  if (!user) {
+    const kind = route.path === '/m' || route.path.startsWith('/m/') ? 'engineer' : route.path === '/t' ? 'manager' : 'staff';
+    return <LoginPage key={kind} companyCode={route.base} kind={kind} />;
+  }
   return <CompanyGate route={route} />;
 }
 
@@ -162,7 +165,7 @@ function MainLayout({ route }) {
 
   const handleLogout = async () => {
     await logout();
-    navigate('/', { replace: true });
+    navigate(loginEntry() === 'manager' ? '/t' : '/', { replace: true }); // 상담실장 주소로 들어왔으면 그 로그인 화면으로
   };
 
   const periodEnd = company?.periodEnd;

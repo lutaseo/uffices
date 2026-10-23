@@ -81,6 +81,7 @@ async function checkPassword(db, rec, password) {
 export const auth = {
   // companyCode: 업체 주소(veritybase.vercel.app/thegood)에서 로그인하면 그 업체 계정만 허용
   // kind: 'engineer' = 기사모바일(/업체주소/m) 로그인 → 기사 계정만
+  //       'manager'  = 상담실장(/업체주소/t) 로그인 → 직원 계정만
   //       그 외(일반 화면 /업체주소) → 직원 계정, 그 아이디의 직원이 없으면 기사 계정 (예전처럼 일반 화면에서 들어온 기사)
   async login(loginId, password, companyCode, kind) {
     const db = await loadDb();
@@ -90,6 +91,7 @@ export const auth = {
     if (code && !company) throw new ApiError('존재하지 않는 업체 주소입니다. 주소를 확인해 주세요.');
     const sameCompany = (rec) => !company || rec.companyId === company.id;
     const user = kind === 'engineer' ? null : db.users.find((u) => u.loginId === id && sameCompany(u));
+    if (!user && kind === 'manager') throw new ApiError(LOGIN_FAIL_MSG); // 상담실장 주소(/t)는 직원 계정만
     if (user) {
       await checkPassword(db, user, password);
       if (!user.active) throw new ApiError('사용이 중지된 계정입니다. 관리자에게 문의해 주세요.');
