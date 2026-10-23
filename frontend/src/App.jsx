@@ -12,6 +12,7 @@ import SignPage from './pages/SignPage.jsx';
 import CustomerApp from './pages/CustomerApp.jsx';
 import EngineerApp from './pages/EngineerApp.jsx';
 import ContractPage, { resetContractListView } from './pages/ContractPage.jsx';
+import ConsultHome from './pages/ConsultHome.jsx';
 import CustomerManagement from './components/CustomerManagement.jsx';
 import ScheduleManagement from './components/ScheduleManagement.jsx';
 import ProgressStatus from './components/ProgressStatus.jsx';
@@ -63,6 +64,10 @@ const MENUS = [
     ],
   },
 ];
+
+// 상담실장 화면 (/업체주소/t 로 로그인): 상담홈 + 계약·계약자·일정 + 내 정보만 (통계·진행상황·설정은 숨김)
+const CONSULT_MENU = { key: 'consult', label: '상담홈', icon: '🏠', path: '/consult' };
+const CONSULT_KEYS = ['consult', 'contract', 'customer', 'schedule', 'setting'];
 
 // 설정 하위 화면
 const SETTING_PAGES = {
@@ -134,11 +139,15 @@ function MainLayout({ route }) {
     if (item.visible) return item.visible(user);
     return !item.perm || can(item.perm);
   };
-  const menus = MENUS.filter((m) => {
-    if (user.role === ROLES.SUPER) return ['accounts', 'alimtalk', 'terms', 'setting'].includes(m.key);
-    return m.always || allowed(m);
-  })
+  const consult = user.role !== ROLES.SUPER && loginEntry() === 'manager'; // 상담실장 주소(/t)로 들어옴
+  const menus = (consult ? [CONSULT_MENU, ...MENUS] : MENUS)
+    .filter((m) => {
+      if (user.role === ROLES.SUPER) return ['accounts', 'alimtalk', 'terms', 'setting'].includes(m.key);
+      if (consult) return CONSULT_KEYS.includes(m.key) && (m.always || allowed(m));
+      return m.always || allowed(m);
+    })
     .map((m) => ({ ...m, subs: (m.subs || []).filter(allowed) }))
+    .map((m) => (consult && m.key === 'setting' ? { ...m, label: '내 정보', icon: '🙂', subs: m.subs.filter((s) => s.key === 'me') } : m))
     .map((m) => ({ ...m, path: m.path || m.subs[0]?.path }));
 
   const [openDropdown, setOpenDropdown] = useState(null);
@@ -176,7 +185,7 @@ function MainLayout({ route }) {
   const subActive = (s) => (s.key === 'main' ? path === s.path || /^\/contracts\/(\d+|new)/.test(path) : path.startsWith(s.path));
 
   return (
-    <div className="app-container">
+    <div className={`app-container ${consult ? 'consult-mode' : ''}`}>
       <header className="app-header">
         <a className="brand-logo" {...linkProps(home, goHome)} title="메인화면">
           <span className="logo-box">VB</span>
@@ -247,6 +256,7 @@ function MainLayout({ route }) {
       )}
 
       <main className="content" key={homeKey}>
+        {current?.key === 'consult' && <ConsultHome />}
         {current?.key === 'contract' && <ContractPage route={route} />}
         {current?.key === 'customer' && <CustomerManagement route={route} />}
         {current?.key === 'schedule' && <ScheduleManagement />}

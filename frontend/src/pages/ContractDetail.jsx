@@ -29,13 +29,14 @@ const scheduleLine = (s) => (s?.date ? `${s.date}(${timeLabel(s) || '무관'})` 
 //   onEdit(contract)          시공 수정 (계약서 작성 화면)
 //   onNewWork(contract)       같은 현장에 시공 추가
 //   onOpenGroup(contractId)   다른 현장 계약으로 이동 (계약자 탭)
-export default function ContractDetail({ contractId, onBack, onEdit, onNewWork, onOpenGroup }) {
+//   initialTab                처음 열 탭 (상담홈의 [상담내역] → '상담내역')
+export default function ContractDetail({ contractId, initialTab, onBack, onEdit, onNewWork, onOpenGroup }) {
   const { company, can, handleError } = useAuth();
   const showAmount = can('contract.amount');
   const brands = company?.brands?.length ? company.brands : BRANDS;
   // 알림톡 버튼: 왼쪽 계약완료 / 오른쪽 기사배정, 위 더스타트 / 아래 더좋은집 (신화홈케어 등 다른 브랜드는 제외)
   const talkBrands = TALK_BRAND_ORDER.filter((b) => brands.includes(b)).length ? TALK_BRAND_ORDER.filter((b) => brands.includes(b)) : brands;
-  const [tab, setTab] = useState('시공관리');
+  const [tab, setTab] = useState(TABS.includes(initialTab) ? initialTab : '시공관리');
   const [data, setData] = useState(null);
   const [selectedId, setSelectedId] = useState(contractId);
   const [payTargetId, setPayTargetId] = useState(null);

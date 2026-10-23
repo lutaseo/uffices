@@ -70,6 +70,7 @@ export default function ContractPage({ route }) {
       <ContractDetail
         key={detail.id}
         contractId={Number(detail.id)}
+        initialTab={query.get('tab') || undefined}
         onBack={() => goBack('/contracts')}
         onEdit={(c) => navigateForward(`/contracts/${c.id}/edit`)}
         onNewWork={(c, category) => navigateForward(`/contracts/new?from=${c.id}${category ? `&category=${encodeURIComponent(category)}` : ''}`)}
@@ -93,6 +94,19 @@ function NoPermission() {
 // 최근에 받은 계약 목록 (화면을 옮겼다 돌아와도 바로 보여주고, 서버에는 '바뀐 게 있는지'만 물어봄)
 //   계정·휴지통·검색조건별로 따로 기억. 새로고침하면 비워짐
 const listCache = new Map();
+const listKey = (userId, filter, trash) => `${userId}|${trash ? 1 : 0}|${JSON.stringify(filter)}`;
+
+// 다른 화면(상담홈)에서도 같은 기억을 씀 — 받아 둔 목록을 먼저 쓰고, 서버에는 바뀐 게 있는지만 물어봄
+export const cachedContractRows = (userId, filter = EMPTY_FILTER) => listCache.get(listKey(userId, filter, false))?.rows || null;
+export async function fetchContractRows(userId, filter = EMPTY_FILTER) {
+  const key = listKey(userId, filter, false);
+  const cached = listCache.get(key);
+  const r = await contractApi.listCached({ ...filter, trash: false }, cached?.version || '');
+  if (r.unchanged && cached) return cached.rows;
+  listCache.set(key, { version: r.version, rows: r.rows });
+  if (listCache.size > 20) listCache.delete(listCache.keys().next().value);
+  return r.rows;
+}
 
 function ContractList({ trash, engineers }) {
   const { user, can, handleError } = useAuth();
@@ -100,7 +114,7 @@ function ContractList({ trash, engineers }) {
   const showTotals = showAmount && can('sales.total'); // 회사 전체 매출 합계는 관리자가 허락한 계정만
 
   const [filter, setFilter] = useState(loadSavedFilter);
-  const cacheKey = `${user.id}|${trash ? 1 : 0}|${JSON.stringify(filter)}`;
+  const cacheKey = listKey(user.id, filter, trash);
   const [rows, setRows] = useState(() => listCache.get(cacheKey)?.rows || []);
   const [loading, setLoading] = useState(() => !listCache.has(cacheKey));
   // 쪽 번호는 기억해 두어, 상세에서 뒤로 왔을 때 같은 쪽을 보여줌
