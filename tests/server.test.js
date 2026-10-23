@@ -307,6 +307,9 @@ test('로그인 주소로 구분: 기사 아이디와 직원 아이디가 같아
   // 직원 계정이 없는 기사 아이디는 일반 화면에서도 기사로 (예전처럼)
   await admin.ok('engineers', 'save', { name: '기사만', phone: '010-0956-0956', loginId: 'onlyeng', password: 'only0956' });
   assert.equal((await client().ok('auth', 'login', 'onlyeng', 'only0956', '', 'staff')).user.role, 'ENGINEER');
+  // /t(상담실장)는 직원 계정만 — 기사 아이디로는 안 됨
+  assert.equal((await client().ok('auth', 'login', 'twin0955', 'staff0955', '', 'manager')).user.role, 'MANAGER', '/t → 직원');
+  assert.equal((await client()('auth', 'login', 'onlyeng', 'only0956', '', 'manager')).status, 400, '/t 에서는 기사 로그인 불가');
   // /m 에서는 직원 계정으로 로그인 불가
   assert.equal((await client()('auth', 'login', 'admin', 'admin1234', '', 'engineer')).status, 400);
 });
