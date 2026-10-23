@@ -4627,3 +4627,128 @@ a.btn-quick.blue:hover {
   border-radius: 4px;
   resize: vertical;
 }
+
+/* 상담홈 (/업체주소/t 상담실장) — 태블릿에서 손가락으로 누르기 좋게 큼직하게 */
+.consult-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.consult-top h2 {
+  margin: 0;
+}
+.consult-new {
+  min-height: 52px;
+  padding: 0 28px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  background: #1a6fe0;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.consult-search {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 52px;
+  padding: 0 16px;
+  font-size: 17px;
+  border: 1px solid #c8cdd5;
+  border-radius: 10px;
+}
+.consult-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 16px;
+}
+.consult-filters button {
+  min-height: 42px;
+  padding: 0 18px;
+  font-size: 15px;
+  background: #fff;
+  border: 1px solid #c8cdd5;
+  border-radius: 21px;
+  cursor: pointer;
+}
+.consult-filters button.on {
+  color: #fff;
+  background: #333;
+  border-color: #333;
+}
+.consult-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+.consult-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #dde1e7;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.consult-card:active {
+  background: #f3f7fd;
+}
+.consult-card-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 18px;
+}
+.consult-chip {
+  padding: 2px 8px;
+  font-size: 13px;
+  color: #1a6fe0;
+  background: #e8f0fe;
+  border-radius: 10px;
+}
+.consult-card-site {
+  font-size: 15px;
+}
+.consult-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.consult-card-actions a,
+.consult-card-actions button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  padding: 0 14px;
+  font-size: 15px;
+  color: #333;
+  text-decoration: none;
+  background: #f5f6f8;
+  border: 1px solid #d5d9e0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.consult-more {
+  margin-top: 12px;
+}
+/* 상담실장 화면에서는 입력칸·선택칸·탭을 크게 (태블릿 터치) */
+.consult-mode .page-card input.input-text,
+.consult-mode .page-card select,
+.consult-mode .page-card textarea {
+  min-height: 40px;
+  font-size: 15px;
+}
+.consult-mode .page-card input[type='radio'],
+.consult-mode .page-card input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+}
+.consult-mode .detail-tabs button {
+  min-height: 44px;
+  font-size: 15px;
+}
