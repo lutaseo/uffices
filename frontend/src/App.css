@@ -4752,3 +4752,10 @@ a.btn-quick.blue:hover {
   min-height: 44px;
   font-size: 15px;
 }
+
+/* 데이터 가져오기 > 직원 계정: 비밀번호만 바꾸기 선택 */
+.import-option {
+  display: block;
+  margin-top: 10px;
+  font-size: 14px;
+}

@@ -1256,9 +1256,10 @@ export const imports = {
   //   부서가 '시공팀'이면 기사모바일 계정 — 같은 아이디 또는 같은 이름('줄)' 같은 머리글 빼고)의 기사에 아이디·비밀번호를 넣고, 없으면 기사로 새로 등록
   //   연락처는 새 기사이거나 기사 연락처가 비어 있을 때만 넣음
   //   그 외는 실장 계정 (기본 권한, 권한은 관리자가 사용자관리에서 조정). 이미 있는 아이디는 건너뜀
-  async users(rows = []) {
+  //   resetPassword: 이미 있는 실장 계정(같은 업체)은 건너뛰지 않고 비밀번호만 바꿈 (관리자 계정은 바꾸지 않음)
+  async users(rows = [], { resetPassword = false } = {}) {
     const { db, user } = authorizeImport(await authorize());
-    const result = { created: 0, engineers: 0, skipped: 0, errors: [] };
+    const result = { created: 0, engineers: 0, updated: 0, skipped: 0, errors: [] };
     const bare = (n) => String(n || '').replace(/^[^)]*\)/, '').trim(); // '줄)김주하' → '김주하'
     for (const row of rows.slice(0, IMPORT_BATCH_MAX)) {
       const name = String(row.name || '').trim();
@@ -1303,7 +1304,11 @@ export const imports = {
         continue;
       }
       if (isLoginIdTaken(db, loginId, { kind: 'user' })) {
-        result.skipped += 1;
+        const existing = db.users.find((u) => u.loginId === loginId);
+        if (resetPassword && existing.companyId === user.companyId && existing.role === ROLES.MANAGER) {
+          existing.passwordHash = await hashPassword(password);
+          result.updated += 1;
+        } else result.skipped += 1;
         continue;
       }
       db.users.push({

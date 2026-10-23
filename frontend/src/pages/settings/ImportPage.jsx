@@ -266,6 +266,7 @@ function ContractImport() {
 function UserImport() {
   const { handleError } = useAuth();
   const [rows, setRows] = useState(null);
+  const [resetPassword, setResetPassword] = useState(false);
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -298,7 +299,7 @@ function UserImport() {
   const run = async () => {
     setBusy(true);
     try {
-      setResult(await imports.users(rows));
+      setResult(await imports.users(rows, { resetPassword }));
       setRows(null);
     } catch (err) {
       handleError(err);
@@ -343,6 +344,9 @@ function UserImport() {
               </tbody>
             </table>
           </div>
+          <label className="import-option">
+            <input type="checkbox" checked={resetPassword} onChange={(e) => setResetPassword(e.target.checked)} /> 이미 있는 실장 계정은 <b>비밀번호만 엑셀 것으로 바꾸기</b> (관리자 계정은 바꾸지 않음)
+          </label>
           <div className="import-actions">
             <button type="button" className="btn-dark-lg sm" disabled={busy} onClick={run}>{busy ? '등록 중...' : `계정 ${rows.length}개 등록`}</button>
             <button type="button" className="btn-dark-lg sm cancel" onClick={() => setRows(null)}>취소</button>
@@ -351,7 +355,7 @@ function UserImport() {
       )}
       {result && (
         <div className="import-result">
-          ✔ 실장 계정 {result.created}개 · 기사모바일 계정 {result.engineers}개 · 이미 있어 건너뜀 {result.skipped}개
+          ✔ 실장 계정 {result.created}개 · 기사모바일 계정 {result.engineers}개{result.updated ? ` · 비밀번호 바꿈 ${result.updated}개` : ''} · 이미 있어 건너뜀 {result.skipped}개
           {result.errors.length > 0 && (
             <ul className="text-red">
               {result.errors.map((x, i) => (
