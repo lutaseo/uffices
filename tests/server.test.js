@@ -775,6 +775,12 @@ test('직원 계정 일괄 등록: 실장은 기본 권한, 시공팀은 기사�
   const again = await admin.ok('imports', 'users', rows.slice(0, 1));
   assert.equal(again.created, 0);
   assert.equal(again.skipped, 1);
+  // 비밀번호만 바꾸기: 실장은 바뀌고, 관리자 계정(admin)은 그대로
+  const reset = await admin.ok('imports', 'users', [{ ...rows[0], password: '1234' }, { ...rows[2], password: '1234' }], { resetPassword: true });
+  assert.equal(reset.updated, 1);
+  assert.equal(reset.skipped, 1);
+  assert.equal((await client().ok('auth', 'login', '0638', '1234')).user.name, '가져온실장');
+  assert.equal((await client()('auth', 'login', 'admin', '1234')).status, 400, '관리자 비밀번호는 안 바뀜');
 });
 
 test('상품 일괄 등록: 붙여넣은 목록을 상품으로, 빈 품목은 짐작, 노출 N 은 비활성, 다시 올려도 중복 없음', async () => {
