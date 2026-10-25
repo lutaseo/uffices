@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   contracts as contractApi,
   customers as customerApi,
@@ -8,6 +8,7 @@ import {
   users as userApi,
 } from '../api/index.js';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { setLeaveGuard } from '../router.js';
 import MoneyInput from '../components/MoneyInput.jsx';
 import PaymentPhotos from '../components/PaymentPhotos.jsx';
 import PaperPhotos from '../components/PaperPhotos.jsx';
@@ -131,6 +132,26 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
   const [viewOpen, setViewOpen] = useState(false);
   const [paper, setPaper] = useState({ saved: null, add: [], remove: [] }); // 실물 계약서 사진 (저장 뒤 올림)
 
+  // 작성 중에 뒤로가기·메뉴 등으로 실수로 나가지 않게: 처음 불러온 내용과 달라졌으면 나가기 전에 물어봄
+  //   (저장·취소 버튼으로 나갈 때는 묻지 않음)
+  const baseline = useRef(null);
+  const latest = useRef({ form, paper });
+  latest.current = { form, paper };
+  if (form && baseline.current === null) baseline.current = JSON.stringify(form);
+  const releaseGuard = useRef(() => {});
+  useEffect(() => {
+    releaseGuard.current = setLeaveGuard(() => {
+      const { form: f, paper: p } = latest.current;
+      const changed = (f && baseline.current !== null && JSON.stringify(f) !== baseline.current) || p.add.length > 0 || p.remove.length > 0;
+      return changed ? `작성 중인 ${isEdit ? '수정' : '계약'} 내용이 저장되지 않았습니다.\n이 화면에서 나가면 입력한 내용이 사라집니다. 나가시겠습니까?` : null;
+    });
+    return () => releaseGuard.current();
+  }, [isEdit]);
+  const close = (...args) => {
+    releaseGuard.current();
+    onClose(...args);
+  };
+
   useEffect(() => {
     if (!isEdit && prefillFrom) {
       contractApi
@@ -248,7 +269,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
       }
       if (photoError) alert(`계약은 저장되었지만 사진 일부를 올리지 못했습니다.\n${photoError}\n계약 수정에서 다시 첨부해 주세요.`);
       else alert(isEdit ? '저장되었습니다.' : `계약이 등록되었습니다. (No.${saved.no})`);
-      onClose(saved, isEdit);
+      close(saved, isEdit);
     } catch (err) {
       handleError(err);
       setSaving(false);
@@ -268,7 +289,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
     <div className="page-card contract-editor">
       <div className="page-title-row">
         <h2>계약관리</h2>
-        <button type="button" className="btn-outline-action" style={{ marginLeft: 'auto' }} onClick={() => onClose()}>
+        <button type="button" className="btn-outline-action" style={{ marginLeft: 'auto' }} onClick={() => close()}>
           ← 뒤로
         </button>
       </div>
@@ -744,7 +765,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
 
         <div className="form-bottom-btns">
           <button type="submit" className="btn-dark-lg" disabled={saving}>{saving ? '저장 중...' : '확인'}</button>
-          <button type="button" className="btn-dark-lg cancel" onClick={() => onClose()}>취소</button>
+          <button type="button" className="btn-dark-lg cancel" onClick={() => close()}>취소</button>
           {isEdit && (
             <button type="button" className="btn-outline-action" onClick={() => setViewOpen(true)}>계약서 보기 / 서명요청</button>
           )}

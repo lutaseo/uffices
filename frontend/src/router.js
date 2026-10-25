@@ -44,12 +44,51 @@ export function withBase(to, base = split(window.location.pathname).base) {
   return `/${base}${target.pathname === '/' ? '' : target.pathname}${target.search}`;
 }
 
+// 작성 중인 화면 지키기: 저장 안 한 내용이 있으면 다른 화면으로 가기 전에 한 번 물어봄
+//   (휴대폰·브라우저 뒤로가기, 메뉴·로고 누르기, 새로고침·창 닫기)
+//   setLeaveGuard(() => 묻는 글 | null) → 해제 함수. 저장·취소 버튼으로 나갈 때는 먼저 해제하고 나감
+let leaveGuard = null;
+export function setLeaveGuard(fn) {
+  leaveGuard = fn;
+  return () => {
+    if (leaveGuard === fn) leaveGuard = null;
+  };
+}
+const leaveMessage = () => (leaveGuard ? leaveGuard() : null);
+// 나가도 되면 true (묻는 글이 없거나, 물어봐서 [확인])
+const confirmLeave = () => {
+  const msg = leaveMessage();
+  return !msg || window.confirm(msg);
+};
+let skipPop = false; // [취소]해서 제자리로 돌아올 때 생기는 이동은 무시
+window.addEventListener('popstate', (e) => {
+  if (skipPop) {
+    skipPop = false;
+    e.stopImmediatePropagation();
+    return;
+  }
+  if (confirmLeave()) {
+    leaveGuard = null; // 나가기로 했으면 더 묻지 않음
+    return;
+  }
+  e.stopImmediatePropagation(); // 화면은 그대로 두고
+  skipPop = true;
+  window.history.go(1); // 주소도 원래대로 (뒤로 간 기록을 다시 앞으로)
+});
+window.addEventListener('beforeunload', (e) => {
+  if (!leaveMessage()) return;
+  e.preventDefault();
+  e.returnValue = ''; // 브라우저 기본 '사이트에서 나가시겠습니까?' 창
+});
+
 // options.replace: 현재 기록을 바꿈(뒤로가기 대상이 되지 않음), options.state: 기록에 함께 저장할 값
 // options.base: 업체 코드를 바꿔서 이동 (로그인 직후 자기 업체 주소로), ''이면 업체 코드 없이
 export function navigate(to, { replace = false, state = {}, base } = {}) {
   const target = new URL(base === undefined ? withBase(to) : withBase(to, base), window.location.origin);
   const same = target.pathname + target.search === window.location.pathname + window.location.search;
   if (same && !replace) return;
+  if (!same && !confirmLeave()) return;
+  if (!same) leaveGuard = null;
   window.history[replace ? 'replaceState' : 'pushState'](state, '', target.pathname + target.search);
   window.dispatchEvent(new Event(EVENT));
   if (!replace) window.scrollTo(0, 0);
