@@ -852,7 +852,7 @@ test('시연 샘플 계약: 운영자만, 가짜 번호(010-0000)·변경이력 
   assert.ok(after.some((c) => c.id === mine.id), '직접 등록한 계약은 그대로');
 });
 
-test('AS관리: 보낸 계약은 계약관리 목록에서 빠지고 AS관리 목록에만, 되돌리기 가능, 변경이력 남김', async () => {
+test('AS관리: 보낸 계약은 AS관리에만, AS 완료해도 AS관리에 남고 재발하면 회차가 쌓임, 변경이력 남김', async () => {
   const c = await admin.ok('contracts', 'create', { ...base, customerName: 'AS고객', customerPhone: '010-5656-7878' });
   assert.equal((await admin('contracts', 'setAs', [c.id], true, { request: '' })).status, 400, 'AS 요청 내용 필수');
   await admin.ok('contracts', 'setAs', [c.id], true, { date: '2026-10-20', request: '욕실 줄눈 들뜸' });
@@ -863,10 +863,20 @@ test('AS관리: 보낸 계약은 계약관리 목록에서 빠지고 AS관리 �
   const got = await admin.ok('contracts', 'get', c.id);
   assert.ok(got.asAt, 'AS 표시');
   assert.equal(got.history.at(-1).action, 'AS관리로 이동');
+  // AS 완료: AS관리에 그대로 두고 완료 표시만
   await admin.ok('contracts', 'setAs', [c.id], false);
-  assert.ok((await admin.ok('contracts', 'list', {})).some((x) => x.id === c.id), '되돌리면 다시 계약관리');
-  assert.ok(!(await admin.ok('contracts', 'list', { as: true })).some((x) => x.id === c.id));
-  assert.equal((await admin.ok('contracts', 'get', c.id)).asInfo, null, '되돌리면 접수 내용은 지움 (변경이력에 남음)');
+  assert.ok(!(await admin.ok('contracts', 'list', {})).some((x) => x.id === c.id), 'AS 완료해도 계약관리로 안 돌아감');
+  const done = (await admin.ok('contracts', 'list', { as: true })).find((x) => x.id === c.id);
+  assert.ok(done, 'AS관리에 그대로');
+  assert.equal(done.asInfo, null, '처리 중 회차 없음 = 완료');
+  assert.ok(done.asLogs[0].doneAt, '1회차에 완료일');
+  // 재발: 다시 AS 접수 → 2회차, 처리 중 추가 접수 → 3회차
+  await admin.ok('contracts', 'setAs', [c.id], true, { request: '같은 곳 재발' });
+  await admin.ok('contracts', 'setAs', [c.id], true, { request: '현관도 추가' });
+  const again = await admin.ok('contracts', 'get', c.id);
+  assert.equal(again.asLogs.length, 3, 'AS 회차가 쌓임');
+  assert.equal(again.asInfo.request, '현관도 추가');
+  assert.deepEqual(again.asLogs.map((l) => !!l.doneAt), [true, false, false]);
 });
 
 test('기사모바일 계약 상세: 본인 배정 계약만, 단가·내부 메모·이력은 숨김', async () => {

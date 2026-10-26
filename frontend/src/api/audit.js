@@ -105,6 +105,7 @@ const FIELDS = {
   deletedAt: '삭제(휴지통)',
   asAt: 'AS관리',
   asInfo: 'AS 접수',
+  asLogs: 'AS 이력',
   taxInvoice: '세금계산서',
   cashReceipt: '현금영수증',
   receptionType: '접수형태',
