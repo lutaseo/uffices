@@ -394,7 +394,10 @@ export default function ScheduleManagement() {
                           {formatAddress(row.contract)}
                           {row.memo && <div className="sub-text">메모: {row.memo}</div>}
                         </td>
-                        <td>{row.mobileStatus || <span className="sub-text">입력 전</span>}</td>
+                        <td>
+                          {row.mobileStatus || <span className="sub-text">입력 전</span>}
+                          {row.mobileMemo && <div className="sub-text">“{row.mobileMemo}”</div>}
+                        </td>
                         <td>{row.contract.status}</td>
                         {showAmount && <td className="text-right">{won(calcAmounts(row.contract).balance)}</td>}
                         <td>

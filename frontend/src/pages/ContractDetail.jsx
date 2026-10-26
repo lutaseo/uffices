@@ -570,7 +570,7 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
             {progress.map(({ c, s, i }) => (
               <tr key={`${c.id}-${i}`}>
                 <td>{c.no ?? '-'}</td>
-                <td>{s.reportedAt ? new Date(s.reportedAt).toLocaleDateString('ko-KR') : '-'}</td>
+                <td>{s.reportedAt ? new Date(s.reportedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</td>
                 <td>
                   {c.category} {i + 1}차{s.mobileStatus && <div className="sub-text">{s.mobileStatus}</div>}
                 </td>
