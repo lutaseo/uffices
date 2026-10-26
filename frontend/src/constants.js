@@ -18,7 +18,8 @@ export const RECEPTION_TYPES = ['음성계약', '박람회', '옵션', '사전�
 export const WORK_STATUS = ['미정', '해피콜완료', '배정', '시공완료', '시공연기', '취소'];
 
 // 기사가 모바일웹에서 보고하는 회차별 상태 ('' = 입력 전)
-export const MOBILE_STATUS = ['시공완료', '시공연기요청', '시공불가'];
+//   현장도착·시공시작은 진행 중 알림용 (완료 집계에는 들어가지 않음)
+export const MOBILE_STATUS = ['현장도착', '시공시작', '시공완료', '시공연기요청', '시공불가'];
 
 // 계약승인
 export const APPROVAL_STATUS = ['승인대기', '승인', '미승인'];
