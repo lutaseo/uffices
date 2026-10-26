@@ -78,9 +78,9 @@ export default function ContractPage({ route }) {
       />
     );
   }
-  const trash = path === '/contracts/trash';
-  if (trash && !can('contract.delete')) return <NoPermission />;
-  return <ContractList key={trash ? 'trash' : 'main'} trash={trash} engineers={engineers} />;
+  const mode = path === '/contracts/trash' ? 'trash' : path === '/contracts/as' ? 'as' : 'main';
+  if (mode === 'trash' && !can('contract.delete')) return <NoPermission />;
+  return <ContractList key={mode} mode={mode} engineers={engineers} />;
 }
 
 function NoPermission() {
@@ -94,12 +94,13 @@ function NoPermission() {
 // 최근에 받은 계약 목록 (화면을 옮겼다 돌아와도 바로 보여주고, 서버에는 '바뀐 게 있는지'만 물어봄)
 //   계정·휴지통·검색조건별로 따로 기억. 새로고침하면 비워짐
 const listCache = new Map();
-const listKey = (userId, filter, trash) => `${userId}|${trash ? 1 : 0}|${JSON.stringify(filter)}`;
+// mode: 'main' 계약관리 / 'as' AS관리 / 'trash' 휴지통
+const listKey = (userId, filter, mode) => `${userId}|${mode}|${JSON.stringify(filter)}`;
 
 // 다른 화면(상담홈)에서도 같은 기억을 씀 — 받아 둔 목록을 먼저 쓰고, 서버에는 바뀐 게 있는지만 물어봄
-export const cachedContractRows = (userId, filter = EMPTY_FILTER) => listCache.get(listKey(userId, filter, false))?.rows || null;
+export const cachedContractRows = (userId, filter = EMPTY_FILTER) => listCache.get(listKey(userId, filter, 'main'))?.rows || null;
 export async function fetchContractRows(userId, filter = EMPTY_FILTER) {
-  const key = listKey(userId, filter, false);
+  const key = listKey(userId, filter, 'main');
   const cached = listCache.get(key);
   const r = await contractApi.listCached({ ...filter, trash: false }, cached?.version || '');
   if (r.unchanged && cached) return cached.rows;
@@ -108,20 +109,22 @@ export async function fetchContractRows(userId, filter = EMPTY_FILTER) {
   return r.rows;
 }
 
-function ContractList({ trash, engineers }) {
+function ContractList({ mode = 'main', engineers }) {
+  const trash = mode === 'trash';
+  const asMode = mode === 'as';
   const { user, can, handleError } = useAuth();
   const showAmount = can('contract.amount');
   const showTotals = showAmount && can('sales.total'); // 회사 전체 매출 합계는 관리자가 허락한 계정만
 
   const [filter, setFilter] = useState(loadSavedFilter);
-  const cacheKey = listKey(user.id, filter, trash);
+  const cacheKey = listKey(user.id, filter, mode);
   const [rows, setRows] = useState(() => listCache.get(cacheKey)?.rows || []);
   const [loading, setLoading] = useState(() => !listCache.has(cacheKey));
   // 쪽 번호는 기억해 두어, 상세에서 뒤로 왔을 때 같은 쪽을 보여줌
-  const [page, setPageState] = useState(() => Number(sessionStorage.getItem(`${PAGE_KEY}.${trash}`)) || 1);
+  const [page, setPageState] = useState(() => Number(sessionStorage.getItem(`${PAGE_KEY}.${mode}`)) || 1);
   const setPage = (n) => {
     setPageState(n);
-    sessionStorage.setItem(`${PAGE_KEY}.${trash}`, String(n));
+    sessionStorage.setItem(`${PAGE_KEY}.${mode}`, String(n));
   };
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [staff, setStaff] = useState([]);
@@ -133,7 +136,7 @@ function ContractList({ trash, engineers }) {
     if (cached) setRows(cached.rows); // 기억해 둔 목록을 먼저 보여주고
     else setLoading(true);
     try {
-      const r = await contractApi.listCached({ ...filter, trash }, cached?.version || '');
+      const r = await contractApi.listCached({ ...filter, trash, as: asMode }, cached?.version || '');
       if (r.unchanged && cached) return; // 바뀐 게 없으면 그대로 (받는 데이터 거의 없음)
       listCache.set(cacheKey, { version: r.version, rows: r.rows });
       if (listCache.size > 20) listCache.delete(listCache.keys().next().value); // 오래된 검색조건부터 비움
@@ -143,7 +146,7 @@ function ContractList({ trash, engineers }) {
     } finally {
       setLoading(false);
     }
-  }, [filter, trash, handleError, cacheKey]);
+  }, [filter, trash, asMode, handleError, cacheKey]);
 
   useEffect(() => {
     load();
@@ -248,7 +251,7 @@ function ContractList({ trash, engineers }) {
         return row;
       }),
       '계약목록',
-      trash ? '계약관리_휴지통' : '계약관리_목록',
+      trash ? '계약관리_휴지통' : asMode ? 'AS관리_목록' : '계약관리_목록',
     );
   };
 
@@ -276,7 +279,7 @@ function ContractList({ trash, engineers }) {
   return (
     <div className="page-card">
       <div className="page-title-row">
-        <h2>{trash ? '🗑️ 휴지통' : '계약관리'}</h2>
+        <h2>{trash ? '🗑️ 휴지통' : asMode ? '🔧 AS관리' : '계약관리'}</h2>
         {user.role === ROLES.MANAGER && isOwnScopeOnly(user) && <span className="scope-badge">본인 작성 계약만 표시</span>}
       </div>
 
@@ -335,7 +338,7 @@ function ContractList({ trash, engineers }) {
         )}
       </div>
 
-      {(can('contract.delete') || can('contract.approve')) && (
+      {(can('contract.delete') || can('contract.approve') || can('contract.edit')) && (
         <div className="bulk-bar">
           <span className="sub-text">선택 {selectedIds.size}건</span>
           {!trash && can('contract.approve') && (
@@ -347,6 +350,11 @@ function ContractList({ trash, engineers }) {
                 선택 미승인
               </button>
             </>
+          )}
+          {!trash && can('contract.edit') && (
+            <button type="button" className="btn-outline-action" onClick={() => bulk('setAs', asMode ? '계약관리로 되돌리시겠습니까?' : 'AS관리로 보내시겠습니까?', !asMode)}>
+              {asMode ? '선택 계약관리로' : '선택 AS관리로'}
+            </button>
           )}
           {!can('contract.delete') ? null : trash ? (
             <>

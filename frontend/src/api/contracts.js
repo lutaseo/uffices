@@ -434,12 +434,13 @@ async function sampleTarget(companyId) {
 // ============================================================
 
 export const contracts = {
-  // filters: { trash, dateType, startDate, endDate, aptName, dong, ho, customerName, phone, brand, category,
+  // filters: { trash, as(AS관리 목록), dateType, startDate, endDate, aptName, dong, ho, customerName, phone, brand, category,
   //            workType, receptionType, status, approval, esignStatus, ownerId, engineerId, sort }
   async list(filters = {}) {
     const { db, user } = await authorize('contract.view');
     return visibleContracts(db, user)
       .filter((c) => (filters.trash ? !!c.deletedAt : !c.deletedAt))
+      .filter((c) => filters.trash || (filters.as ? !!c.asAt : !c.asAt)) // AS관리로 넘긴 계약은 AS관리 목록에만
       .filter((c) => matchesFilter(c, filters))
       .map((c) => contractListView(c, user, db))
       .sort(SORTERS[filters.sort] || SORTERS.no_desc);
@@ -660,6 +661,19 @@ export const contracts = {
       addHistory(c, user, '계약 승인 변경', [{ label: '계약승인', from: c.approval, to: approval }]);
       c.approval = approval;
       c.updatedAt = nowIso();
+    });
+    saveDb(db);
+  },
+
+  // AS관리로 보내기(on=true) / 계약관리로 되돌리기(on=false) — 계약 목록에서 여러 건, 계약 상세에서 한 건
+  async setAs(ids, on = true) {
+    const { db, user } = await authorize('contract.edit');
+    ids.forEach((id) => {
+      const c = findContract(db, user, id);
+      if (c.deletedAt) throw new ApiError('휴지통에 있는 계약입니다.');
+      if (!!c.asAt === !!on) return;
+      c.asAt = on ? nowIso() : null;
+      addHistory(c, user, on ? 'AS관리로 이동' : 'AS관리에서 계약관리로 되돌림');
     });
     saveDb(db);
   },

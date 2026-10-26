@@ -4836,3 +4836,14 @@ a.btn-quick.blue:hover {
     font-weight: 600;
   }
 }
+
+/* 계약 상세: AS관리로 보낸 시공 표시 */
+.as-chip {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 1px 6px;
+  font-size: 11px;
+  color: #b45309;
+  background: #fef3c7;
+  border-radius: 8px;
+}
