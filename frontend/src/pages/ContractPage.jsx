@@ -8,6 +8,7 @@ import ContractEditor from './ContractEditor.jsx';
 import ContractDetail from './ContractDetail.jsx';
 import ContractViewModal from '../components/ContractViewModal.jsx';
 import KakaoModal from '../components/KakaoModal.jsx';
+import AsModal from '../components/AsModal.jsx';
 import Pagination from '../components/Pagination.jsx';
 import { calcAmounts, itemsSummary, summarize, timeLabel } from '../utils/contract.js';
 import { formatAddress, won } from '../utils/format.js';
@@ -130,6 +131,7 @@ function ContractList({ mode = 'main', engineers }) {
   const [staff, setStaff] = useState([]);
   const [viewId, setViewId] = useState(null);
   const [kakaoTarget, setKakaoTarget] = useState(null);
+  const [asOpen, setAsOpen] = useState(false); // AS 접수 창 (선택 AS관리로)
 
   const load = useCallback(async () => {
     const cached = listCache.get(cacheKey);
@@ -352,7 +354,11 @@ function ContractList({ mode = 'main', engineers }) {
             </>
           )}
           {!trash && can('contract.edit') && (
-            <button type="button" className="btn-outline-action" onClick={() => bulk('setAs', asMode ? '계약관리로 되돌리시겠습니까?' : 'AS관리로 보내시겠습니까?', !asMode)}>
+            <button
+              type="button"
+              className="btn-outline-action"
+              onClick={() => (asMode ? bulk('setAs', '계약관리로 되돌리시겠습니까?', false) : selectedIds.size ? setAsOpen(true) : alert('선택된 계약이 없습니다.'))}
+            >
               {asMode ? '선택 계약관리로' : '선택 AS관리로'}
             </button>
           )}
@@ -392,6 +398,18 @@ function ContractList({ mode = 'main', engineers }) {
 
       {viewId && <ContractViewModal contractId={viewId} onClose={() => setViewId(null)} onChanged={load} />}
       {kakaoTarget && <KakaoModal contract={kakaoTarget} onClose={() => setKakaoTarget(null)} />}
+      {asOpen && (
+        <AsModal
+          title={`선택한 ${selectedIds.size}건`}
+          onClose={() => setAsOpen(false)}
+          onSave={async (info) => {
+            await contractApi.setAs([...selectedIds], true, info);
+            setAsOpen(false);
+            setSelectedIds(new Set());
+            await load();
+          }}
+        />
+      )}
     </div>
   );
 }

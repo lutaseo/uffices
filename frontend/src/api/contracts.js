@@ -666,14 +666,23 @@ export const contracts = {
   },
 
   // AS관리로 보내기(on=true) / 계약관리로 되돌리기(on=false) — 계약 목록에서 여러 건, 계약 상세에서 한 건
-  async setAs(ids, on = true) {
+  //   info: AS 접수 { date(접수일), request(요청 내용) } — 옮길 때 접수 창에서 입력, 되돌리면 지움(변경이력에는 남음)
+  async setAs(ids, on = true, info = {}) {
     const { db, user } = await authorize('contract.edit');
+    const request = String(info.request || '').trim().slice(0, 500);
+    if (on && !request) throw new ApiError('AS 요청 내용을 적어 주세요.');
     ids.forEach((id) => {
       const c = findContract(db, user, id);
       if (c.deletedAt) throw new ApiError('휴지통에 있는 계약입니다.');
       if (!!c.asAt === !!on) return;
       c.asAt = on ? nowIso() : null;
-      addHistory(c, user, on ? 'AS관리로 이동' : 'AS관리에서 계약관리로 되돌림');
+      c.asInfo = on ? { date: isDateKey(info.date) ? info.date : today(), request, byName: user.name } : null;
+      addHistory(
+        c,
+        user,
+        on ? 'AS관리로 이동' : 'AS관리에서 계약관리로 되돌림',
+        on ? [{ label: 'AS 접수', from: '', to: `${c.asInfo.date} ${request}` }] : [],
+      );
     });
     saveDb(db);
   },

@@ -4847,3 +4847,9 @@ a.btn-quick.blue:hover {
   background: #fef3c7;
   border-radius: 8px;
 }
+.as-request {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #b45309;
+  white-space: pre-wrap;
+}

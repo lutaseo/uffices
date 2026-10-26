@@ -159,6 +159,11 @@ function FullTable({ contracts, selectedIds, onToggle, onToggleAll, showAmount, 
                 </td>
                 <td data-label="아파트명" className="text-left apt-cell">
                   <div>{formatAddress(item)}</div>
+                  {item.asInfo && (
+                    <div className="as-request">
+                      🔧 AS {item.asInfo.date} · {item.asInfo.request}
+                    </div>
+                  )}
                   {itemsSummary(item) && <div className="sub-text ellipsis">{itemsSummary(item)}</div>}
                   <div className="sub-text">
                     계약일 {item.contractDate} · 작성 {item.ownerName}
