@@ -412,6 +412,23 @@ function upsertCustomerForContract(db, user, name, phone, phone2) {
   return cust;
 }
 
+// 시연용 샘플 계약 (contracts.sampleAdd / sampleClear)
+const SAMPLE_MAX = 200;
+const SAMPLE_LAST = ['김', '이', '박', '최', '정', '강', '조', '윤', '장', '임', '한', '오', '서', '신', '권', '황', '안', '송', '류', '홍'];
+const SAMPLE_FIRST = ['민준', '서연', '도윤', '지우', '하준', '서윤', '시우', '하은', '주원', '지유', '지호', '수아', '예준', '지민', '건우', '채원', '현우', '다은', '준서', '예린'];
+const SAMPLE_APTS = ['샘플힐스테이트', '시연자이', '데모푸르지오', '예시래미안', '가상아이파크', '테스트e편한세상'];
+
+async function sampleTarget(companyId) {
+  const { db, user } = await authorize();
+  if (user.role !== ROLES.SUPER) throw new ApiError('운영자만 사용할 수 있습니다.', 'FORBIDDEN');
+  const company = db.companies.find((c) => c.id === Number(companyId));
+  if (!company) throw new ApiError('업체를 찾을 수 없습니다.', 'NOT_FOUND');
+  const owner =
+    db.users.find((u) => u.companyId === company.id && u.role === ROLES.ADMIN && u.active !== false) || db.users.find((u) => u.companyId === company.id);
+  if (!owner) throw new ApiError('이 업체에 계정이 없습니다. 먼저 업체 관리자 계정을 만들어 주세요.');
+  return { db, owner, company };
+}
+
 // ============================================================
 // 계약
 // ============================================================
@@ -501,6 +518,84 @@ export const contracts = {
     invalidateNumbers(db);
     saveDb(db);
     return contractView(contract, user, db);
+  },
+
+  // 시연용 샘플 계약 (운영자 전용) — 시연 업체에 가짜 계약을 넣고 지움. 변경이력·수정로그는 남기지 않음
+  //   이름·아파트는 가짜, 전화번호는 010-0000-xxxx (실제 사람에게 연락이 가지 않게), 표시 sample: true
+  async sampleAdd(companyId, count = 100) {
+    const { db, owner, company } = await sampleTarget(companyId);
+    const n = Math.min(SAMPLE_MAX, Math.max(1, Math.floor(Number(count) || 0)));
+    const staff = db.users.filter((u) => u.companyId === company.id && u.active !== false);
+    const engineers = db.engineers.filter((e) => e.companyId === company.id && e.active !== false);
+    const products = db.products.filter((p) => p.companyId === company.id && p.visible !== false);
+    const brands = company.brands?.length ? company.brands : [company.name];
+    const cats = CATEGORIES.filter((c) => c !== '기타');
+    const pick = (a) => a[Math.floor(Math.random() * a.length)];
+    const between = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
+    const addDays = (key, d) => new Date(Date.parse(`${key}T00:00:00Z`) + d * 86400000).toISOString().slice(0, 10);
+    const now = today();
+    for (let i = 0; i < n; i++) {
+      const contractDate = addDays(now, -between(0, 90));
+      const workDate = addDays(contractDate, between(5, 40));
+      const category = pick(cats);
+      const product = pick(products.filter((p) => p.category === category).concat([null]));
+      const price = product?.price || pick([250000, 350000, 450000, 600000, 800000, 1200000]);
+      const done = workDate < now;
+      const status = done ? (Math.random() < 0.1 ? '취소' : '시공완료') : pick(['미정', '해피콜완료', '배정']);
+      const data = {
+        brand: pick(brands),
+        category,
+        customerName: pick(SAMPLE_LAST) + pick(SAMPLE_FIRST),
+        customerPhone: `010-0000-${String(between(0, 9999)).padStart(4, '0')}`,
+        aptName: pick(SAMPLE_APTS),
+        dong: String(between(101, 112)),
+        ho: String(between(1, 25) * 100 + between(1, 4)),
+        contractDate,
+        ownerId: staff.length ? pick(staff).id : owner.id,
+        approval: '승인',
+        status,
+        cancelReason: status === '취소' ? '고객 사정' : '',
+        canceledDate: status === '취소' ? workDate : '',
+        completedDate: status === '시공완료' ? workDate : '',
+        schedules: [{ date: workDate, ampm: pick(['AM', 'PM']), engineerId: status !== '미정' && engineers.length ? pick(engineers).id : null }],
+        lineItems: [{ productId: product?.id || null, name: product?.name || `${category} 시공`, detail: product?.detail || '', qty: 1, unitPrice: price }],
+        payments: Math.random() < 0.7 ? [{ date: contractDate, kind: '계약금', method: pick(['계좌이체', '카드', '현금']), amount: Math.round(price * 0.1 / 10000) * 10000 || 10000 }] : [],
+        memo: '시연용 샘플 데이터',
+      };
+      const fields = normalizeContractInput(db, owner, data, null);
+      const cust = upsertCustomerForContract(db, owner, fields.customerName, fields.customerPhone, '');
+      cust.sample = true;
+      db.contracts.push({
+        totalAmount: 0,
+        discount: 0,
+        voucher: 0,
+        ...fields,
+        id: nextId(db, 'contracts'),
+        companyId: company.id,
+        customerId: cust.id,
+        esign: { status: done ? ESIGN_STATUS.SIGNED : pick([ESIGN_STATUS.NONE, ESIGN_STATUS.WAITING]), token: null },
+        history: [], // 변경이력 남기지 않음
+        sample: true,
+        createdAt: nowIso(),
+        updatedAt: nowIso(),
+        deletedAt: null,
+      });
+    }
+    invalidateNumbers(db);
+    saveDb(db);
+    return { created: n, total: db.contracts.filter((c) => c.companyId === company.id && c.sample).length };
+  },
+
+  // 샘플 계약만 모두 지움 (직접 등록한 계약은 그대로)
+  async sampleClear(companyId) {
+    const { db, company } = await sampleTarget(companyId);
+    const before = db.contracts.length;
+    db.contracts = db.contracts.filter((c) => !(c.companyId === company.id && c.sample));
+    const used = new Set(db.contracts.filter((c) => c.companyId === company.id).map((c) => c.customerId));
+    db.customers = db.customers.filter((c) => !(c.companyId === company.id && c.sample && !used.has(c.id)));
+    invalidateNumbers(db);
+    saveDb(db);
+    return { removed: before - db.contracts.length };
   },
 
   async update(id, data) {
