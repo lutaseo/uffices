@@ -6,6 +6,7 @@ import { BRANDS, CATEGORIES } from '../constants.js';
 const TALK_BRAND_ORDER = ['더스타트', '더좋은집'];
 import { calcAmounts, isRefund, kindBreakdown, sumAmounts, timeLabel } from '../utils/contract.js';
 import { formatAddress, won } from '../utils/format.js';
+import AsModal from '../components/AsModal.jsx';
 import KakaoModal from '../components/KakaoModal.jsx';
 import PaymentModal from '../components/PaymentModal.jsx';
 import DiscountModal from '../components/DiscountModal.jsx';
@@ -38,6 +39,7 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
   const talkBrands = TALK_BRAND_ORDER.filter((b) => brands.includes(b)).length ? TALK_BRAND_ORDER.filter((b) => brands.includes(b)) : brands;
   const [tab, setTab] = useState(TABS.includes(initialTab) ? initialTab : '시공관리');
   const [data, setData] = useState(null);
+  const [asTarget, setAsTarget] = useState(null); // AS 접수 창을 띄운 시공
   const [selectedId, setSelectedId] = useState(contractId);
   const [payTargetId, setPayTargetId] = useState(null);
   const [paymentModal, setPaymentModal] = useState(null); // { contract, payment? }
@@ -89,11 +91,11 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
     });
   };
 
-  // AS관리로 보내기 / 계약관리로 되돌리기
+  // AS관리로 보내기(접수 창) / 계약관리로 되돌리기
   const toggleAs = (c) => {
-    const on = !c.asAt;
-    if (!window.confirm(on ? `[${c.category}] 시공(No.${c.no})을 AS관리로 보내시겠습니까?` : `[${c.category}] 시공(No.${c.no})을 계약관리로 되돌리시겠습니까?`)) return;
-    run(() => contractApi.setAs([c.id], on), on ? 'AS관리로 보냈습니다. (계약관리 > AS관리)' : '계약관리로 되돌렸습니다.');
+    if (!c.asAt) return setAsTarget(c);
+    if (!window.confirm(`[${c.category}] 시공(No.${c.no})을 계약관리로 되돌리시겠습니까?\nAS 접수 내용은 변경이력에만 남습니다.`)) return;
+    run(() => contractApi.setAs([c.id], false), '계약관리로 되돌렸습니다.');
   };
 
   const savePayment = async (form) => {
@@ -319,6 +321,11 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
                   {c.category} - {c.workType}
                   {c.status === '취소' && <div className="text-red sub-text">취소</div>}
                   {c.asAt && <div className="as-chip">AS관리</div>}
+                  {c.asInfo && (
+                    <div className="sub-text as-request">
+                      {c.asInfo.date} 접수 · {c.asInfo.request}
+                    </div>
+                  )}
                 </td>
                 <td className="text-left">
                   {(c.lineItems || []).map((l, i) => (
@@ -796,6 +803,18 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
       {discountTarget && <DiscountModal contract={discountTarget} onSave={saveDiscount} onClose={() => setDiscountTarget(null)} />}
       {paymentModal && (
         <PaymentModal contract={paymentModal.contract} payment={paymentModal.payment} onSave={savePayment} onClose={() => setPaymentModal(null)} />
+      )}
+      {asTarget && (
+        <AsModal
+          title={`${asTarget.category} · ${asTarget.customerName} (No.${asTarget.no})`}
+          onClose={() => setAsTarget(null)}
+          onSave={async (info) => {
+            await contractApi.setAs([asTarget.id], true, info);
+            setAsTarget(null);
+            alert('AS관리로 옮겼습니다. (계약관리 > AS관리)');
+            await load();
+          }}
+        />
       )}
       {kakao && (
         <KakaoModal

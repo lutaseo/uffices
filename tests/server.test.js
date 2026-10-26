@@ -854,8 +854,11 @@ test('시연 샘플 계약: 운영자만, 가짜 번호(010-0000)·변경이력 
 
 test('AS관리: 보낸 계약은 계약관리 목록에서 빠지고 AS관리 목록에만, 되돌리기 가능, 변경이력 남김', async () => {
   const c = await admin.ok('contracts', 'create', { ...base, customerName: 'AS고객', customerPhone: '010-5656-7878' });
-  await admin.ok('contracts', 'setAs', [c.id], true);
+  assert.equal((await admin('contracts', 'setAs', [c.id], true, { request: '' })).status, 400, 'AS 요청 내용 필수');
+  await admin.ok('contracts', 'setAs', [c.id], true, { date: '2026-10-20', request: '욕실 줄눈 들뜸' });
   assert.ok(!(await admin.ok('contracts', 'list', {})).some((x) => x.id === c.id), '계약관리 목록에서 빠짐');
+  const info = (await admin.ok('contracts', 'list', { as: true })).find((x) => x.id === c.id).asInfo;
+  assert.deepEqual([info.date, info.request], ['2026-10-20', '욕실 줄눈 들뜸'], 'AS 접수 내용');
   assert.ok((await admin.ok('contracts', 'list', { as: true })).some((x) => x.id === c.id), 'AS관리 목록에 있음');
   const got = await admin.ok('contracts', 'get', c.id);
   assert.ok(got.asAt, 'AS 표시');
@@ -863,6 +866,7 @@ test('AS관리: 보낸 계약은 계약관리 목록에서 빠지고 AS관리 �
   await admin.ok('contracts', 'setAs', [c.id], false);
   assert.ok((await admin.ok('contracts', 'list', {})).some((x) => x.id === c.id), '되돌리면 다시 계약관리');
   assert.ok(!(await admin.ok('contracts', 'list', { as: true })).some((x) => x.id === c.id));
+  assert.equal((await admin.ok('contracts', 'get', c.id)).asInfo, null, '되돌리면 접수 내용은 지움 (변경이력에 남음)');
 });
 
 test('기사모바일 계약 상세: 본인 배정 계약만, 단가·내부 메모·이력은 숨김', async () => {
