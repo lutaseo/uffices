@@ -124,6 +124,11 @@ const READ_ONLY = new Set([
 
 // 트래픽 절약: 자주 불리는 가벼운 요청은 필요한 업체 표만 읽음 (나머지는 계약 등 전체)
 //   여기 적은 함수가 다른 표를 쓰게 바뀌면 목록도 함께 고쳐야 합니다.
+// 운영자가 특정 업체(args[0])의 자료를 읽고 쓰는 요청
+const SUPER_COMPANY_CALLS = new Set(['contracts.sampleAdd', 'contracts.sampleClear']);
+// 수정 로그를 남기지 않는 요청 (시연용 샘플)
+const NO_AUDIT = new Set(['contracts.sampleAdd', 'contracts.sampleClear']);
+
 const LIGHT_TABLES = {
   'auth.me': [],
   'auth.login': [],
@@ -258,6 +263,7 @@ export async function handleRpc({ body, headers }) {
     } else {
       const who = await resolveCompanyId(client, ctx.session);
       scope = who.isSuper ? { allCompanies: true } : { companyId: who.companyId };
+      if (who.isSuper && SUPER_COMPANY_CALLS.has(name)) scope = { companyId: Number(args[0]) || -1 }; // 운영자가 한 업체 자료를 다룸 (시연 샘플)
       if (LIGHT_TABLES[name]) scope.tables = LIGHT_TABLES[name];
       if (name === 'contracts.get' || name === 'contracts.signBundle') scope.signatureFor = args[0]; // 계약서 보기일 때만 서명 이미지 로드
       if (RECEIPT_CALLS.has(name)) scope.receiptsFor = args[0]; // 이 계약의 영수증 사진만 로드
@@ -298,7 +304,7 @@ export async function handleRpc({ body, headers }) {
     // 업무 코드가 저장(saveDb)한 내용만 반영. (예: 로그인 실패 횟수는 오류여도 저장됨)
     if (!readOnlyCall) {
       const changes = await persistChanges(client, before, ctx.committed, readOnly);
-      if (!error && changes.length) await writeAuditLog(client, { name, session: sessionAtStart, db, scope, changes });
+      if (!error && changes.length && !NO_AUDIT.has(name)) await writeAuditLog(client, { name, session: sessionAtStart, db, scope, changes });
     }
     await client.query('COMMIT');
     // 느린 요청 기록 (Vercel 로그에서 '[느림]' 으로 검색) — 다음에 느릴 때 원인을 바로 찾기 위함

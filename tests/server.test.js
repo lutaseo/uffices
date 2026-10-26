@@ -830,6 +830,28 @@ test('아파트 일괄 등록: 새 아파트 등록, 지역 빈 아파트는 지
   assert.deepEqual(await admin.ok('apartments', 'importMany', rows), { created: 0, updated: 0, skipped: 3 }, '다시 올려도 중복 없음');
 });
 
+test('시연 샘플 계약: 운영자만, 가짜 번호(010-0000)·변경이력 없음·수정로그 없음, 샘플만 지움', async () => {
+  const sup = client();
+  await sup.ok('auth', 'login', 'super', process.env.INIT_SUPER_PASSWORD);
+  const companyId = (await admin.ok('auth', 'me')).company.id;
+  assert.equal((await admin('contracts', 'sampleAdd', companyId, 5)).status, 403, '업체 관리자는 불가');
+  const mine = await admin.ok('contracts', 'create', { ...base, customerName: '진짜계약', customerPhone: '010-8282-1212' });
+  const logsBefore = (await admin.ok('auditLogs', 'list', {})).rows.length;
+  const r = await sup.ok('contracts', 'sampleAdd', companyId, 5);
+  assert.equal(r.created, 5);
+  const list = await admin.ok('contracts', 'list', {});
+  const samples = list.filter((c) => /^010-0000-/.test(c.customerPhone));
+  assert.ok(samples.length >= 5, '010-0000 번호');
+  const one = await admin.ok('contracts', 'get', samples[0].id);
+  assert.equal(one.history.length, 0, '변경이력 없음');
+  assert.equal((await admin.ok('auditLogs', 'list', {})).rows.length, logsBefore, '수정로그 없음');
+  const cleared = await sup.ok('contracts', 'sampleClear', companyId);
+  assert.ok(cleared.removed >= 5);
+  const after = await admin.ok('contracts', 'list', {});
+  assert.ok(!after.some((c) => /^010-0000-/.test(c.customerPhone)), '샘플은 모두 지움');
+  assert.ok(after.some((c) => c.id === mine.id), '직접 등록한 계약은 그대로');
+});
+
 test('기사모바일 계약 상세: 본인 배정 계약만, 단가·내부 메모·이력은 숨김', async () => {
   const eng = client();
   await eng.ok('auth', 'login', 'gong', 'gong1234');

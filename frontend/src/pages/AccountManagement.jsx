@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { companies as companyApi, teams as teamApi, users as userApi } from '../api/index.js';
+import { companies as companyApi, contracts as contractApi, teams as teamApi, users as userApi } from '../api/index.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import {
   DATA_SCOPES,
@@ -28,6 +28,36 @@ function SuperAdminView() {
   const [adminForm, setAdminForm] = useState(null);
 
   const load = useCallback(() => companyApi.list().then(setList).catch(handleError), [handleError]);
+  const [sampleBusy, setSampleBusy] = useState(null);
+
+  // 시연용 샘플 계약 넣기/지우기 (가짜 이름·010-0000 번호, 변경이력·수정로그 안 남김)
+  const addSample = async (c) => {
+    const input = window.prompt(`[${c.name}] 에 시연용 샘플 계약을 몇 건 넣을까요? (최대 200)\n가짜 이름·010-0000-xxxx 번호로 만들고, 변경이력·수정로그는 남기지 않습니다.`, '100');
+    if (input === null) return;
+    setSampleBusy(c.id);
+    try {
+      const r = await contractApi.sampleAdd(c.id, Number(input));
+      alert(`샘플 계약 ${r.created}건을 넣었습니다. (이 업체 샘플 합계 ${r.total}건)`);
+      load();
+    } catch (err) {
+      handleError(err);
+    } finally {
+      setSampleBusy(null);
+    }
+  };
+  const clearSample = async (c) => {
+    if (!window.confirm(`[${c.name}] 의 샘플 계약을 모두 지울까요?\n직접 등록한 계약은 지우지 않습니다.`)) return;
+    setSampleBusy(c.id);
+    try {
+      const r = await contractApi.sampleClear(c.id);
+      alert(`샘플 계약 ${r.removed}건을 지웠습니다.`);
+      load();
+    } catch (err) {
+      handleError(err);
+    } finally {
+      setSampleBusy(null);
+    }
+  };
   useEffect(() => {
     load();
   }, [load]);
@@ -198,7 +228,17 @@ function SuperAdminView() {
                     </button>
                   </td>
                   <td>{c.managerCount}</td>
-                  <td>{c.contractCount}</td>
+                  <td>
+                    {c.contractCount}
+                    <div className="sample-actions">
+                      <button type="button" className="btn-link" disabled={sampleBusy === c.id} onClick={() => addSample(c)}>
+                        {sampleBusy === c.id ? '처리 중…' : '+ 시연 샘플'}
+                      </button>
+                      <button type="button" className="btn-link" disabled={sampleBusy === c.id} onClick={() => clearSample(c)}>
+                        샘플 지우기
+                      </button>
+                    </div>
+                  </td>
                   <td>
                     <div className="row-actions">
                       <button
