@@ -94,10 +94,10 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
     });
   };
 
-  // AS 접수(접수 창 — 처음이면 AS관리로 옮기고, AS 중이면 추가 접수) / AS 완료 → 계약관리로
+  // AS 접수(접수 창 — 처음이면 AS관리로 옮기고, 이미 AS관리면 다음 회차) / AS 완료(AS관리에 그대로)
   const finishAs = (c) => {
-    if (!window.confirm(`[${c.category}] 시공(No.${c.no})의 AS를 완료하고 계약관리로 옮기시겠습니까?\nAS 이력은 회차별로 남습니다.`)) return;
-    run(() => contractApi.setAs([c.id], false), 'AS 완료 — 계약관리로 옮겼습니다.');
+    if (!window.confirm(`[${c.category}] 시공(No.${c.no})의 AS를 완료 처리하시겠습니까?`)) return;
+    run(() => contractApi.setAs([c.id], false), 'AS 완료로 표시했습니다.');
   };
 
   const savePayment = async (form) => {
@@ -322,7 +322,7 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
                 <td className="nowrap">
                   {c.category} - {c.workType}
                   {c.status === '취소' && <div className="text-red sub-text">취소</div>}
-                  {c.asAt && <div className="as-chip">AS관리</div>}
+                  {c.asAt && <div className="as-chip">{asLogsOf(c).some((l) => !l.doneAt) ? 'AS 처리중' : 'AS 완료'}</div>}
                   {asLogsOf(c).map((l, i) => (
                     <div key={i} className={`sub-text as-request ${l.doneAt ? 'done' : ''}`}>
                       AS {i + 1}회 {l.date} · {l.request}
@@ -373,7 +373,7 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
                         {c.asAt ? 'AS 추가 접수' : 'AS 접수'}
                       </button>
                     )}
-                    {can('contract.edit') && c.asAt && (
+                    {can('contract.edit') && c.asAt && asLogsOf(c).some((l) => !l.doneAt) && (
                       <button type="button" className="btn-outline-action" onClick={() => finishAs(c)}>
                         AS 완료
                       </button>

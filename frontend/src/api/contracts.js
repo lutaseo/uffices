@@ -665,12 +665,13 @@ export const contracts = {
     saveDb(db);
   },
 
-  // AS 접수(on=true) / AS 완료 — 계약관리로(on=false) — 계약 목록에서 여러 건, 계약 상세에서 한 건
+  // AS 접수(on=true) / AS 완료(on=false) — 계약 목록에서 여러 건, 계약 상세에서 한 건
   //   info: AS 접수 { date(접수일), request(요청 내용) }
-  //   AS 는 재발할 수 있어 회차별로 쌓음: asLogs [{ date, request, byName, doneAt }] (완료해도 지우지 않음)
-  //     - 계약관리에 있는 계약 → AS관리로 옮기며 새 회차 / 이미 AS관리에 있으면 '추가 접수'로 새 회차만
-  //     - AS 완료 → 열린 회차에 완료일을 찍고 계약관리로
-  //   asInfo = 지금 열린(처리 중) 회차 — 목록 표시용
+  //   AS관리로 옮긴 계약은 계속 AS관리에 둠 (AS는 AS대로 관리). 재발할 수 있어 회차별로 쌓음:
+  //     asLogs [{ date, request, byName, doneAt, doneBy }] — 완료해도 지우지 않음
+  //     - 계약관리에 있는 계약 → AS관리로 옮기며 1회 / AS관리에 있으면 다음 회차 추가
+  //     - AS 완료 → 처리 중인 회차에 완료일만 찍음 (AS관리에 그대로)
+  //   asInfo = 지금 처리 중인 회차 (없으면 null = 완료)
   async setAs(ids, on = true, info = {}) {
     const { db, user } = await authorize('contract.edit');
     const request = String(info.request || '').trim().slice(0, 500);
@@ -681,17 +682,16 @@ export const contracts = {
       const logs = c.asLogs || (c.asInfo ? [{ ...c.asInfo, doneAt: null }] : []);
       if (on) {
         const entry = { date: isDateKey(info.date) ? info.date : today(), request, byName: user.name, doneAt: null };
-        const again = !!c.asAt;
+        const again = !!c.asAt; // 이미 AS관리에 있음 → 재발·추가 접수
         c.asLogs = [...logs, entry];
         c.asInfo = entry;
         c.asAt = c.asAt || nowIso();
         addHistory(c, user, again ? 'AS 추가 접수' : 'AS관리로 이동', [{ label: `AS ${c.asLogs.length}회 접수`, from: '', to: `${entry.date} ${request}` }]);
       } else {
-        if (!c.asAt) return;
+        if (!c.asAt || !logs.some((l) => !l.doneAt)) return;
         c.asLogs = logs.map((l) => (l.doneAt ? l : { ...l, doneAt: today(), doneBy: user.name }));
         c.asInfo = null;
-        c.asAt = null;
-        addHistory(c, user, 'AS 완료 (계약관리로)');
+        addHistory(c, user, 'AS 완료');
       }
     });
     saveDb(db);

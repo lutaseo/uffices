@@ -132,6 +132,7 @@ function ContractList({ mode = 'main', engineers }) {
   const [viewId, setViewId] = useState(null);
   const [kakaoTarget, setKakaoTarget] = useState(null);
   const [asOpen, setAsOpen] = useState(false); // AS 접수 창 (선택 AS관리로)
+  const [asFilter, setAsFilter] = useState('all'); // AS관리: 전체 / 처리중 / 완료
 
   const load = useCallback(async () => {
     const cached = listCache.get(cacheKey);
@@ -175,10 +176,16 @@ function ContractList({ mode = 'main', engineers }) {
     sessionStorage.setItem(FILTER_KEY, JSON.stringify(next));
   };
 
-  const summary = useMemo(() => summarize(rows), [rows]);
-  const maxPage = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  // AS관리: 처리중(완료 안 된 회차가 있음) / 완료
+  const asOpenOf = (c) => (c.asLogs ? c.asLogs.some((l) => !l.doneAt) : !!c.asInfo);
+  const shown = useMemo(
+    () => (asMode && asFilter !== 'all' ? rows.filter((c) => asOpenOf(c) === (asFilter === 'open')) : rows),
+    [rows, asMode, asFilter],
+  );
+  const summary = useMemo(() => summarize(shown), [shown]);
+  const maxPage = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
   const currentPage = Math.min(page, maxPage); // 기억한 쪽이 범위를 넘으면 마지막 쪽
-  const pageRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const pageRows = shown.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const toggle = (id) =>
     setSelectedIds((prev) => {
@@ -211,7 +218,7 @@ function ContractList({ mode = 'main', engineers }) {
 
   const handleExport = () => {
     downloadExcel(
-      rows.map((c) => {
+      shown.map((c) => {
         const a = calcAmounts(c);
         const row = {
           번호: c.no,
@@ -282,6 +289,19 @@ function ContractList({ mode = 'main', engineers }) {
     <div className="page-card">
       <div className="page-title-row">
         <h2>{trash ? '🗑️ 휴지통' : asMode ? '🔧 AS관리' : '계약관리'}</h2>
+        {asMode && (
+          <div className="as-filter">
+            {[
+              ['all', '전체'],
+              ['open', '처리중'],
+              ['done', '완료'],
+            ].map(([k, label]) => (
+              <button key={k} type="button" className={asFilter === k ? 'on' : ''} onClick={() => (setAsFilter(k), setPage(1))}>
+                {label} {k === 'all' ? rows.length : rows.filter((c) => asOpenOf(c) === (k === 'open')).length}
+              </button>
+            ))}
+          </div>
+        )}
         {user.role === ROLES.MANAGER && isOwnScopeOnly(user) && <span className="scope-badge">본인 작성 계약만 표시</span>}
       </div>
 
@@ -357,7 +377,7 @@ function ContractList({ mode = 'main', engineers }) {
             <button
               type="button"
               className="btn-outline-action"
-              onClick={() => (asMode ? bulk('setAs', 'AS 완료하고 계약관리로 옮기시겠습니까? (AS 이력은 남습니다)', false) : selectedIds.size ? setAsOpen(true) : alert('선택된 계약이 없습니다.'))}
+              onClick={() => (asMode ? bulk('setAs', 'AS 완료 처리하시겠습니까?', false) : selectedIds.size ? setAsOpen(true) : alert('선택된 계약이 없습니다.'))}
             >
               {asMode ? '선택 AS 완료' : '선택 AS관리로'}
             </button>
@@ -392,7 +412,7 @@ function ContractList({ mode = 'main', engineers }) {
             renderActions={renderActions}
             onOpen={trash ? undefined : (c) => navigateForward(`/contracts/${c.id}`)}
           />
-          <Pagination page={currentPage} total={rows.length} pageSize={PAGE_SIZE} onChange={setPage} />
+          <Pagination page={currentPage} total={shown.length} pageSize={PAGE_SIZE} onChange={setPage} />
         </>
       )}
 

@@ -6,6 +6,9 @@ import { ESIGN_STATUS } from '../constants.js';
 
 const CIRCLED = ['①', '②', '③'];
 
+// AS 최근 회차 (AS관리 목록 표시)
+const asLast = (c) => c.asLogs?.at(-1) || c.asInfo || null;
+
 const STATUS_CLASS = {
   미정: 'st-gray',
   해피콜완료: 'st-blue',
@@ -159,9 +162,10 @@ function FullTable({ contracts, selectedIds, onToggle, onToggleAll, showAmount, 
                 </td>
                 <td data-label="아파트명" className="text-left apt-cell">
                   <div>{formatAddress(item)}</div>
-                  {item.asInfo && (
+                  {asLast(item) && (
                     <div className="as-request">
-                      🔧 AS{item.asLogs?.length > 1 ? ` ${item.asLogs.length}회` : ''} {item.asInfo.date} · {item.asInfo.request}
+                      🔧 AS{item.asLogs?.length > 1 ? ` ${item.asLogs.length}회` : ''} {asLast(item).date} · {asLast(item).request}
+                      {asLast(item).doneAt && <b> (완료)</b>}
                     </div>
                   )}
                   {itemsSummary(item) && <div className="sub-text ellipsis">{itemsSummary(item)}</div>}
