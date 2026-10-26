@@ -4759,3 +4759,80 @@ a.btn-quick.blue:hover {
   margin-top: 10px;
   font-size: 14px;
 }
+
+/* 계약 목록 휴대폰 보기 전환: 자세히(카드) / 간단히(이름·아파트·금액 한 줄) — PC 에서는 늘 표 */
+.mobile-view-toggle,
+.contract-compact-list {
+  display: none;
+}
+@media screen and (max-width: 768px) {
+  .mobile-view-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+    font-size: 13px;
+    color: #64748b;
+  }
+  .mobile-view-toggle span {
+    margin-right: 4px;
+  }
+  .mobile-view-toggle button {
+    padding: 6px 14px;
+    font-size: 13px;
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 16px;
+    cursor: pointer;
+  }
+  .mobile-view-toggle button.on {
+    color: #fff;
+    background: #1a6fe0;
+    border-color: #1a6fe0;
+  }
+  .view-compact .contract-table-container {
+    display: none;
+  }
+  .view-compact .contract-compact-list {
+    display: block;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+  }
+  .cc-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 12px;
+    font-size: 14px;
+    text-align: left;
+    background: #fff;
+    border: none;
+    border-bottom: 1px solid #e2e8f0;
+    cursor: pointer;
+  }
+  .cc-row:last-child {
+    border-bottom: none;
+  }
+  .cc-row:active {
+    background: #f1f5f9;
+  }
+  .cc-name {
+    flex-shrink: 0;
+    font-weight: 700;
+  }
+  .cc-site {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    color: #475569;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .cc-amount {
+    flex-shrink: 0;
+    font-weight: 600;
+  }
+}

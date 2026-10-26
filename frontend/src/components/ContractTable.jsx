@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import PaperChip from './PaperChip.jsx';
 import { calcAmounts, itemsSummary, kindBreakdown, timeLabel } from '../utils/contract.js';
 import { formatAddress, won } from '../utils/format.js';
@@ -23,8 +23,57 @@ const ESIGN_CLASS = {
   [ESIGN_STATUS.SIGNED]: 'es-done',
 };
 
+// 휴대폰 목록 보기: 'full' 자세히(카드에 모든 항목) / 'compact' 간단히(이름·아파트·계약금액 한 줄) — 기기에 기억
+const VIEW_KEY = 'uffice.mobileListView';
+const savedView = () => {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'compact' ? 'compact' : 'full';
+  } catch {
+    return 'full';
+  }
+};
+
 // onOpen 이 있으면 줄에 마우스를 올렸을 때 강조되고, 누르면 계약 상세로 이동
-export default function ContractTable({ contracts, selectedIds, onToggle, onToggleAll, showAmount, renderActions, onOpen }) {
+export default function ContractTable(props) {
+  const [view, setViewState] = useState(savedView);
+  const setView = (v) => {
+    setViewState(v);
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      // 저장 안 되는 브라우저면 이번에만 적용
+    }
+  };
+  const { contracts, showAmount, onOpen } = props;
+  return (
+    <div className={`contract-list-wrap view-${view}`}>
+      {/* 휴대폰에서만 보이는 보기 전환 */}
+      <div className="mobile-view-toggle">
+        <span>목록 보기</span>
+        <button type="button" className={view === 'full' ? 'on' : ''} onClick={() => setView('full')}>
+          자세히
+        </button>
+        <button type="button" className={view === 'compact' ? 'on' : ''} onClick={() => setView('compact')}>
+          간단히
+        </button>
+      </div>
+      {/* 간단히: 이름 · 아파트 · 계약금액 한 줄 (휴대폰에서만) */}
+      <div className="contract-compact-list">
+        {contracts.length === 0 && <p className="no-data">조건에 맞는 계약이 없습니다.</p>}
+        {contracts.map((item) => (
+          <button key={item.id} type="button" className="cc-row" onClick={onOpen ? () => onOpen(item) : undefined}>
+            <span className="cc-name">{item.customerName}</span>
+            <span className="cc-site">{formatAddress(item)}</span>
+            {showAmount && <span className="cc-amount">{won(calcAmounts(item).actual)}원</span>}
+          </button>
+        ))}
+      </div>
+      <FullTable {...props} />
+    </div>
+  );
+}
+
+function FullTable({ contracts, selectedIds, onToggle, onToggleAll, showAmount, renderActions, onOpen }) {
   const allChecked = contracts.length > 0 && contracts.every((c) => selectedIds.has(c.id));
   const colCount = showAmount ? 13 : 11;
 
