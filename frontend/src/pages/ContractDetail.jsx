@@ -24,6 +24,9 @@ const siteText = (c) =>
     .filter(Boolean)
     .join(' ');
 
+// AS 회차 이력 (예전 asInfo 하나만 있던 계약도 1회로)
+const asLogsOf = (c) => c.asLogs || (c.asInfo ? [c.asInfo] : []);
+
 const scheduleLine = (s) => (s?.date ? `${s.date}(${timeLabel(s) || '무관'})` : '');
 
 // 계약 상세: 같은 계약자·같은 현장의 시공들을 한 화면에서 관리
@@ -91,11 +94,10 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
     });
   };
 
-  // AS관리로 보내기(접수 창) / 계약관리로 되돌리기
-  const toggleAs = (c) => {
-    if (!c.asAt) return setAsTarget(c);
-    if (!window.confirm(`[${c.category}] 시공(No.${c.no})을 계약관리로 되돌리시겠습니까?\nAS 접수 내용은 변경이력에만 남습니다.`)) return;
-    run(() => contractApi.setAs([c.id], false), '계약관리로 되돌렸습니다.');
+  // AS 접수(접수 창 — 처음이면 AS관리로 옮기고, AS 중이면 추가 접수) / AS 완료 → 계약관리로
+  const finishAs = (c) => {
+    if (!window.confirm(`[${c.category}] 시공(No.${c.no})의 AS를 완료하고 계약관리로 옮기시겠습니까?\nAS 이력은 회차별로 남습니다.`)) return;
+    run(() => contractApi.setAs([c.id], false), 'AS 완료 — 계약관리로 옮겼습니다.');
   };
 
   const savePayment = async (form) => {
@@ -321,11 +323,12 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
                   {c.category} - {c.workType}
                   {c.status === '취소' && <div className="text-red sub-text">취소</div>}
                   {c.asAt && <div className="as-chip">AS관리</div>}
-                  {c.asInfo && (
-                    <div className="sub-text as-request">
-                      {c.asInfo.date} 접수 · {c.asInfo.request}
+                  {asLogsOf(c).map((l, i) => (
+                    <div key={i} className={`sub-text as-request ${l.doneAt ? 'done' : ''}`}>
+                      AS {i + 1}회 {l.date} · {l.request}
+                      {l.doneAt && ` (완료 ${l.doneAt})`}
                     </div>
-                  )}
+                  ))}
                 </td>
                 <td className="text-left">
                   {(c.lineItems || []).map((l, i) => (
@@ -366,8 +369,13 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
                       <button type="button" className="btn-dark-action" onClick={() => onEdit(c)}>수정</button>
                     )}
                     {can('contract.edit') && (
-                      <button type="button" className="btn-outline-action" onClick={() => toggleAs(c)}>
-                        {c.asAt ? '계약관리로' : 'AS관리로'}
+                      <button type="button" className="btn-outline-action" onClick={() => setAsTarget(c)}>
+                        {c.asAt ? 'AS 추가 접수' : 'AS 접수'}
+                      </button>
+                    )}
+                    {can('contract.edit') && c.asAt && (
+                      <button type="button" className="btn-outline-action" onClick={() => finishAs(c)}>
+                        AS 완료
                       </button>
                     )}
                     {can('contract.delete') && (
@@ -806,12 +814,12 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
       )}
       {asTarget && (
         <AsModal
-          title={`${asTarget.category} · ${asTarget.customerName} (No.${asTarget.no})`}
+          title={`${asTarget.category} · ${asTarget.customerName} (No.${asTarget.no}) — ${asLogsOf(asTarget).length + 1}회차`}
           onClose={() => setAsTarget(null)}
           onSave={async (info) => {
             await contractApi.setAs([asTarget.id], true, info);
             setAsTarget(null);
-            alert('AS관리로 옮겼습니다. (계약관리 > AS관리)');
+            alert(asTarget.asAt ? 'AS를 추가 접수했습니다.' : 'AS관리로 옮겼습니다. (계약관리 > AS관리)');
             await load();
           }}
         />

@@ -357,9 +357,9 @@ function ContractList({ mode = 'main', engineers }) {
             <button
               type="button"
               className="btn-outline-action"
-              onClick={() => (asMode ? bulk('setAs', '계약관리로 되돌리시겠습니까?', false) : selectedIds.size ? setAsOpen(true) : alert('선택된 계약이 없습니다.'))}
+              onClick={() => (asMode ? bulk('setAs', 'AS 완료하고 계약관리로 옮기시겠습니까? (AS 이력은 남습니다)', false) : selectedIds.size ? setAsOpen(true) : alert('선택된 계약이 없습니다.'))}
             >
-              {asMode ? '선택 계약관리로' : '선택 AS관리로'}
+              {asMode ? '선택 AS 완료' : '선택 AS관리로'}
             </button>
           )}
           {!can('contract.delete') ? null : trash ? (

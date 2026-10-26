@@ -161,7 +161,7 @@ function FullTable({ contracts, selectedIds, onToggle, onToggleAll, showAmount, 
                   <div>{formatAddress(item)}</div>
                   {item.asInfo && (
                     <div className="as-request">
-                      🔧 AS {item.asInfo.date} · {item.asInfo.request}
+                      🔧 AS{item.asLogs?.length > 1 ? ` ${item.asLogs.length}회` : ''} {item.asInfo.date} · {item.asInfo.request}
                     </div>
                   )}
                   {itemsSummary(item) && <div className="sub-text ellipsis">{itemsSummary(item)}</div>}

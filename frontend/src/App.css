@@ -4853,3 +4853,6 @@ a.btn-quick.blue:hover {
   color: #b45309;
   white-space: pre-wrap;
 }
+.as-request.done {
+  color: #94a3b8;
+}

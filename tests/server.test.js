@@ -866,7 +866,17 @@ test('AS관리: 보낸 계약은 계약관리 목록에서 빠지고 AS관리 �
   await admin.ok('contracts', 'setAs', [c.id], false);
   assert.ok((await admin.ok('contracts', 'list', {})).some((x) => x.id === c.id), '되돌리면 다시 계약관리');
   assert.ok(!(await admin.ok('contracts', 'list', { as: true })).some((x) => x.id === c.id));
-  assert.equal((await admin.ok('contracts', 'get', c.id)).asInfo, null, '되돌리면 접수 내용은 지움 (변경이력에 남음)');
+  const done = await admin.ok('contracts', 'get', c.id);
+  assert.equal(done.asInfo, null, 'AS 완료하면 처리 중 접수는 비움');
+  assert.equal(done.asLogs.length, 1);
+  assert.ok(done.asLogs[0].doneAt, '1회차에 완료일');
+  // 재발: 다시 AS 접수 → 2회차, 처리 중 추가 접수 → 3회차
+  await admin.ok('contracts', 'setAs', [c.id], true, { request: '같은 곳 재발' });
+  await admin.ok('contracts', 'setAs', [c.id], true, { request: '현관도 추가' });
+  const again = await admin.ok('contracts', 'get', c.id);
+  assert.equal(again.asLogs.length, 3, 'AS 회차가 쌓임');
+  assert.equal(again.asInfo.request, '현관도 추가');
+  assert.deepEqual(again.asLogs.map((l) => !!l.doneAt), [true, false, false]);
 });
 
 test('기사모바일 계약 상세: 본인 배정 계약만, 단가·내부 메모·이력은 숨김', async () => {

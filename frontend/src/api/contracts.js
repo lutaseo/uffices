@@ -665,8 +665,12 @@ export const contracts = {
     saveDb(db);
   },
 
-  // AS관리로 보내기(on=true) / 계약관리로 되돌리기(on=false) — 계약 목록에서 여러 건, 계약 상세에서 한 건
-  //   info: AS 접수 { date(접수일), request(요청 내용) } — 옮길 때 접수 창에서 입력, 되돌리면 지움(변경이력에는 남음)
+  // AS 접수(on=true) / AS 완료 — 계약관리로(on=false) — 계약 목록에서 여러 건, 계약 상세에서 한 건
+  //   info: AS 접수 { date(접수일), request(요청 내용) }
+  //   AS 는 재발할 수 있어 회차별로 쌓음: asLogs [{ date, request, byName, doneAt }] (완료해도 지우지 않음)
+  //     - 계약관리에 있는 계약 → AS관리로 옮기며 새 회차 / 이미 AS관리에 있으면 '추가 접수'로 새 회차만
+  //     - AS 완료 → 열린 회차에 완료일을 찍고 계약관리로
+  //   asInfo = 지금 열린(처리 중) 회차 — 목록 표시용
   async setAs(ids, on = true, info = {}) {
     const { db, user } = await authorize('contract.edit');
     const request = String(info.request || '').trim().slice(0, 500);
@@ -674,15 +678,21 @@ export const contracts = {
     ids.forEach((id) => {
       const c = findContract(db, user, id);
       if (c.deletedAt) throw new ApiError('휴지통에 있는 계약입니다.');
-      if (!!c.asAt === !!on) return;
-      c.asAt = on ? nowIso() : null;
-      c.asInfo = on ? { date: isDateKey(info.date) ? info.date : today(), request, byName: user.name } : null;
-      addHistory(
-        c,
-        user,
-        on ? 'AS관리로 이동' : 'AS관리에서 계약관리로 되돌림',
-        on ? [{ label: 'AS 접수', from: '', to: `${c.asInfo.date} ${request}` }] : [],
-      );
+      const logs = c.asLogs || (c.asInfo ? [{ ...c.asInfo, doneAt: null }] : []);
+      if (on) {
+        const entry = { date: isDateKey(info.date) ? info.date : today(), request, byName: user.name, doneAt: null };
+        const again = !!c.asAt;
+        c.asLogs = [...logs, entry];
+        c.asInfo = entry;
+        c.asAt = c.asAt || nowIso();
+        addHistory(c, user, again ? 'AS 추가 접수' : 'AS관리로 이동', [{ label: `AS ${c.asLogs.length}회 접수`, from: '', to: `${entry.date} ${request}` }]);
+      } else {
+        if (!c.asAt) return;
+        c.asLogs = logs.map((l) => (l.doneAt ? l : { ...l, doneAt: today(), doneBy: user.name }));
+        c.asInfo = null;
+        c.asAt = null;
+        addHistory(c, user, 'AS 완료 (계약관리로)');
+      }
     });
     saveDb(db);
   },
