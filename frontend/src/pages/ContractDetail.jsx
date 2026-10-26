@@ -89,6 +89,13 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
     });
   };
 
+  // AS관리로 보내기 / 계약관리로 되돌리기
+  const toggleAs = (c) => {
+    const on = !c.asAt;
+    if (!window.confirm(on ? `[${c.category}] 시공(No.${c.no})을 AS관리로 보내시겠습니까?` : `[${c.category}] 시공(No.${c.no})을 계약관리로 되돌리시겠습니까?`)) return;
+    run(() => contractApi.setAs([c.id], on), on ? 'AS관리로 보냈습니다. (계약관리 > AS관리)' : '계약관리로 되돌렸습니다.');
+  };
+
   const savePayment = async (form) => {
     const { contract, payment } = paymentModal;
     try {
@@ -311,6 +318,7 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
                 <td className="nowrap">
                   {c.category} - {c.workType}
                   {c.status === '취소' && <div className="text-red sub-text">취소</div>}
+                  {c.asAt && <div className="as-chip">AS관리</div>}
                 </td>
                 <td className="text-left">
                   {(c.lineItems || []).map((l, i) => (
@@ -349,6 +357,11 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
                   <div className="row-actions">
                     {can('contract.edit') && (
                       <button type="button" className="btn-dark-action" onClick={() => onEdit(c)}>수정</button>
+                    )}
+                    {can('contract.edit') && (
+                      <button type="button" className="btn-outline-action" onClick={() => toggleAs(c)}>
+                        {c.asAt ? '계약관리로' : 'AS관리로'}
+                      </button>
                     )}
                     {can('contract.delete') && (
                       <button type="button" className="btn-dark-action" onClick={() => removeWork(c)}>삭제</button>

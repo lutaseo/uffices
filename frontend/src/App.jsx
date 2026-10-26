@@ -35,6 +35,7 @@ const MENUS = [
     path: '/contracts',
     subs: [
       { key: 'main', label: '계약관리', path: '/contracts' },
+      { key: 'as', label: 'AS관리', path: '/contracts/as' },
       { key: 'trash', label: '휴지통', path: '/contracts/trash', perm: 'contract.delete' },
     ],
   },
