@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { usePageTitle } from '../utils/title.js';
 import { esign } from '../api/index.js';
 import ContractDocument from '../components/ContractDocument.jsx';
 
@@ -13,6 +14,7 @@ export default function SignPage({ token }) {
   const canvasRef = useRef(null);
   const drawing = useRef(false);
   const hasInk = useRef(false);
+  usePageTitle(`전자계약서 서명${data?.company?.name ? ` · ${data.company.name}` : ''}`, '전자계약서');
 
   useEffect(() => {
     esign

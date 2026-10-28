@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { API_MODE, companies } from '../api/index.js';
+import { usePageTitle } from '../utils/title.js';
 
 // companyCode: 업체 주소(veritybase.vercel.app/업체주소)로 들어오면 그 업체 로그인 화면
 // kind: 로그인 주소별 화면
@@ -37,6 +38,9 @@ export default function LoginPage({ companyCode = '', kind = 'staff' }) {
     if (!companyCode) return;
     companies.publicInfo(companyCode).then(setCompany).catch(() => setCompany(null));
   }, [companyCode]);
+  // 탭 이름: 업체 주소 없으면 운영자 로그인
+  const shortName = !companyCode ? 'VerityBase 운영자' : `${company?.name || ''} ${kind === 'engineer' ? '기사' : kind === 'manager' ? '상담' : ''}`.trim();
+  usePageTitle(companyCode ? `${label} 로그인 · ${company?.name ? `${company.name} ` : ''}VerityBase` : 'VerityBase 운영자 로그인', shortName);
   const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');

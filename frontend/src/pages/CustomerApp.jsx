@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { usePageTitle } from '../utils/title.js';
 import { companies as companyApi, customerApp } from '../api/index.js';
 import { timeLabel } from '../utils/contract.js';
 import { formatPhone, won } from '../utils/format.js';
@@ -81,6 +82,7 @@ export default function CustomerApp({ companyCode, token }) {
   };
 
   const title = companyName || data?.company.name || '';
+  usePageTitle(`내 계약 확인 · ${title || 'VerityBase'}`, title ? `${title} 내 계약` : '내 계약');
   if (checking) return <div className="page-loading">불러오는 중...</div>;
   return (
     <div className="cust-app">

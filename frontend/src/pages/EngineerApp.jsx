@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { usePageTitle } from '../utils/title.js';
 import { API_MODE, engineerApp } from '../api/index.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { MOBILE_STATUS, OFF_LABEL } from '../constants.js';
@@ -13,6 +14,7 @@ import PhotoViewer from '../components/PhotoViewer.jsx';
 // 기사모바일: 기사 계정으로 로그인하면 이 화면만 보입니다 (휴대폰 화면 기준).
 export default function EngineerApp({ route }) {
   const { user, company, logout } = useAuth();
+  usePageTitle(`기사모바일 · ${company?.name || ''} VerityBase`, `${company?.name || ''} 기사`.trim());
   const tab = route?.path === '/m/off' ? 'off' : 'schedule';
   const detail = route && match('/m/contract/:id', route.path);
   // 기사 계정은 /engineer 주소만 사용
