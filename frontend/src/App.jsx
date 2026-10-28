@@ -6,6 +6,7 @@ import { useAuth } from './auth/AuthContext.jsx';
 import { API_MODE } from './api/index.js';
 import { ROLES, ROLE_LABELS } from './auth/permissions.js';
 import { formatKoreanDate, today } from './utils/date.js';
+import { usePageTitle } from './utils/title.js';
 
 import LoginPage, { loginEntry } from './pages/LoginPage.jsx';
 import SignPage from './pages/SignPage.jsx';
@@ -182,6 +183,14 @@ function MainLayout({ route }) {
   const daysLeft = periodEnd
     ? Math.ceil((new Date(`${periodEnd}T00:00:00`) - new Date(`${today()}T00:00:00`)) / 86400000)
     : null;
+
+  // 탭 이름: '계약관리 · 더좋은집 VerityBase', AS관리·휴지통 등 하위 메뉴면 그 이름, 운영자는 'VerityBase 운영자'
+  const currentSub = current?.subs?.length > 1 ? current.subs.find((s) => (s.key === 'main' ? path === s.path || /^\/contracts\/(\d+|new)/.test(path) : path.startsWith(s.path))) : null;
+  const pageName = (currentSub || current)?.label || '';
+  usePageTitle(
+    `${pageName ? `${pageName} · ` : ''}${company ? `${company.name} VerityBase` : 'VerityBase 운영자'}${consult ? ' (상담실장)' : ''}`,
+    company ? `${company.name}${consult ? ' 상담' : ''}` : 'VerityBase 운영자',
+  );
 
   const subActive = (s) => (s.key === 'main' ? path === s.path || /^\/contracts\/(\d+|new)/.test(path) : path.startsWith(s.path));
 
