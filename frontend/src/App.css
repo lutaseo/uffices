@@ -4892,3 +4892,20 @@ a.btn-quick.blue:hover {
 .extra-work-title .btn-text-danger {
   font-size: 13px;
 }
+
+/* 계약 등록: 상품 고르기 [패키지] [추가시공품목] */
+.product-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.product-pick-label {
+  display: inline-block;
+  min-width: 84px;
+  font-weight: 600;
+  font-size: 13px;
+}
+.product-picker .text-orange {
+  color: #e8590c;
+}
