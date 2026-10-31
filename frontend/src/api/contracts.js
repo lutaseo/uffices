@@ -204,6 +204,7 @@ function normalizeContractInput(db, user, data, existing) {
       .filter((l) => String(l.name || '').trim())
       .map((l) => ({
         productId: l.productId ? Number(l.productId) : null,
+        kind: l.kind === '추가시공품목' ? '추가시공품목' : '패키지', // 계약 등록 화면에서 [패키지] / [추가시공품목] 칸 구분
         name: String(l.name).trim(),
         detail: l.detail || '',
         qty: Math.max(1, Math.floor(Number(l.qty) || 1)),

@@ -547,7 +547,7 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
                   {p.receipt === '미발행' ? '' : p.receipt}
                   {p.hasReceipt && (
                     <button type="button" className="btn-receipt" title="영수증 사진 보기" onClick={() => openReceipt(p.contract, p)}>
-                      📎 사진{p.receiptCount > 1 ? ` ${p.receiptCount}장` : ''}
+                      📎 사진{p.receiptCount > 1 ? ` ${p.receiptCount}장` : ''} 크게 보기
                     </button>
                   )}
                 </td>
