@@ -4938,3 +4938,59 @@ a.btn-quick.blue:hover {
   padding-bottom: 8px;
   border-bottom: 1px dashed #e2e8f0;
 }
+
+/* 시공선택: 상품 이름 검색 (치면 아래에 맞는 상품, 누르면 추가) */
+.product-search {
+  position: relative;
+  display: inline-block;
+}
+.product-search .input-text {
+  width: 180px;
+}
+.product-search-list {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 320px;
+  max-width: 90vw;
+  max-height: 280px;
+  overflow-y: auto;
+  margin-top: 2px;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+.product-search-list button {
+  padding: 8px 10px;
+  font-size: 13px;
+  text-align: left;
+  background: #fff;
+  border: none;
+  border-bottom: 1px solid #f1f5f9;
+  cursor: pointer;
+}
+.product-search-list button:hover {
+  background: #eef4fd;
+}
+.product-search-empty {
+  padding: 8px 10px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+/* 상품 줄: 상품명 비었을 때 표시, 상세품목 줄바꿈 */
+.input-missing {
+  border-color: #e8590c !important;
+  background: #fff7ed;
+}
+.line-items .line-detail {
+  min-height: 34px;
+  resize: vertical;
+  white-space: pre-wrap;
+}
+.line-items .money-input .input-text {
+  width: 110px;
+}
