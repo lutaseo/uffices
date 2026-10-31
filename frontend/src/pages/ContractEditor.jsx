@@ -901,7 +901,8 @@ const ADDON = '추가시공품목';
 const detailRows = (text) => Math.min(6, Math.max(1, String(text || '').split('\n').reduce((n, x) => n + Math.max(1, Math.ceil(x.length / 26)), 0)));
 const kindOfProduct = (p) => (p && p.kind && p.kind !== '패키지' ? ADDON : '패키지');
 function ProductLines({ products, category, all, onAll, lines, onLines }) {
-  const byId = (a, b) => a.id - b.id;
+  // 이름 가나다순, 숫자는 크기대로 (메디알레1 → 2 → … → 10), 이름이 같으면 등록 번호순
+  const byName = (a, b) => String(a.name || '').trim().localeCompare(String(b.name || '').trim(), 'ko', { numeric: true }) || a.id - b.id;
   // 줄의 종류: 상품관리의 그 상품 구분이 기준 (상품 번호로, 없으면 같은 이름으로 찾음 — 예전 프로그램에서 가져온 계약은 이름만 있음)
   //   상품관리에 없는 줄(직접입력)은 넣은 칸의 종류(kind), 그것도 없으면 패키지
   const lineKind = (l) => {
@@ -910,8 +911,8 @@ function ProductLines({ products, category, all, onAll, lines, onLines }) {
   };
   const pickable = products.filter((p) => p.visible !== false && p.active !== false); // 고르는 칸에는 노출 중인 상품만
   const groups = [
-    { kind: '패키지', items: pickable.filter((p) => kindOfProduct(p) === '패키지' && (all || p.category === category)).sort(byId) },
-    { kind: ADDON, items: pickable.filter((p) => kindOfProduct(p) === ADDON && (all || p.category === category)).sort(byId) },
+    { kind: '패키지', items: pickable.filter((p) => kindOfProduct(p) === '패키지' && (all || p.category === category)).sort(byName) },
+    { kind: ADDON, items: pickable.filter((p) => kindOfProduct(p) === ADDON && (all || p.category === category)).sort(byName) },
   ];
   const setLine = (i, patch) => onLines(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
   const add = (kind, id) => {
