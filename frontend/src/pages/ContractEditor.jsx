@@ -121,10 +121,6 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
   const [saving, setSaving] = useState(false);
   const [productList, setProductList] = useState([]);
   const [allProducts, setAllProducts] = useState(false);
-  // 구분(줄눈·청소·탄성…)을 고르면 그 시공 상품만 (전체 상품 보기로 넓힐 수 있음)
-  const shownProducts = (form ? productList.filter((p) => allProducts || p.category === form.category) : []).sort(
-    (a, b) => (a.kind || '').localeCompare(b.kind || '') || a.id - b.id,
-  );
   const [crewTeams, setCrewTeams] = useState([]);
   const [staff, setStaff] = useState([]);
   const [offs, setOffs] = useState([]);
@@ -493,7 +489,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
                 {showAmount ? (
                   <>
                     <ProductPicker
-                      products={shownProducts}
+                      products={productList}
                       category={form.category}
                       all={allProducts}
                       onAll={setAllProducts}
@@ -851,7 +847,6 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
 // [+ 시공 추가]로 늘어나는 시공 하나: 시공 구분 + 시공내역·금액 (입금·일정은 저장 뒤 그 계약에서)
 function ExtraWork({ no, work, products, showAmount, onChange, onRemove }) {
   const [all, setAll] = useState(false);
-  const list = products.filter((p) => all || p.category === work.category).sort((a, b) => (a.kind || '').localeCompare(b.kind || '') || a.id - b.id);
   const lineTotal = work.lineItems.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.unitPrice) || 0), 0);
   const amounts = calcAmounts({ ...work, totalAmount: work.lineItems.length ? lineTotal : work.totalAmount });
   const setLine = (i, patch) => onChange({ lineItems: work.lineItems.map((l, j) => (j === i ? { ...l, ...patch } : l)) });
@@ -895,7 +890,7 @@ function ExtraWork({ no, work, products, showAmount, onChange, onRemove }) {
               <td className="label-col">상품선택</td>
               <td className="input-col">
                 <ProductPicker
-                  products={list}
+                  products={products}
                   category={work.category}
                   all={all}
                   onAll={setAll}
@@ -968,11 +963,14 @@ function ExtraWork({ no, work, products, showAmount, onChange, onRemove }) {
 }
 
 // 상품 고르기: [패키지] [추가시공품목] 두 칸 (상품관리의 '구분'으로 나눔, 무료시공은 추가시공품목 칸에)
-//   products: 이미 구분(줄눈·청소…)으로 거른 목록, all: 전체 상품 보기
+//   products: 업체 상품 전체, category: 고른 구분(줄눈·청소…), all: 전체 상품 보기
+//   패키지는 고른 구분 것만, 추가시공품목은 구분과 상관없이 전부 (고른 구분 것이 위, 나머지는 [구분] 표시)
 function ProductPicker({ products, category, all, onAll, onAdd, onManual }) {
+  const byId = (a, b) => a.id - b.id;
+  const mineFirst = (a, b) => (a.category === category ? 0 : 1) - (b.category === category ? 0 : 1) || byId(a, b);
   const groups = [
-    { label: '패키지', items: products.filter((p) => (p.kind || '패키지') === '패키지') },
-    { label: '추가시공품목', items: products.filter((p) => p.kind && p.kind !== '패키지') },
+    { label: '패키지', items: products.filter((p) => (p.kind || '패키지') === '패키지' && (all || p.category === category)).sort(byId) },
+    { label: '추가시공품목', items: products.filter((p) => p.kind && p.kind !== '패키지').sort(mineFirst), mixed: true },
   ];
   return (
     <div className="product-picker">
@@ -985,12 +983,12 @@ function ProductPicker({ products, category, all, onAll, onAdd, onManual }) {
             </option>
             {g.items.map((p) => (
               <option key={p.id} value={p.id}>
-                {all ? `[${p.category}] ` : ''}
+                {all || (g.mixed && p.category !== category) ? `[${p.category}] ` : ''}
                 {p.name} — {won(p.price)}원
               </option>
             ))}
           </select>
-          {!g.items.length && <span className="sub-text text-orange">'설정 &gt; 상품관리'에서 {all ? '' : `${category} `}{g.label} 상품을 등록해 주세요.</span>}
+          {!g.items.length && <span className="sub-text text-orange">'설정 &gt; 상품관리'에서 {all || g.mixed ? '' : `${category} `}{g.label} 상품을 등록해 주세요.</span>}
         </div>
       ))}
       <div className="inline-fields">
