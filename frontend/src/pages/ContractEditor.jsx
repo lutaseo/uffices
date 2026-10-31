@@ -131,18 +131,20 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
   const [customerResults, setCustomerResults] = useState(null);
   const [viewOpen, setViewOpen] = useState(false);
   const [paper, setPaper] = useState({ saved: null, add: [], remove: [] }); // 실물 계약서 사진 (저장 뒤 올림)
+  // 새 계약에서 [+ 시공 추가]로 함께 등록할 다른 시공들 (같은 고객·현장, 시공마다 계약이 따로 만들어짐)
+  const [extras, setExtras] = useState([]);
 
   // 작성 중에 뒤로가기·메뉴 등으로 실수로 나가지 않게: 처음 불러온 내용과 달라졌으면 나가기 전에 물어봄
   //   (저장·취소 버튼으로 나갈 때는 묻지 않음)
   const baseline = useRef(null);
-  const latest = useRef({ form, paper });
-  latest.current = { form, paper };
+  const latest = useRef({ form, paper, extras });
+  latest.current = { form, paper, extras };
   if (form && baseline.current === null) baseline.current = JSON.stringify(form);
   const releaseGuard = useRef(() => {});
   useEffect(() => {
     releaseGuard.current = setLeaveGuard(() => {
-      const { form: f, paper: p } = latest.current;
-      const changed = (f && baseline.current !== null && JSON.stringify(f) !== baseline.current) || p.add.length > 0 || p.remove.length > 0;
+      const { form: f, paper: p, extras: ex } = latest.current;
+      const changed = (f && baseline.current !== null && JSON.stringify(f) !== baseline.current) || p.add.length > 0 || p.remove.length > 0 || ex.length > 0;
       return changed ? `작성 중인 ${isEdit ? '수정' : '계약'} 내용이 저장되지 않았습니다.\n이 화면에서 나가면 입력한 내용이 사라집니다. 나가시겠습니까?` : null;
     });
     return () => releaseGuard.current();
@@ -267,8 +269,23 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
       } catch (err) {
         photoError = `${photoError ? `${photoError}\n` : ''}실물 계약서 사진: ${err.message}`;
       }
-      if (photoError) alert(`계약은 저장되었지만 사진 일부를 올리지 못했습니다.\n${photoError}\n계약 수정에서 다시 첨부해 주세요.`);
-      else alert(isEdit ? '저장되었습니다.' : `계약이 등록되었습니다. (No.${saved.no})`);
+      // [+ 시공 추가]로 넣은 시공: 같은 고객·현장 정보로 시공마다 계약을 하나씩 더 만듦 (일정·입금은 각 계약에서)
+      const nos = [saved.no];
+      const failed = [];
+      if (!isEdit) {
+        const SHARED = ['brand', 'customerName', 'customerPhone', 'customerPhone2', 'ownerId', 'aptName', 'dong', 'ho', 'aptType', 'area', 'contractDate', 'moveInDate', 'approval', 'taxInvoice', 'cashReceipt', 'customerNote'];
+        const base = Object.fromEntries(SHARED.map((k) => [k, form[k]]));
+        for (const w of extras) {
+          try {
+            nos.push((await contractApi.create({ ...base, ...w, schedules: [emptySchedule()], payments: [], status: '미정' })).no);
+          } catch (err) {
+            failed.push(`${w.category}: ${err.message}`);
+          }
+        }
+      }
+      if (failed.length) alert(`계약 No.${nos.join(', No.')} 은 등록되었지만 추가 시공 일부를 등록하지 못했습니다.\n${failed.join('\n')}\n계약 상세의 [시공등록]으로 다시 추가해 주세요.`);
+      else if (photoError) alert(`계약은 저장되었지만 사진 일부를 올리지 못했습니다.\n${photoError}\n계약 수정에서 다시 첨부해 주세요.`);
+      else alert(isEdit ? '저장되었습니다.' : `계약이 등록되었습니다. (No.${nos.join(', No.')})`);
       close(saved, isEdit);
     } catch (err) {
       handleError(err);
@@ -609,6 +626,36 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
           </tbody>
         </table>
 
+        {/* ---------------- 3-1. 추가 시공 (새 계약만) — 같은 고객·현장에 다른 시공을 함께 등록 ---------------- */}
+        {!isEdit &&
+          extras.map((w, k) => (
+            <ExtraWork
+              key={k}
+              no={k + 1}
+              work={w}
+              products={productList}
+              showAmount={showAmount}
+              onChange={(patch) => setExtras((prev) => prev.map((x, j) => (j === k ? { ...x, ...patch } : x)))}
+              onRemove={() => setExtras((prev) => prev.filter((_, j) => j !== k))}
+            />
+          ))}
+        {!isEdit && (
+          <div className="add-work-row">
+            <button
+              type="button"
+              className="btn-dark-lg sm"
+              onClick={() => {
+                const used = [form.category, ...extras.map((x) => x.category)];
+                const category = CATEGORIES.find((c) => c !== '기타' && !used.includes(c)) || CATEGORIES[0];
+                setExtras((prev) => [...prev, { category, workType: WORK_TYPES[0], receptionType: form.receptionType, lineItems: [], items: '', totalAmount: '', discount: '', voucher: '' }]);
+              }}
+            >
+              + 시공 추가
+            </button>
+            <span className="sub-text">같은 고객·현장에 다른 시공(예: 줄눈 + 청소)을 함께 등록합니다. 시공마다 계약이 하나씩 만들어지고, 일정·입금은 각 계약에서 정합니다.</span>
+          </div>
+        )}
+
         {/* ---------------- 4. 시공정보 (일정·담당) ---------------- */}
         <h3 className="form-section-title">&gt; 시공정보</h3>
         <table className="form-grid-table">
@@ -809,5 +856,134 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
 
       {viewOpen && <ContractViewModal contractId={contractId} onClose={() => setViewOpen(false)} />}
     </div>
+  );
+}
+
+// [+ 시공 추가]로 늘어나는 시공 하나: 시공 구분 + 시공내역·금액 (입금·일정은 저장 뒤 그 계약에서)
+function ExtraWork({ no, work, products, showAmount, onChange, onRemove }) {
+  const [all, setAll] = useState(false);
+  const list = products.filter((p) => all || p.category === work.category).sort((a, b) => (a.kind || '').localeCompare(b.kind || '') || a.id - b.id);
+  const lineTotal = work.lineItems.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.unitPrice) || 0), 0);
+  const amounts = calcAmounts({ ...work, totalAmount: work.lineItems.length ? lineTotal : work.totalAmount });
+  const setLine = (i, patch) => onChange({ lineItems: work.lineItems.map((l, j) => (j === i ? { ...l, ...patch } : l)) });
+  const addProduct = (id) => {
+    const p = products.find((x) => x.id === Number(id));
+    if (!p) return;
+    const detail = [p.detail, p.freeDetail && `[무료시공] ${p.freeDetail}`].filter(Boolean).join('\n');
+    onChange({ lineItems: [...work.lineItems, { productId: p.id, name: p.name, detail, qty: 1, unitPrice: p.price }] });
+  };
+  const radios = (field, values) =>
+    values.map((v) => (
+      <label key={v} className="radio-item">
+        <input type="radio" name={`extra${no}-${field}`} checked={work[field] === v} onChange={() => onChange({ [field]: v })} /> {v}
+      </label>
+    ));
+
+  return (
+    <>
+      <h3 className="form-section-title extra-work-title">
+        &gt; 추가 시공 {no}
+        <button type="button" className="btn-text-danger" onClick={onRemove}>
+          이 시공 빼기
+        </button>
+      </h3>
+      <table className="form-grid-table">
+        <tbody>
+          <tr>
+            <td className="label-col">구분</td>
+            <td className="input-col">{radios('category', CATEGORIES)}</td>
+          </tr>
+          <tr>
+            <td className="label-col">시공종류</td>
+            <td className="input-col">{radios('workType', WORK_TYPES)}</td>
+          </tr>
+          <tr>
+            <td className="label-col">접수형태</td>
+            <td className="input-col">{radios('receptionType', RECEPTION_TYPES)}</td>
+          </tr>
+          {showAmount && (
+            <tr>
+              <td className="label-col">상품선택</td>
+              <td className="input-col">
+                <div className="inline-fields" style={{ marginBottom: 8 }}>
+                  <select className="input-text product-select" value="" onChange={(e) => addProduct(e.target.value)}>
+                    <option value="">
+                      + {all ? '상품 추가 (전체)' : `${work.category} 상품 추가`} ({list.length}개)
+                    </option>
+                    {list.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        [{all ? `${p.category}/` : ''}{p.kind}] {p.name} — {won(p.price)}원
+                      </option>
+                    ))}
+                  </select>
+                  <label className="radio-item">
+                    <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> 전체 상품 보기
+                  </label>
+                  <button type="button" className="btn-dark-sm" onClick={() => onChange({ lineItems: [...work.lineItems, { productId: null, name: '', detail: '', qty: 1, unitPrice: 0 }] })}>
+                    + 직접입력
+                  </button>
+                </div>
+                {work.lineItems.length > 0 && (
+                  <table className="line-items">
+                    <thead>
+                      <tr>
+                        <th>상품명</th>
+                        <th>상세품목</th>
+                        <th>수량</th>
+                        <th>단가</th>
+                        <th>금액</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {work.lineItems.map((l, i) => (
+                        <tr key={i}>
+                          <td><input className="input-text full" value={l.name} onChange={(e) => setLine(i, { name: e.target.value })} /></td>
+                          <td><input className="input-text full" value={l.detail} onChange={(e) => setLine(i, { detail: e.target.value })} /></td>
+                          <td><input type="number" min="1" className="input-text" style={{ width: 60 }} value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} /></td>
+                          <td><input type="number" min="0" className="input-text money" value={l.unitPrice} onChange={(e) => setLine(i, { unitPrice: e.target.value })} /></td>
+                          <td className="text-right">{won((Number(l.qty) || 0) * (Number(l.unitPrice) || 0))}</td>
+                          <td>
+                            <button type="button" className="btn-text-danger" onClick={() => onChange({ lineItems: work.lineItems.filter((_, j) => j !== i) })}>삭제</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </td>
+            </tr>
+          )}
+          <tr>
+            <td className="label-col">추가 시공내용</td>
+            <td className="input-col">
+              <textarea className="input-text full" rows={2} value={work.items} onChange={(e) => onChange({ items: e.target.value })} placeholder="상품 외 추가 내용" />
+            </td>
+          </tr>
+          {showAmount && (
+            <tr>
+              <td className="label-col">금액</td>
+              <td className="input-col">
+                <div className="amount-fields">
+                  <label className="inline-label">
+                    시공총액
+                    {work.lineItems.length ? <strong>{won(amounts.total)}원</strong> : <MoneyInput value={work.totalAmount} onChange={(v) => onChange({ totalAmount: v })} />}
+                  </label>
+                  <label className="inline-label">
+                    할인 <MoneyInput value={work.discount} onChange={(v) => onChange({ discount: v })} placeholder="예: 10000" />
+                  </label>
+                  <label className="inline-label">
+                    상품권 <MoneyInput value={work.voucher} onChange={(v) => onChange({ voucher: v })} />
+                  </label>
+                  <span className="calc-result">
+                    실계약금 <strong>{won(amounts.actual)}</strong>원
+                  </span>
+                </div>
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </>
   );
 }

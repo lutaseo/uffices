@@ -4875,3 +4875,20 @@ a.btn-quick.blue:hover {
   background: #b45309;
   border-color: #b45309;
 }
+
+/* 계약 등록: [+ 시공 추가] 줄과 추가 시공 제목 */
+.add-work-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 6px;
+}
+.extra-work-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.extra-work-title .btn-text-danger {
+  font-size: 13px;
+}
