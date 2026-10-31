@@ -176,7 +176,8 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
   }, [contractId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 입력된 시공일의 기사 휴무 조회 → 기사 선택 목록에 표시/비활성화
-  const scheduleDates = (form?.schedules || []).map((s) => s.date).filter(Boolean).sort();
+  //   [+ 시공 추가]의 일정 날짜도 함께
+  const scheduleDates = [...(form?.schedules || []), ...extras.flatMap((w) => w.schedules || [])].map((s) => s.date).filter(Boolean).sort();
   const datesKey = scheduleDates.join(',');
   useEffect(() => {
     if (!scheduleDates.length) {
@@ -188,8 +189,6 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
       .then(setOffs)
       .catch(() => setOffs([]));
   }, [datesKey]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const offOf = (engineerId, date) => offs.find((o) => String(o.engineerId) === String(engineerId) && o.date === date);
 
   const amounts = useMemo(() => {
     if (!form) return calcAmounts({});
@@ -229,9 +228,8 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
     }
     if (showAmount && amounts.balance < 0 && !window.confirm(`입금액이 실계약금보다 ${won(-amounts.balance)}원 많습니다. 그대로 저장하시겠습니까?`)) return;
     // 비어 있는 뒤쪽 회차는 저장하지 않음 (①은 항상 유지)
-    const schedules = form.schedules.filter(
-      (s, i) => i === 0 || s.date || s.engineerId || s.teamId || s.time || s.ampm || s.mobileStatus,
-    );
+    const keepSteps = (list) => list.filter((s, i) => i === 0 || s.date || s.engineerId || s.teamId || s.time || s.ampm || s.mobileStatus);
+    const schedules = keepSteps(form.schedules);
     setSaving(true);
     try {
       // 입금 줄의 사진(_add/_remove/_saved)은 계약 저장 뒤 입금별로 따로 올림 (한 번에 보내면 용량 한도 초과 위험)
@@ -258,7 +256,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
       } catch (err) {
         photoError = `${photoError ? `${photoError}\n` : ''}실물 계약서 사진: ${err.message}`;
       }
-      // [+ 시공 추가]로 넣은 시공: 같은 고객·현장 정보로 시공마다 계약을 하나씩 더 만듦 (일정·입금은 각 계약에서)
+      // [+ 시공 추가]로 넣은 시공: 같은 고객·현장 정보로 시공마다 계약을 하나씩 더 만듦 (일정·입금도 그 계약에)
       const nos = [saved.no];
       const failed = [];
       if (!isEdit) {
@@ -267,7 +265,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
         for (const w of extras) {
           try {
             const pays = w.payments || [];
-            let made = await contractApi.create({ ...base, ...w, schedules: [emptySchedule()], payments: pays.map(strip), status: '미정' });
+            let made = await contractApi.create({ ...base, ...w, schedules: keepSteps(w.schedules || [emptySchedule()]), payments: pays.map(strip), status: '미정' });
             nos.push(made.no);
             // 추가 시공의 영수증 사진도 그 계약의 입금별로 올림 (금액 0인 줄은 저장되지 않아 순서가 같음)
             const keptPays = pays.filter((p) => Number(p.amount));
@@ -304,6 +302,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
     ));
 
   const timeOpts = timeOptions(settings);
+  const stepCtx = { settings, timeOpts, engineers, crewTeams, offs };
 
   return (
     <div className="page-card contract-editor">
@@ -599,6 +598,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
               work={w}
               products={productList}
               showAmount={showAmount}
+              stepCtx={stepCtx}
               onChange={(patch) => setExtras((prev) => prev.map((x, j) => (j === k ? { ...x, ...patch } : x)))}
               onRemove={() => setExtras((prev) => prev.filter((_, j) => j !== k))}
             />
@@ -611,12 +611,12 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
               onClick={() => {
                 const used = [form.category, ...extras.map((x) => x.category)];
                 const category = CATEGORIES.find((c) => c !== '기타' && !used.includes(c)) || CATEGORIES[0];
-                setExtras((prev) => [...prev, { category, workType: WORK_TYPES[0], receptionType: form.receptionType, lineItems: [], items: '', totalAmount: '', discount: '', voucher: '', payments: [] }]);
+                setExtras((prev) => [...prev, { category, workType: WORK_TYPES[0], receptionType: form.receptionType, lineItems: [], items: '', totalAmount: '', discount: '', voucher: '', payments: [], schedules: [emptySchedule()] }]);
               }}
             >
               + 시공 추가
             </button>
-            <span className="sub-text">같은 고객·현장에 다른 시공(예: 줄눈 + 청소)을 함께 등록합니다. 시공마다 계약이 하나씩 만들어지고 입금도 시공별로 들어갑니다. 일정(기사 배정)은 등록 뒤 각 계약에서 정합니다.</span>
+            <span className="sub-text">같은 고객·현장에 다른 시공(예: 줄눈 + 청소)을 함께 등록합니다. 시공마다 계약이 하나씩 만들어지고 일정(기사 배정)·입금도 시공별로 들어갑니다.</span>
           </div>
         )}
 
@@ -625,95 +625,9 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
         <table className="form-grid-table">
           <tbody>
             {form.schedules.map((s, i) => {
-              const slot = slotOf(s, settings);
-              const selectedOff = s.assignType === ASSIGN_TYPES.ENGINEER && s.engineerId && s.date ? offOf(s.engineerId, s.date) : null;
-              const blocked = selectedOff && offBlocks(selectedOff.period, slot);
-              const dayOffs = s.date ? offs.filter((o) => o.date === s.date) : [];
               return (
                 <tr key={i} className="schedule-step-row">
-                  <td className="label-col">시공 등록 {CIRCLED[i]}</td>
-                  <td className="input-col">
-                    <div className="inline-fields">
-                      <input type="date" className="input-text" value={s.date} onChange={(e) => setStep(i, { date: e.target.value })} />
-                      <button type="button" className="btn-dark-sm" onClick={() => setStep(i, { date: '', time: '', ampm: '' })}>초기화</button>
-                      <select className="input-text" value={timeValueOf(s)} onChange={(e) => setStep(i, timeFieldsOf(e.target.value))}>
-                        <option value="">시간</option>
-                        <option value="AM">오전(시간미정)</option>
-                        <option value="PM">오후(시간미정)</option>
-                        {timeOpts.map((t) => (
-                          <option key={t} value={t}>{t}</option>
-                        ))}
-                      </select>
-                    </div>
-                    {dayOffs.length > 0 && (
-                      <div className="sub-text off-hint">
-                        이날 휴무: {dayOffs.map((o) => `${o.engineerName}(${OFF_LABEL[o.period]})`).join(', ')}
-                      </div>
-                    )}
-                  </td>
-                  <td className="label-col">
-                    시공담당 {CIRCLED[i]}
-                    <div className="assign-type">
-                      {[
-                        [ASSIGN_TYPES.ENGINEER, '기사배정'],
-                        [ASSIGN_TYPES.TEAM, '팀배정'],
-                      ].map(([v, label]) => (
-                        <label key={v}>
-                          <input
-                            type="radio"
-                            name={`assign-${i}`}
-                            checked={s.assignType === v}
-                            onChange={() => setStep(i, { assignType: v, engineerId: '', teamId: '' })}
-                          />{' '}
-                          {label}
-                        </label>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="input-col">
-                    <div className="inline-fields">
-                      {s.assignType === ASSIGN_TYPES.TEAM ? (
-                        <select className="input-text" value={s.teamId} onChange={(e) => setStep(i, { teamId: e.target.value })}>
-                          <option value="">팀선택</option>
-                          {crewTeams.map((t) => {
-                            const st = s.date ? teamOffStatus(t.id, engineers, (id) => offOf(id, s.date), slot) : null;
-                            return (
-                              <option key={t.id} value={t.id} disabled={st?.allOff && String(t.id) !== String(s.teamId)}>
-                                {t.name}
-                                {st?.total ? ` (${st.total}명${st.offCount ? `, 휴무 ${st.offCount}명` : ''})` : ''}
-                                {st?.allOff ? ' — 전원 휴무' : ''}
-                              </option>
-                            );
-                          })}
-                        </select>
-                      ) : (
-                        <EngineerPicker
-                          value={s.engineerId}
-                          engineers={engineers.filter((en) => doesCategory(en, form.category))}
-                          others={engineers.filter((en) => !doesCategory(en, form.category))}
-                          fallbackName={s.engineerName}
-                          placeholder={`${form.category} 기사 검색`}
-                          info={(en) => {
-                            const off = s.date ? offOf(en.id, s.date) : null;
-                            return { disabled: !!(off && offBlocks(off.period, slot)) && String(en.id) !== String(s.engineerId), note: off ? `${OFF_LABEL[off.period]}휴무` : '' };
-                          }}
-                          onChange={(id) => setStep(i, { engineerId: id })}
-                        />
-                      )}
-                      <button type="button" className="btn-dark-sm" onClick={() => setStep(i, { engineerId: '', teamId: '' })}>초기화</button>
-                    </div>
-                    {s.assignType === ASSIGN_TYPES.TEAM && s.teamId && s.date && teamOffStatus(s.teamId, engineers, (id) => offOf(id, s.date), slot).allOff && (
-                      <div className="text-red off-hint">
-                        선택한 팀은 이 시간대에 팀원 전원이 휴무입니다.{slot === null && ' 오전/오후 시간을 지정하면 배정할 수 있습니다.'}
-                      </div>
-                    )}
-                    {blocked && (
-                      <div className="text-red off-hint">
-                        {engineers.find((en) => String(en.id) === String(s.engineerId))?.name || s.engineerName || '선택한 기사'} 기사는 이날 {OFF_LABEL[selectedOff.period]} 휴무입니다.
-                        {selectedOff.period !== 'DAY' && slot === null && ` ${selectedOff.period === 'AM' ? '오후' : '오전'} 시간을 선택하면 배정할 수 있습니다.`}
-                      </div>
-                    )}
-                  </td>
+                  <ScheduleStep i={i} s={s} name={`assign-${i}`} category={form.category} onPatch={(patch) => setStep(i, patch)} {...stepCtx} />
                   <td className="label-col">모바일웹 {CIRCLED[i]}</td>
                   <td className="input-col mobile-cell">
                     {s.mobileStatus ? (
@@ -823,13 +737,15 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
   );
 }
 
-// [+ 시공 추가]로 늘어나는 시공 하나: 시공 구분 + 시공내역·금액 (입금·일정은 저장 뒤 그 계약에서)
-function ExtraWork({ no, work, products, showAmount, onChange, onRemove }) {
+// [+ 시공 추가]로 늘어나는 시공 하나: 시공 구분 + 시공내역·금액 + 입금 + 일정(기사 배정) — 저장하면 그 계약에 들어감
+function ExtraWork({ no, work, products, showAmount, stepCtx, onChange, onRemove }) {
   const [all, setAll] = useState(false);
   const lineTotal = work.lineItems.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.unitPrice) || 0), 0);
   const payments = work.payments || [];
   const amounts = calcAmounts({ ...work, payments, totalAmount: work.lineItems.length ? lineTotal : work.totalAmount });
   const setPay = (i, patch) => onChange({ payments: payments.map((p, j) => (j === i ? { ...p, ...patch } : p)) });
+  const steps = work.schedules?.length ? work.schedules : [emptySchedule()];
+  const setStep = (i, patch) => onChange({ schedules: steps.map((s, j) => (j === i ? { ...s, ...patch } : s)) });
   const radios = (field, values) =>
     values.map((v) => (
       <label key={v} className="radio-item">
@@ -938,6 +854,130 @@ function ExtraWork({ no, work, products, showAmount, onChange, onRemove }) {
           )}
         </tbody>
       </table>
+      <table className="form-grid-table extra-work-schedule">
+        <tbody>
+          {steps.map((s, i) => (
+            <tr key={i} className="schedule-step-row">
+              <ScheduleStep i={i} s={s} name={`extra${no}-assign-${i}`} category={work.category} onPatch={(patch) => setStep(i, patch)} {...stepCtx} />
+            </tr>
+          ))}
+          <tr>
+            <td className="label-col">일정</td>
+            <td className="input-col" colSpan={3}>
+              <div className="inline-fields">
+                {steps.length < MAX_SCHEDULE_STEPS && (
+                  <button type="button" className="btn-dark-sm" onClick={() => onChange({ schedules: [...steps, emptySchedule()] })}>
+                    + 회차 추가
+                  </button>
+                )}
+                {steps.length > 1 && (
+                  <button type="button" className="btn-text-danger" onClick={() => onChange({ schedules: steps.slice(0, -1) })}>
+                    마지막 회차 빼기
+                  </button>
+                )}
+                <span className="sub-text">이 시공({work.category})의 시공일·담당 기사입니다. 비워 두면 등록 뒤 그 계약에서 정해도 됩니다.</span>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </>
+  );
+}
+
+// 시공 회차 하나의 칸들: 시공일·시간 + 시공담당(기사/팀 배정, 휴무 표시)
+//   본 계약의 시공정보와 [+ 시공 추가]의 일정에서 같이 씀. 휴무(offs)는 부모가 입력된 날짜로 불러 줌
+function ScheduleStep({ i, s, name, category, onPatch, settings, timeOpts, engineers, crewTeams, offs }) {
+  const offOf = (engineerId, date) => offs.find((o) => String(o.engineerId) === String(engineerId) && o.date === date);
+  const slot = slotOf(s, settings);
+  const selectedOff = s.assignType === ASSIGN_TYPES.ENGINEER && s.engineerId && s.date ? offOf(s.engineerId, s.date) : null;
+  const blocked = selectedOff && offBlocks(selectedOff.period, slot);
+  const dayOffs = s.date ? offs.filter((o) => o.date === s.date) : [];
+  return (
+    <>
+      <td className="label-col">시공 등록 {CIRCLED[i]}</td>
+      <td className="input-col">
+        <div className="inline-fields">
+          <input type="date" className="input-text" value={s.date} onChange={(e) => onPatch({ date: e.target.value })} />
+          <button type="button" className="btn-dark-sm" onClick={() => onPatch({ date: '', time: '', ampm: '' })}>초기화</button>
+          <select className="input-text" value={timeValueOf(s)} onChange={(e) => onPatch(timeFieldsOf(e.target.value))}>
+            <option value="">시간</option>
+            <option value="AM">오전(시간미정)</option>
+            <option value="PM">오후(시간미정)</option>
+            {timeOpts.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        </div>
+        {dayOffs.length > 0 && (
+          <div className="sub-text off-hint">
+            이날 휴무: {dayOffs.map((o) => `${o.engineerName}(${OFF_LABEL[o.period]})`).join(', ')}
+          </div>
+        )}
+      </td>
+      <td className="label-col">
+        시공담당 {CIRCLED[i]}
+        <div className="assign-type">
+          {[
+            [ASSIGN_TYPES.ENGINEER, '기사배정'],
+            [ASSIGN_TYPES.TEAM, '팀배정'],
+          ].map(([v, label]) => (
+            <label key={v}>
+              <input
+                type="radio"
+                name={name}
+                checked={s.assignType === v}
+                onChange={() => onPatch({ assignType: v, engineerId: '', teamId: '' })}
+              />{' '}
+              {label}
+            </label>
+          ))}
+        </div>
+      </td>
+      <td className="input-col">
+        <div className="inline-fields">
+          {s.assignType === ASSIGN_TYPES.TEAM ? (
+            <select className="input-text" value={s.teamId} onChange={(e) => onPatch({ teamId: e.target.value })}>
+              <option value="">팀선택</option>
+              {crewTeams.map((t) => {
+                const st = s.date ? teamOffStatus(t.id, engineers, (id) => offOf(id, s.date), slot) : null;
+                return (
+                  <option key={t.id} value={t.id} disabled={st?.allOff && String(t.id) !== String(s.teamId)}>
+                    {t.name}
+                    {st?.total ? ` (${st.total}명${st.offCount ? `, 휴무 ${st.offCount}명` : ''})` : ''}
+                    {st?.allOff ? ' — 전원 휴무' : ''}
+                  </option>
+                );
+              })}
+            </select>
+          ) : (
+            <EngineerPicker
+              value={s.engineerId}
+              engineers={engineers.filter((en) => doesCategory(en, category))}
+              others={engineers.filter((en) => !doesCategory(en, category))}
+              fallbackName={s.engineerName}
+              placeholder={`${category} 기사 검색`}
+              info={(en) => {
+                const off = s.date ? offOf(en.id, s.date) : null;
+                return { disabled: !!(off && offBlocks(off.period, slot)) && String(en.id) !== String(s.engineerId), note: off ? `${OFF_LABEL[off.period]}휴무` : '' };
+              }}
+              onChange={(id) => onPatch({ engineerId: id })}
+            />
+          )}
+          <button type="button" className="btn-dark-sm" onClick={() => onPatch({ engineerId: '', teamId: '' })}>초기화</button>
+        </div>
+        {s.assignType === ASSIGN_TYPES.TEAM && s.teamId && s.date && teamOffStatus(s.teamId, engineers, (id) => offOf(id, s.date), slot).allOff && (
+          <div className="text-red off-hint">
+            선택한 팀은 이 시간대에 팀원 전원이 휴무입니다.{slot === null && ' 오전/오후 시간을 지정하면 배정할 수 있습니다.'}
+          </div>
+        )}
+        {blocked && (
+          <div className="text-red off-hint">
+            {engineers.find((en) => String(en.id) === String(s.engineerId))?.name || s.engineerName || '선택한 기사'} 기사는 이날 {OFF_LABEL[selectedOff.period]} 휴무입니다.
+            {selectedOff.period !== 'DAY' && slot === null && ` ${selectedOff.period === 'AM' ? '오후' : '오전'} 시간을 선택하면 배정할 수 있습니다.`}
+          </div>
+        )}
+      </td>
     </>
   );
 }
