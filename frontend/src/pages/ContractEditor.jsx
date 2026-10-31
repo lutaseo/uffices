@@ -202,22 +202,8 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
   const onField = (e) => set(e.target.name, e.target.value);
   const setStep = (i, patch) =>
     setForm((prev) => ({ ...prev, schedules: prev.schedules.map((s, j) => (j === i ? { ...s, ...patch } : s)) }));
-  const setLine = (i, patch) =>
-    setForm((prev) => ({ ...prev, lineItems: prev.lineItems.map((l, j) => (j === i ? { ...l, ...patch } : l)) }));
   const setPay = (i, patch) =>
     setForm((prev) => ({ ...prev, payments: prev.payments.map((p, j) => (j === i ? { ...p, ...patch } : p)) }));
-
-  const addProduct = (id) => {
-    const p = productList.find((x) => x.id === Number(id));
-    if (!p) return;
-    setForm((prev) => ({
-      ...prev,
-      lineItems: [
-        ...prev.lineItems,
-        { productId: p.id, name: p.name, detail: [p.detail, p.freeDetail && `[무료시공] ${p.freeDetail}`].filter(Boolean).join('\n'), qty: 1, unitPrice: p.price },
-      ],
-    }));
-  };
 
   const searchCustomer = async () => {
     const q = form.customerName || form.customerPhone;
@@ -488,42 +474,14 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
               <td className="input-col">
                 {showAmount ? (
                   <>
-                    <ProductPicker
+                    <ProductLines
                       products={productList}
                       category={form.category}
                       all={allProducts}
                       onAll={setAllProducts}
-                      onAdd={addProduct}
-                      onManual={() => set('lineItems', [...form.lineItems, { productId: null, name: '', detail: '', qty: 1, unitPrice: 0 }])}
+                      lines={form.lineItems}
+                      onLines={(lines) => set('lineItems', lines)}
                     />
-                    {form.lineItems.length > 0 && (
-                      <table className="line-items">
-                        <thead>
-                          <tr>
-                            <th>상품명</th>
-                            <th>상세품목</th>
-                            <th>수량</th>
-                            <th>단가</th>
-                            <th>금액</th>
-                            <th />
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {form.lineItems.map((l, i) => (
-                            <tr key={i}>
-                              <td><input className="input-text full" value={l.name} onChange={(e) => setLine(i, { name: e.target.value })} /></td>
-                              <td><input className="input-text full" value={l.detail} onChange={(e) => setLine(i, { detail: e.target.value })} /></td>
-                              <td><input type="number" min="1" className="input-text" style={{ width: 60 }} value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} /></td>
-                              <td><input type="number" min="0" className="input-text money" value={l.unitPrice} onChange={(e) => setLine(i, { unitPrice: e.target.value })} /></td>
-                              <td className="text-right">{won((Number(l.qty) || 0) * (Number(l.unitPrice) || 0))}</td>
-                              <td>
-                                <button type="button" className="btn-text-danger" onClick={() => set('lineItems', form.lineItems.filter((_, j) => j !== i))}>삭제</button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
                   </>
                 ) : (
                   <div>
@@ -849,13 +807,6 @@ function ExtraWork({ no, work, products, showAmount, onChange, onRemove }) {
   const [all, setAll] = useState(false);
   const lineTotal = work.lineItems.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.unitPrice) || 0), 0);
   const amounts = calcAmounts({ ...work, totalAmount: work.lineItems.length ? lineTotal : work.totalAmount });
-  const setLine = (i, patch) => onChange({ lineItems: work.lineItems.map((l, j) => (j === i ? { ...l, ...patch } : l)) });
-  const addProduct = (id) => {
-    const p = products.find((x) => x.id === Number(id));
-    if (!p) return;
-    const detail = [p.detail, p.freeDetail && `[무료시공] ${p.freeDetail}`].filter(Boolean).join('\n');
-    onChange({ lineItems: [...work.lineItems, { productId: p.id, name: p.name, detail, qty: 1, unitPrice: p.price }] });
-  };
   const radios = (field, values) =>
     values.map((v) => (
       <label key={v} className="radio-item">
@@ -889,42 +840,14 @@ function ExtraWork({ no, work, products, showAmount, onChange, onRemove }) {
             <tr>
               <td className="label-col">상품선택</td>
               <td className="input-col">
-                <ProductPicker
+                <ProductLines
                   products={products}
                   category={work.category}
                   all={all}
                   onAll={setAll}
-                  onAdd={addProduct}
-                  onManual={() => onChange({ lineItems: [...work.lineItems, { productId: null, name: '', detail: '', qty: 1, unitPrice: 0 }] })}
+                  lines={work.lineItems}
+                  onLines={(lines) => onChange({ lineItems: lines })}
                 />
-                {work.lineItems.length > 0 && (
-                  <table className="line-items">
-                    <thead>
-                      <tr>
-                        <th>상품명</th>
-                        <th>상세품목</th>
-                        <th>수량</th>
-                        <th>단가</th>
-                        <th>금액</th>
-                        <th />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {work.lineItems.map((l, i) => (
-                        <tr key={i}>
-                          <td><input className="input-text full" value={l.name} onChange={(e) => setLine(i, { name: e.target.value })} /></td>
-                          <td><input className="input-text full" value={l.detail} onChange={(e) => setLine(i, { detail: e.target.value })} /></td>
-                          <td><input type="number" min="1" className="input-text" style={{ width: 60 }} value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} /></td>
-                          <td><input type="number" min="0" className="input-text money" value={l.unitPrice} onChange={(e) => setLine(i, { unitPrice: e.target.value })} /></td>
-                          <td className="text-right">{won((Number(l.qty) || 0) * (Number(l.unitPrice) || 0))}</td>
-                          <td>
-                            <button type="button" className="btn-text-danger" onClick={() => onChange({ lineItems: work.lineItems.filter((_, j) => j !== i) })}>삭제</button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
               </td>
             </tr>
           )}
@@ -962,43 +885,85 @@ function ExtraWork({ no, work, products, showAmount, onChange, onRemove }) {
   );
 }
 
-// 상품 고르기: [패키지] [추가시공품목] 두 칸 (상품관리의 '구분'으로 나눔, 무료시공은 추가시공품목 칸에)
+// 상품 고르기 + 고른 상품 목록: [패키지] [추가시공품목] 따로 — 각 선택 칸 바로 아래에 그 종류 상품만 쌓임
 //   products: 업체 상품 전체, category: 고른 구분(줄눈·청소…), all: 전체 상품 보기
 //   패키지는 고른 구분 것만, 추가시공품목은 구분과 상관없이 전부 (고른 구분 것이 위, 나머지는 [구분] 표시)
-function ProductPicker({ products, category, all, onAll, onAdd, onManual }) {
+//   lines: 상품내역(lineItems), 줄마다 kind('패키지'|'추가시공품목') — 예전 줄은 상품의 구분으로 판단
+const ADDON = '추가시공품목';
+const kindOfProduct = (p) => (p && p.kind && p.kind !== '패키지' ? ADDON : '패키지');
+function ProductLines({ products, category, all, onAll, lines, onLines }) {
   const byId = (a, b) => a.id - b.id;
   const mineFirst = (a, b) => (a.category === category ? 0 : 1) - (b.category === category ? 0 : 1) || byId(a, b);
+  const lineKind = (l) => l.kind || kindOfProduct(products.find((p) => p.id === Number(l.productId)));
   const groups = [
-    { label: '패키지', items: products.filter((p) => (p.kind || '패키지') === '패키지' && (all || p.category === category)).sort(byId) },
-    { label: '추가시공품목', items: products.filter((p) => p.kind && p.kind !== '패키지').sort(mineFirst), mixed: true },
+    { kind: '패키지', items: products.filter((p) => kindOfProduct(p) === '패키지' && (all || p.category === category)).sort(byId) },
+    { kind: ADDON, items: products.filter((p) => kindOfProduct(p) === ADDON).sort(mineFirst), mixed: true },
   ];
+  const setLine = (i, patch) => onLines(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+  const add = (kind, id) => {
+    const p = products.find((x) => x.id === Number(id));
+    if (!p) return;
+    const detail = [p.detail, p.freeDetail && `[무료시공] ${p.freeDetail}`].filter(Boolean).join('\n');
+    onLines([...lines, { productId: p.id, kind, name: p.name, detail, qty: 1, unitPrice: p.price }]);
+  };
   return (
     <div className="product-picker">
-      {groups.map((g) => (
-        <div key={g.label} className="inline-fields product-pick-row">
-          <span className="product-pick-label">{g.label}</span>
-          <select className="input-text product-select" value="" onChange={(e) => onAdd(e.target.value)}>
-            <option value="">
-              + {g.label} 선택 ({g.items.length}개)
-            </option>
-            {g.items.map((p) => (
-              <option key={p.id} value={p.id}>
-                {all || (g.mixed && p.category !== category) ? `[${p.category}] ` : ''}
-                {p.name} — {won(p.price)}원
-              </option>
-            ))}
-          </select>
-          {!g.items.length && <span className="sub-text text-orange">'설정 &gt; 상품관리'에서 {all || g.mixed ? '' : `${category} `}{g.label} 상품을 등록해 주세요.</span>}
-        </div>
-      ))}
-      <div className="inline-fields">
-        <label className="radio-item">
-          <input type="checkbox" checked={all} onChange={(e) => onAll(e.target.checked)} /> 전체 상품 보기
-        </label>
-        <button type="button" className="btn-dark-sm" onClick={onManual}>
-          + 직접입력
-        </button>
-      </div>
+      {groups.map((g) => {
+        const mine = lines.map((l, i) => ({ l, i })).filter(({ l }) => lineKind(l) === g.kind);
+        return (
+          <div key={g.kind} className="product-group">
+            <div className="inline-fields product-pick-row">
+              <span className="product-pick-label">{g.kind}</span>
+              <select className="input-text product-select" value="" onChange={(e) => add(g.kind, e.target.value)}>
+                <option value="">
+                  + {g.kind} 선택 ({g.items.length}개)
+                </option>
+                {g.items.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {all || (g.mixed && p.category !== category) ? `[${p.category}] ` : ''}
+                    {p.name} — {won(p.price)}원
+                  </option>
+                ))}
+              </select>
+              <button type="button" className="btn-dark-sm" onClick={() => onLines([...lines, { productId: null, kind: g.kind, name: '', detail: '', qty: 1, unitPrice: 0 }])}>
+                + 직접입력
+              </button>
+              {!g.items.length && <span className="sub-text text-orange">'설정 &gt; 상품관리'에서 {all || g.mixed ? '' : `${category} `}{g.kind} 상품을 등록해 주세요.</span>}
+            </div>
+            {mine.length > 0 && (
+              <table className="line-items">
+                <thead>
+                  <tr>
+                    <th>상품명</th>
+                    <th>상세품목</th>
+                    <th>수량</th>
+                    <th>단가</th>
+                    <th>금액</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {mine.map(({ l, i }) => (
+                    <tr key={i}>
+                      <td><input className="input-text full" value={l.name} onChange={(e) => setLine(i, { name: e.target.value })} /></td>
+                      <td><input className="input-text full" value={l.detail} onChange={(e) => setLine(i, { detail: e.target.value })} /></td>
+                      <td><input type="number" min="1" className="input-text" style={{ width: 60 }} value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} /></td>
+                      <td><input type="number" min="0" className="input-text money" value={l.unitPrice} onChange={(e) => setLine(i, { unitPrice: e.target.value })} /></td>
+                      <td className="text-right">{won((Number(l.qty) || 0) * (Number(l.unitPrice) || 0))}</td>
+                      <td>
+                        <button type="button" className="btn-text-danger" onClick={() => onLines(lines.filter((_, j) => j !== i))}>삭제</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        );
+      })}
+      <label className="radio-item">
+        <input type="checkbox" checked={all} onChange={(e) => onAll(e.target.checked)} /> 전체 상품 보기 (패키지를 다른 구분에서도 고르기)
+      </label>
     </div>
   );
 }
