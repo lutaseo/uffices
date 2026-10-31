@@ -394,7 +394,7 @@ export function ProductSettings({ path = '' }) {
       fields={[
         { key: 'name', label: '상품명', required: true },
         { key: 'kind', label: '상품 종류', type: 'radio', options: PRODUCT_KINDS.slice(0, 2), help: '계약 등록 [시공선택]에서 패키지 칸 / 추가시공품목 칸 중 어디에 나올지 정합니다.' },
-        { key: 'category', label: '시공 구분', type: 'radio', options: WORK_CATEGORIES, help: '계약 등록의 시공 구분(줄눈·청소…)과 같습니다. 패키지는 같은 시공 구분일 때만 보입니다.' },
+        { key: 'category', label: '시공 구분', type: 'radio', options: WORK_CATEGORIES, help: '계약 등록의 시공 구분(줄눈·청소…)과 같습니다. 패키지·추가시공품목 모두 같은 시공 구분일 때만 보입니다.' },
         { key: 'detail', label: '상세품목', type: 'textarea', rows: 10 },
         { key: 'freeDetail', label: '무료시공내역', type: 'textarea', rows: 10 },
         { key: 'price', label: '금액', type: 'money', help: '계약 등록 [시공선택]에서 이 상품을 고르면 이 금액이 단가로 들어갑니다.' },
