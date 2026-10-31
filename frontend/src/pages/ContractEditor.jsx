@@ -169,7 +169,8 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
           onClose();
         });
     }
-    productApi.list().then(setProductList).catch(() => {});
+    // 숨긴(노출 N) 상품까지 받아 둠 — 고르는 칸에는 안 나오지만, 예전 계약 상품 줄의 종류(패키지/추가시공품목)를 알아내는 데 씀
+    productApi.list({ includeInactive: true }).then(setProductList).catch(() => {});
     teamApi.list().then((t) => setCrewTeams(t.filter((x) => x.kind === '시공팀'))).catch(() => {});
     if (user.role === ROLES.ADMIN) userApi.staffOptions().then(setStaff).catch(() => {});
   }, [contractId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -894,10 +895,16 @@ const kindOfProduct = (p) => (p && p.kind && p.kind !== '패키지' ? ADDON : '�
 function ProductLines({ products, category, all, onAll, lines, onLines }) {
   const byId = (a, b) => a.id - b.id;
   const mineFirst = (a, b) => (a.category === category ? 0 : 1) - (b.category === category ? 0 : 1) || byId(a, b);
-  const lineKind = (l) => l.kind || kindOfProduct(products.find((p) => p.id === Number(l.productId)));
+  // 줄의 종류: 상품관리의 그 상품 구분이 기준 (상품 번호로, 없으면 같은 이름으로 찾음 — 예전 프로그램에서 가져온 계약은 이름만 있음)
+  //   상품관리에 없는 줄(직접입력)은 넣은 칸의 종류(kind), 그것도 없으면 패키지
+  const lineKind = (l) => {
+    const p = products.find((x) => l.productId && x.id === Number(l.productId)) || products.find((x) => x.name.trim() === String(l.name || '').trim());
+    return p ? kindOfProduct(p) : l.kind === ADDON ? ADDON : '패키지';
+  };
+  const pickable = products.filter((p) => p.visible !== false && p.active !== false); // 고르는 칸에는 노출 중인 상품만
   const groups = [
-    { kind: '패키지', items: products.filter((p) => kindOfProduct(p) === '패키지' && (all || p.category === category)).sort(byId) },
-    { kind: ADDON, items: products.filter((p) => kindOfProduct(p) === ADDON).sort(mineFirst), mixed: true },
+    { kind: '패키지', items: pickable.filter((p) => kindOfProduct(p) === '패키지' && (all || p.category === category)).sort(byId) },
+    { kind: ADDON, items: pickable.filter((p) => kindOfProduct(p) === ADDON).sort(mineFirst), mixed: true },
   ];
   const setLine = (i, patch) => onLines(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
   const add = (kind, id) => {
