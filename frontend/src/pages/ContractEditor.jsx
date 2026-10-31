@@ -492,25 +492,14 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
               <td className="input-col">
                 {showAmount ? (
                   <>
-                    <div className="inline-fields" style={{ marginBottom: 8 }}>
-                      <select className="input-text product-select" value="" onChange={(e) => addProduct(e.target.value)}>
-                        <option value="">
-                          + {allProducts ? '상품 추가 (전체)' : `${form.category} 상품 추가`} ({shownProducts.length}개)
-                        </option>
-                        {shownProducts.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            [{allProducts ? `${p.category}/` : ''}{p.kind}] {p.name} — {won(p.price)}원
-                          </option>
-                        ))}
-                      </select>
-                      <label className="radio-item">
-                        <input type="checkbox" checked={allProducts} onChange={(e) => setAllProducts(e.target.checked)} /> 전체 상품 보기
-                      </label>
-                      {!allProducts && !shownProducts.length && <span className="sub-text">등록된 {form.category} 상품이 없습니다 (설정 → 상품관리)</span>}
-                      <button type="button" className="btn-dark-sm" onClick={() => set('lineItems', [...form.lineItems, { productId: null, name: '', detail: '', qty: 1, unitPrice: 0 }])}>
-                        + 직접입력
-                      </button>
-                    </div>
+                    <ProductPicker
+                      products={shownProducts}
+                      category={form.category}
+                      all={allProducts}
+                      onAll={setAllProducts}
+                      onAdd={addProduct}
+                      onManual={() => set('lineItems', [...form.lineItems, { productId: null, name: '', detail: '', qty: 1, unitPrice: 0 }])}
+                    />
                     {form.lineItems.length > 0 && (
                       <table className="line-items">
                         <thead>
@@ -905,24 +894,14 @@ function ExtraWork({ no, work, products, showAmount, onChange, onRemove }) {
             <tr>
               <td className="label-col">상품선택</td>
               <td className="input-col">
-                <div className="inline-fields" style={{ marginBottom: 8 }}>
-                  <select className="input-text product-select" value="" onChange={(e) => addProduct(e.target.value)}>
-                    <option value="">
-                      + {all ? '상품 추가 (전체)' : `${work.category} 상품 추가`} ({list.length}개)
-                    </option>
-                    {list.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        [{all ? `${p.category}/` : ''}{p.kind}] {p.name} — {won(p.price)}원
-                      </option>
-                    ))}
-                  </select>
-                  <label className="radio-item">
-                    <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> 전체 상품 보기
-                  </label>
-                  <button type="button" className="btn-dark-sm" onClick={() => onChange({ lineItems: [...work.lineItems, { productId: null, name: '', detail: '', qty: 1, unitPrice: 0 }] })}>
-                    + 직접입력
-                  </button>
-                </div>
+                <ProductPicker
+                  products={list}
+                  category={work.category}
+                  all={all}
+                  onAll={setAll}
+                  onAdd={addProduct}
+                  onManual={() => onChange({ lineItems: [...work.lineItems, { productId: null, name: '', detail: '', qty: 1, unitPrice: 0 }] })}
+                />
                 {work.lineItems.length > 0 && (
                   <table className="line-items">
                     <thead>
@@ -985,5 +964,43 @@ function ExtraWork({ no, work, products, showAmount, onChange, onRemove }) {
         </tbody>
       </table>
     </>
+  );
+}
+
+// 상품 고르기: [패키지] [추가시공품목] 두 칸 (상품관리의 '구분'으로 나눔, 무료시공은 추가시공품목 칸에)
+//   products: 이미 구분(줄눈·청소…)으로 거른 목록, all: 전체 상품 보기
+function ProductPicker({ products, category, all, onAll, onAdd, onManual }) {
+  const groups = [
+    { label: '패키지', items: products.filter((p) => (p.kind || '패키지') === '패키지') },
+    { label: '추가시공품목', items: products.filter((p) => p.kind && p.kind !== '패키지') },
+  ];
+  return (
+    <div className="product-picker">
+      {groups.map((g) => (
+        <div key={g.label} className="inline-fields product-pick-row">
+          <span className="product-pick-label">{g.label}</span>
+          <select className="input-text product-select" value="" onChange={(e) => onAdd(e.target.value)}>
+            <option value="">
+              + {g.label} 선택 ({g.items.length}개)
+            </option>
+            {g.items.map((p) => (
+              <option key={p.id} value={p.id}>
+                {all ? `[${p.category}] ` : ''}
+                {p.name} — {won(p.price)}원
+              </option>
+            ))}
+          </select>
+          {!g.items.length && <span className="sub-text text-orange">'설정 &gt; 상품관리'에서 {all ? '' : `${category} `}{g.label} 상품을 등록해 주세요.</span>}
+        </div>
+      ))}
+      <div className="inline-fields">
+        <label className="radio-item">
+          <input type="checkbox" checked={all} onChange={(e) => onAll(e.target.checked)} /> 전체 상품 보기
+        </label>
+        <button type="button" className="btn-dark-sm" onClick={onManual}>
+          + 직접입력
+        </button>
+      </div>
+    </div>
   );
 }
