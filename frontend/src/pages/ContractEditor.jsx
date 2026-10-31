@@ -266,7 +266,21 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
         const base = Object.fromEntries(SHARED.map((k) => [k, form[k]]));
         for (const w of extras) {
           try {
-            nos.push((await contractApi.create({ ...base, ...w, schedules: [emptySchedule()], payments: [], status: '미정' })).no);
+            const pays = w.payments || [];
+            let made = await contractApi.create({ ...base, ...w, schedules: [emptySchedule()], payments: pays.map(strip), status: '미정' });
+            nos.push(made.no);
+            // 추가 시공의 영수증 사진도 그 계약의 입금별로 올림 (금액 0인 줄은 저장되지 않아 순서가 같음)
+            const keptPays = pays.filter((p) => Number(p.amount));
+            for (let i = 0; i < keptPays.length; i++) {
+              const add = keptPays[i]._add || [];
+              const target = made.payments?.[i];
+              if (!target || !add.length) continue;
+              try {
+                made = await contractApi.paymentPhotos(made.id, target.id, { add, remove: [] });
+              } catch (err) {
+                photoError = `${photoError ? `${photoError}\n` : ''}No.${made.no} 영수증 사진: ${err.message}`;
+              }
+            }
           } catch (err) {
             failed.push(`${w.category}: ${err.message}`);
           }
@@ -597,12 +611,12 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
               onClick={() => {
                 const used = [form.category, ...extras.map((x) => x.category)];
                 const category = CATEGORIES.find((c) => c !== '기타' && !used.includes(c)) || CATEGORIES[0];
-                setExtras((prev) => [...prev, { category, workType: WORK_TYPES[0], receptionType: form.receptionType, lineItems: [], items: '', totalAmount: '', discount: '', voucher: '' }]);
+                setExtras((prev) => [...prev, { category, workType: WORK_TYPES[0], receptionType: form.receptionType, lineItems: [], items: '', totalAmount: '', discount: '', voucher: '', payments: [] }]);
               }}
             >
               + 시공 추가
             </button>
-            <span className="sub-text">같은 고객·현장에 다른 시공(예: 줄눈 + 청소)을 함께 등록합니다. 시공마다 계약이 하나씩 만들어지고, 일정·입금은 각 계약에서 정합니다.</span>
+            <span className="sub-text">같은 고객·현장에 다른 시공(예: 줄눈 + 청소)을 함께 등록합니다. 시공마다 계약이 하나씩 만들어지고 입금도 시공별로 들어갑니다. 일정(기사 배정)은 등록 뒤 각 계약에서 정합니다.</span>
           </div>
         )}
 
@@ -813,7 +827,9 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
 function ExtraWork({ no, work, products, showAmount, onChange, onRemove }) {
   const [all, setAll] = useState(false);
   const lineTotal = work.lineItems.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.unitPrice) || 0), 0);
-  const amounts = calcAmounts({ ...work, totalAmount: work.lineItems.length ? lineTotal : work.totalAmount });
+  const payments = work.payments || [];
+  const amounts = calcAmounts({ ...work, payments, totalAmount: work.lineItems.length ? lineTotal : work.totalAmount });
+  const setPay = (i, patch) => onChange({ payments: payments.map((p, j) => (j === i ? { ...p, ...patch } : p)) });
   const radios = (field, values) =>
     values.map((v) => (
       <label key={v} className="radio-item">
@@ -881,6 +897,40 @@ function ExtraWork({ no, work, products, showAmount, onChange, onRemove }) {
                   </label>
                   <span className="calc-result">
                     실계약금 <strong>{won(amounts.actual)}</strong>원
+                  </span>
+                </div>
+              </td>
+            </tr>
+          )}
+          {showAmount && (
+            <tr>
+              <td className="label-col">입금 내역</td>
+              <td className="input-col">
+                {payments.map((p, i) => (
+                  <div key={i} className="inline-fields schedule-row">
+                    <input type="date" className="input-text" value={p.date} onChange={(e) => setPay(i, { date: e.target.value })} />
+                    <select className="input-text" value={p.kind} onChange={(e) => setPay(i, { kind: e.target.value })}>
+                      {PAYMENT_KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
+                    </select>
+                    <select className="input-text" value={p.method} onChange={(e) => setPay(i, { method: e.target.value })}>
+                      {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                    <MoneyInput value={p.amount} onChange={(v) => setPay(i, { amount: v })} placeholder="금액" />
+                    <input className="input-text" value={p.memo || ''} onChange={(e) => setPay(i, { memo: e.target.value })} placeholder="메모 (입금자명 등)" />
+                    <PaymentPhotos contractId={null} payment={p} onChange={(patch) => setPay(i, patch)} />
+                    <button type="button" className="btn-text-danger pay-row-delete" onClick={() => onChange({ payments: payments.filter((_, j) => j !== i) })}>삭제</button>
+                  </div>
+                ))}
+                <div className="inline-fields">
+                  <button
+                    type="button"
+                    className="btn-dark-sm"
+                    onClick={() => onChange({ payments: [...payments, { date: today(), kind: payments.length ? '잔금' : '계약금', method: PAYMENT_METHODS[0], amount: '', memo: '' }] })}
+                  >
+                    + 입금 추가
+                  </button>
+                  <span className="calc-result">
+                    입금 <strong>{won(amounts.paid)}</strong>원 / 잔액 <strong className={amounts.balance > 0 ? 'text-red' : ''}>{won(amounts.balance)}</strong>원
                   </span>
                 </div>
               </td>
