@@ -894,7 +894,7 @@ function ExtraWork({ no, work, products, showAmount, onChange, onRemove }) {
 
 // 상품 고르기 + 고른 상품 목록: [패키지] [추가시공품목] 따로 — 각 선택 칸 바로 아래에 그 종류 상품만 쌓임
 //   products: 업체 상품 전체, category: 고른 구분(줄눈·청소…), all: 전체 상품 보기
-//   패키지는 고른 구분 것만, 추가시공품목은 구분과 상관없이 전부 (고른 구분 것이 위, 나머지는 [구분] 표시)
+//   패키지·추가시공품목 모두 고른 구분(줄눈·청소·나노코팅…) 것만 — [전체 상품 보기]면 모든 구분 ([구분] 표시)
 //   lines: 상품내역(lineItems), 줄마다 kind('패키지'|'추가시공품목') — 예전 줄은 상품의 구분으로 판단
 const ADDON = '추가시공품목';
 // 상세품목 칸 높이: 줄바꿈과 글자 수에 맞춰 (최대 6줄, 넘으면 스크롤)
@@ -902,7 +902,6 @@ const detailRows = (text) => Math.min(6, Math.max(1, String(text || '').split('\
 const kindOfProduct = (p) => (p && p.kind && p.kind !== '패키지' ? ADDON : '패키지');
 function ProductLines({ products, category, all, onAll, lines, onLines }) {
   const byId = (a, b) => a.id - b.id;
-  const mineFirst = (a, b) => (a.category === category ? 0 : 1) - (b.category === category ? 0 : 1) || byId(a, b);
   // 줄의 종류: 상품관리의 그 상품 구분이 기준 (상품 번호로, 없으면 같은 이름으로 찾음 — 예전 프로그램에서 가져온 계약은 이름만 있음)
   //   상품관리에 없는 줄(직접입력)은 넣은 칸의 종류(kind), 그것도 없으면 패키지
   const lineKind = (l) => {
@@ -912,7 +911,7 @@ function ProductLines({ products, category, all, onAll, lines, onLines }) {
   const pickable = products.filter((p) => p.visible !== false && p.active !== false); // 고르는 칸에는 노출 중인 상품만
   const groups = [
     { kind: '패키지', items: pickable.filter((p) => kindOfProduct(p) === '패키지' && (all || p.category === category)).sort(byId) },
-    { kind: ADDON, items: pickable.filter((p) => kindOfProduct(p) === ADDON).sort(mineFirst), mixed: true },
+    { kind: ADDON, items: pickable.filter((p) => kindOfProduct(p) === ADDON && (all || p.category === category)).sort(byId) },
   ];
   const setLine = (i, patch) => onLines(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
   const add = (kind, id) => {
@@ -921,7 +920,7 @@ function ProductLines({ products, category, all, onAll, lines, onLines }) {
     const detail = [p.detail, p.freeDetail && `[무료시공] ${p.freeDetail}`].filter(Boolean).join('\n');
     onLines([...lines, { productId: p.id, kind, name: p.name, detail, qty: 1, unitPrice: p.price }]);
   };
-  const label = (g, p) => `${all || (g.mixed && p.category !== category) ? `[${p.category}] ` : ''}${p.name} — ${won(p.price)}원`;
+  const label = (g, p) => `${all ? `[${p.category}] ` : ''}${p.name} — ${won(p.price)}원`;
   return (
     <div className="product-picker">
       {groups.map((g) => {
@@ -944,7 +943,7 @@ function ProductLines({ products, category, all, onAll, lines, onLines }) {
               <button type="button" className="btn-dark-sm" onClick={() => onLines([...lines, { productId: null, kind: g.kind, name: '', detail: '', qty: 1, unitPrice: 0 }])}>
                 + 직접입력
               </button>
-              {!g.items.length && <span className="sub-text text-orange">'설정 &gt; 상품관리'에서 {all || g.mixed ? '' : `${category} `}{g.kind} 상품을 등록해 주세요.</span>}
+              {!g.items.length && <span className="sub-text text-orange">'설정 &gt; 상품관리'에서 {all ? '' : `${category} `}{g.kind} 상품을 등록해 주세요.</span>}
             </div>
             {mine.length > 0 && (
               <table className="line-items">
@@ -982,7 +981,7 @@ function ProductLines({ products, category, all, onAll, lines, onLines }) {
         );
       })}
       <label className="radio-item">
-        <input type="checkbox" checked={all} onChange={(e) => onAll(e.target.checked)} /> 전체 상품 보기 (패키지를 다른 구분에서도 고르기)
+        <input type="checkbox" checked={all} onChange={(e) => onAll(e.target.checked)} /> 전체 상품 보기 (다른 시공 구분의 상품도 고르기)
       </label>
     </div>
   );
