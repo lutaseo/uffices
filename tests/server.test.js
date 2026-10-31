@@ -879,6 +879,15 @@ test('AS관리: 보낸 계약은 AS관리에만, AS 완료해도 AS관리에 남
   assert.deepEqual(again.asLogs.map((l) => !!l.doneAt), [true, false, false]);
 });
 
+test('상품 줄: 상품명 없이 금액만 있는 줄은 저장을 막고(금액이 사라지지 않게), 완전히 빈 줄은 무시', async () => {
+  const bad = await admin('contracts', 'create', { ...base, customerName: '빈줄고객', customerPhone: '010-9191-8282', lineItems: [{ name: '', qty: 1, unitPrice: 300000 }] });
+  assert.equal(bad.status, 400);
+  assert.match(bad.error.message, /상품명/);
+  const ok = await admin.ok('contracts', 'create', { ...base, customerName: '빈줄고객', customerPhone: '010-9191-8282', lineItems: [{ name: '줄눈', qty: 1, unitPrice: 300000 }, { name: '', qty: 1, unitPrice: 0 }] });
+  assert.equal(ok.lineItems.length, 1);
+  assert.equal(ok.totalAmount, 300000);
+});
+
 test('기사모바일 계약 상세: 본인 배정 계약만, 단가·내부 메모·이력은 숨김', async () => {
   const eng = client();
   await eng.ok('auth', 'login', 'gong', 'gong1234');

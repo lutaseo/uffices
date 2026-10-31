@@ -200,8 +200,11 @@ function normalizeContractInput(db, user, data, existing) {
   if (status === '취소' && !out.cancelReason) throw new ApiError('취소 사유를 입력해 주세요.');
 
   if (can(user, 'contract.amount')) {
+    const blank = (l) => !String(l.name || '').trim();
+    // 완전히 빈 줄은 무시, 금액·내용이 있는데 상품명이 없으면 막음 (조용히 버리면 금액이 사라짐)
+    if ((data.lineItems || []).some((l) => blank(l) && (Number(l.unitPrice) || String(l.detail || '').trim()))) throw new ApiError('상품명이 비어 있는 줄이 있습니다. 상품명을 입력하거나 그 줄을 삭제해 주세요.');
     out.lineItems = (data.lineItems || [])
-      .filter((l) => String(l.name || '').trim())
+      .filter((l) => !blank(l))
       .map((l) => ({
         productId: l.productId ? Number(l.productId) : null,
         // 계약 등록 화면에서 [패키지] / [추가시공품목] 칸 구분 — 화면이 보낸 경우만 (예전 줄은 화면이 상품 구분으로 판단)

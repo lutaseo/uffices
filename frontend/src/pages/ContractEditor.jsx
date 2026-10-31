@@ -221,6 +221,12 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
 
   const handleSave = async (e) => {
     e.preventDefault();
+    // 상품명 없는 줄은 서버가 받지 않음 → 금액이 사라지지 않게 저장 전에 알려 줌
+    const noName = [form.lineItems, ...extras.map((w) => w.lineItems)].some((lines) => lines.some((l) => !String(l.name || '').trim()));
+    if (noName) {
+      alert('상품명이 비어 있는 줄이 있습니다. 상품명을 입력하거나 그 줄을 삭제해 주세요.');
+      return;
+    }
     if (showAmount && amounts.balance < 0 && !window.confirm(`입금액이 실계약금보다 ${won(-amounts.balance)}원 많습니다. 그대로 저장하시겠습니까?`)) return;
     // 비어 있는 뒤쪽 회차는 저장하지 않음 (①은 항상 유지)
     const schedules = form.schedules.filter(
@@ -471,7 +477,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
         <table className="form-grid-table">
           <tbody>
             <tr>
-              <td className="label-col">상품선택</td>
+              <td className="label-col">시공선택</td>
               <td className="input-col">
                 {showAmount ? (
                   <>
@@ -839,7 +845,7 @@ function ExtraWork({ no, work, products, showAmount, onChange, onRemove }) {
           </tr>
           {showAmount && (
             <tr>
-              <td className="label-col">상품선택</td>
+              <td className="label-col">시공선택</td>
               <td className="input-col">
                 <ProductLines
                   products={products}
@@ -891,6 +897,8 @@ function ExtraWork({ no, work, products, showAmount, onChange, onRemove }) {
 //   패키지는 고른 구분 것만, 추가시공품목은 구분과 상관없이 전부 (고른 구분 것이 위, 나머지는 [구분] 표시)
 //   lines: 상품내역(lineItems), 줄마다 kind('패키지'|'추가시공품목') — 예전 줄은 상품의 구분으로 판단
 const ADDON = '추가시공품목';
+// 상세품목 칸 높이: 줄바꿈과 글자 수에 맞춰 (최대 6줄, 넘으면 스크롤)
+const detailRows = (text) => Math.min(6, Math.max(1, String(text || '').split('\n').reduce((n, x) => n + Math.max(1, Math.ceil(x.length / 26)), 0)));
 const kindOfProduct = (p) => (p && p.kind && p.kind !== '패키지' ? ADDON : '패키지');
 function ProductLines({ products, category, all, onAll, lines, onLines }) {
   const byId = (a, b) => a.id - b.id;
@@ -913,6 +921,7 @@ function ProductLines({ products, category, all, onAll, lines, onLines }) {
     const detail = [p.detail, p.freeDetail && `[무료시공] ${p.freeDetail}`].filter(Boolean).join('\n');
     onLines([...lines, { productId: p.id, kind, name: p.name, detail, qty: 1, unitPrice: p.price }]);
   };
+  const label = (g, p) => `${all || (g.mixed && p.category !== category) ? `[${p.category}] ` : ''}${p.name} — ${won(p.price)}원`;
   return (
     <div className="product-picker">
       {groups.map((g) => {
@@ -927,11 +936,11 @@ function ProductLines({ products, category, all, onAll, lines, onLines }) {
                 </option>
                 {g.items.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {all || (g.mixed && p.category !== category) ? `[${p.category}] ` : ''}
-                    {p.name} — {won(p.price)}원
+                    {label(g, p)}
                   </option>
                 ))}
               </select>
+              <ProductSearch items={g.items} kind={g.kind} label={(p) => label(g, p)} onPick={(p) => add(g.kind, p.id)} />
               <button type="button" className="btn-dark-sm" onClick={() => onLines([...lines, { productId: null, kind: g.kind, name: '', detail: '', qty: 1, unitPrice: 0 }])}>
                 + 직접입력
               </button>
@@ -952,11 +961,15 @@ function ProductLines({ products, category, all, onAll, lines, onLines }) {
                 <tbody>
                   {mine.map(({ l, i }) => (
                     <tr key={i}>
-                      <td><input className="input-text full" value={l.name} onChange={(e) => setLine(i, { name: e.target.value })} /></td>
-                      <td><input className="input-text full" value={l.detail} onChange={(e) => setLine(i, { detail: e.target.value })} /></td>
-                      <td><input type="number" min="1" className="input-text" style={{ width: 60 }} value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} /></td>
-                      <td><input type="number" min="0" className="input-text money" value={l.unitPrice} onChange={(e) => setLine(i, { unitPrice: e.target.value })} /></td>
-                      <td className="text-right">{won((Number(l.qty) || 0) * (Number(l.unitPrice) || 0))}</td>
+                      <td data-label="상품명">
+                        <input className={`input-text full ${!String(l.name || '').trim() ? 'input-missing' : ''}`} value={l.name} onChange={(e) => setLine(i, { name: e.target.value })} placeholder="상품명 (필수)" />
+                      </td>
+                      <td data-label="상세품목">
+                        <textarea className="input-text full line-detail" rows={detailRows(l.detail)} value={l.detail} onChange={(e) => setLine(i, { detail: e.target.value })} />
+                      </td>
+                      <td data-label="수량"><input type="number" min="1" className="input-text" style={{ width: 60 }} value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} /></td>
+                      <td data-label="단가"><MoneyInput value={l.unitPrice} onChange={(v) => setLine(i, { unitPrice: v })} /></td>
+                      <td data-label="금액" className="text-right">{won((Number(l.qty) || 0) * (Number(l.unitPrice) || 0))}</td>
                       <td>
                         <button type="button" className="btn-text-danger" onClick={() => onLines(lines.filter((_, j) => j !== i))}>삭제</button>
                       </td>
@@ -972,5 +985,34 @@ function ProductLines({ products, category, all, onAll, lines, onLines }) {
         <input type="checkbox" checked={all} onChange={(e) => onAll(e.target.checked)} /> 전체 상품 보기 (패키지를 다른 구분에서도 고르기)
       </label>
     </div>
+  );
+}
+
+// 상품 이름으로 찾기: 글자를 치면 맞는 상품이 아래에 나오고, 누르면 추가 (목록에서 고르는 칸은 그대로)
+function ProductSearch({ items, kind, label, onPick }) {
+  const [q, setQ] = useState('');
+  const key = q.trim().replace(/\s+/g, '').toLowerCase();
+  const hits = key ? items.filter((p) => `${p.name}${p.detail || ''}`.replace(/\s+/g, '').toLowerCase().includes(key)).slice(0, 12) : [];
+  return (
+    <span className="product-search">
+      <input className="input-text" value={q} onChange={(e) => setQ(e.target.value)} placeholder={`🔍 ${kind} 검색`} />
+      {key && (
+        <span className="product-search-list">
+          {hits.length === 0 && <span className="product-search-empty">찾는 상품이 없습니다</span>}
+          {hits.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => {
+                onPick(p);
+                setQ('');
+              }}
+            >
+              {label(p)}
+            </button>
+          ))}
+        </span>
+      )}
+    </span>
   );
 }
