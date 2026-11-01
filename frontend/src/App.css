@@ -5026,7 +5026,8 @@ a.btn-quick.blue:hover {
   color: #b00020;
 }
 
-/* 계약 등록 '시공정보': PC·태블릿은 그대로, 휴대폰에서는 접어 두고 제목을 누르면 펼침 */
+/* 계약 등록 '시공정보': PC는 그대로, 휴대폰·태블릿에서는 접어 두고 제목을 누르면 펼침
+   태블릿 = 화면 폭 1100px 이하이거나 손가락 터치가 주 입력인 기기 (가로로 돌린 큰 태블릿 포함) */
 .fold-mobile-btn {
   all: unset;
   font: inherit;
@@ -5035,7 +5036,7 @@ a.btn-quick.blue:hover {
 .fold-mobile-hint {
   display: none;
 }
-@media screen and (max-width: 768px) {
+@media screen and (max-width: 1100px), screen and (pointer: coarse) {
   .fold-mobile-btn {
     cursor: pointer;
     display: flex;
