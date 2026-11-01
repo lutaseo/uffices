@@ -129,7 +129,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
   const [paper, setPaper] = useState({ saved: null, add: [], remove: [] }); // 실물 계약서 사진 (저장 뒤 올림)
   // 새 계약에서 [+ 시공 추가]로 함께 등록할 다른 시공들 (같은 고객·현장, 시공마다 계약이 따로 만들어짐)
   const [extras, setExtras] = useState([]);
-  const [schedOpen, setSchedOpen] = useState(false); // 시공정보 펼침 (휴대폰 화면에서만 접힘)
+  const [schedOpen, setSchedOpen] = useState(false); // 시공정보 펼침 (휴대폰·태블릿에서만 접힘)
 
   // 작성 중에 뒤로가기·메뉴 등으로 실수로 나가지 않게: 처음 불러온 내용과 달라졌으면 나가기 전에 물어봄
   //   (저장·취소 버튼으로 나갈 때는 묻지 않음)
@@ -628,7 +628,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
         )}
 
         {/* ---------------- 4. 시공정보 (일정·담당) ---------------- */}
-        {/* 휴대폰 화면에서는 기본으로 접어 두고 제목을 누르면 펼침 (PC·태블릿은 항상 펼침) */}
+        {/* 휴대폰·태블릿에서는 기본으로 접어 두고 제목을 누르면 펼침 (PC는 항상 펼침) */}
         <h3 className={`form-section-title fold-mobile-title ${schedOpen ? 'open' : ''}`}>
           <button type="button" className="fold-mobile-btn" onClick={() => setSchedOpen((v) => !v)} aria-expanded={schedOpen}>
             &gt; 시공정보 <span className="fold-mobile-hint">{schedOpen ? '▲ 접기' : '▼ 눌러서 펼치기'}</span>
