@@ -303,7 +303,7 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
               <th>추가시공품목</th>
               <th>시공 등록</th>
               <th>시공기사</th>
-              {can('notify.send') && <th>알림톡</th>}
+              <th>알림톡</th>
               <th>관리</th>
             </tr>
           </thead>
@@ -347,7 +347,7 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
                     </div>
                   ))}
                 </td>
-                {can('notify.send') && (
+                {(
                   <td onClick={(e) => e.stopPropagation()}>
                     <div className="talk-btn-grid">
                       {talkBrands.map((b) =>

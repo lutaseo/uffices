@@ -241,7 +241,7 @@ export async function buildSeed(hashPassword) {
     companyId: company.id,
     phone: '010-5555-6666',
     createdBy: admin.id,
-    permissions: [...DEFAULT_MANAGER_PERMISSIONS, 'notify.send'],
+    permissions: [...DEFAULT_MANAGER_PERMISSIONS],
     dataScope: DATA_SCOPES.OWN,
   });
   db.users.push(manager);

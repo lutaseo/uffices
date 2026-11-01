@@ -1116,17 +1116,18 @@ test('비즈고 알림톡: 키는 Authorization 헤더로, 템플릿 자동 치�
   }
 });
 
-test('서명요청 알림톡: 서명요청 권한만 있어도 고객 서명 링크 알림톡은 보냄, 다른 알림톡은 알림톡 권한 필요', async () => {
-  await admin.ok('users', 'create', { loginId: 'signtalkmgr', password: 'signtalk1234', name: '서명알림실장', permissions: ['contract.view', 'contract.create', 'esign.send'], dataScope: 'all' });
+test('알림톡: 따로 권한 없이 계약을 볼 수 있는 직원이면 모든 알림톡 발송, 기사는 불가', async () => {
+  await admin.ok('users', 'create', { loginId: 'talkmgr', password: 'talkmgr1234', name: '알림톡실장', permissions: ['contract.view'], dataScope: 'all' });
   const mgr = client();
-  await mgr.ok('auth', 'login', 'signtalkmgr', 'signtalk1234');
+  await mgr.ok('auth', 'login', 'talkmgr', 'talkmgr1234');
   const [c] = await admin.ok('contracts', 'list', {});
-  const msg = { contractId: c.id, brand: '더좋은집', receiverName: '고객', receiverPhone: '010-1234-5678', message: '안내' };
-  const sent = await mgr.ok('notifications', 'send', { ...msg, template: '서명요청', templateKey: '서명요청', target: '고객' });
-  assert.equal(sent.templateKey, '서명요청');
-  assert.equal((await mgr('notifications', 'send', { ...msg, template: '계약완료', templateKey: '계약완료', target: '고객' })).status, 403, '다른 알림톡은 권한 필요');
-  await admin.ok('users', 'create', { loginId: 'nosigntalk', password: 'nosign1234', name: '권한없는실장', permissions: ['contract.view'], dataScope: 'all' });
-  const none = client();
-  await none.ok('auth', 'login', 'nosigntalk', 'nosign1234');
-  assert.equal((await none('notifications', 'send', { ...msg, template: '서명요청', templateKey: '서명요청', target: '고객' })).status, 403, '서명요청 권한도 없으면 불가');
+  const msg = { contractId: c.id, brand: '더좋은집', receiverName: '고객', receiverPhone: '010-1234-5678', message: '안내', target: '고객' };
+  assert.equal((await mgr.ok('notifications', 'send', { ...msg, template: '서명요청', templateKey: '서명요청' })).templateKey, '서명요청');
+  assert.equal((await mgr.ok('notifications', 'send', { ...msg, template: '계약완료', templateKey: '계약완료' })).templateKey, '계약완료');
+  assert.equal((await mgr.ok('notifications', 'send', { ...msg, template: '기사배정', templateKey: '기사배정_고객' })).templateKey, '기사배정_고객');
+  assert.ok((await mgr.ok('notifications', 'history', c.id)).length >= 3);
+  await admin.ok('engineers', 'save', { name: '알림톡기사', phone: '010-5252-6363', loginId: 'talkeng', password: 'talkeng1234' });
+  const eng = client();
+  await eng.ok('auth', 'login', 'talkeng', 'talkeng1234');
+  assert.equal((await eng('notifications', 'send', { ...msg, template: '계약완료', templateKey: '계약완료' })).status, 403, '기사는 불가');
 });
