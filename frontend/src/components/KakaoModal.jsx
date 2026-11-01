@@ -13,10 +13,12 @@ const TEMPLATES = {
 };
 
 export default function KakaoModal({ contract, initialTemplate = '기사배정', initialTarget = '고객', initialStep = 0, initialBrand, signUrl, onClose }) {
-  const { handleError, company } = useAuth();
+  const { handleError, company, can } = useAuth();
+  // 알림톡 권한이 없으면 계약서 보기의 서명요청 알림톡만 (서명 링크를 받을 수 있는 사람)
+  const signOnly = !can('notify.send');
   const brands = company?.brands?.length ? company.brands : BRANDS; // 업체에 등록된 브랜드
   const [brand, setBrand] = useState(initialBrand || contract.brand || brands[0]);
-  const [template, setTemplate] = useState(initialTemplate);
+  const [template, setTemplate] = useState(signOnly ? '서명요청' : initialTemplate);
   const [target, setTarget] = useState(initialTarget);
   const [step, setStep] = useState(initialStep);
   const [sending, setSending] = useState(false);
@@ -94,7 +96,7 @@ export default function KakaoModal({ contract, initialTemplate = '기사배정',
           <div className="form-group">
             <label>알림톡 템플릿</label>
             <div className="radio-btn-group">
-              {Object.entries(TEMPLATES).map(([k, t]) => tag('talkTemplate', k, template, setTemplate, t.label))}
+              {Object.entries(TEMPLATES).filter(([k]) => !signOnly || k === '서명요청').map(([k, t]) => tag('talkTemplate', k, template, setTemplate, t.label))}
             </div>
           </div>
           {tpl.targets.length > 1 && (

@@ -1016,8 +1016,11 @@ export const notifications = {
   // templateKey/templateCode/variables/buttons: 비즈고 알림톡 발송용 (utils/alimtalk.js 에서 만든 값)
   // 알림톡 발송: 비즈고 연결(서버 + API Key)이 있으면 실제 발송, 없으면(데모) 기록만 (result 'MOCK')
   //   템플릿 코드·채널은 운영자(super) 알림톡연결 화면에서 업체·브랜드별로 — 승인된 코드가 없으면 보내지 않고 안내
+  //   전자서명 요청 알림톡(고객에게 서명 링크)은 계약서 링크를 받을 수 있는 사람(서명요청 권한)이면 알림톡 권한 없이도 보냄
   async send({ contractId, template, templateKey, variables, buttons, target, brand, receiverName, receiverPhone, message }) {
-    const { db, user } = await authorize('notify.send');
+    const { db, user } = await authorize();
+    const signLink = templateKey === '서명요청' && target === '고객';
+    if (!can(user, 'notify.send') && !(signLink && can(user, 'esign.send'))) throw new ApiError('권한이 없습니다.', 'FORBIDDEN');
     findContract(db, user, contractId);
     if (digitsOnly(receiverPhone).length < 10) throw new ApiError('수신자 연락처가 없습니다.');
     const tpl = ALIMTALK_TEMPLATES[templateKey];

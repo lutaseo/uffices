@@ -332,7 +332,7 @@ function engineerContractView(db, me, c) {
     area: c.area || '',
     address: formatAddress(c),
     moveInDate: c.moveInDate || '',
-    lineItems: (c.lineItems || []).map((l) => ({ name: l.name, detail: l.detail || '', qty: l.qty })),
+    lineItems: (c.lineItems || []).map((l) => ({ name: l.name, detail: l.detail || '', qty: l.qty, ...(l.kind ? { kind: l.kind } : {}) })),
     items: c.items || '',
     customerNote: c.customerNote || '',
     engineerNote: c.engineerNote || '',
