@@ -152,11 +152,11 @@ function normalizeCode(db, code, exceptId) {
 }
 
 export const companies = {
-  // 로그인 화면용 (로그인 전): 주소 코드로 업체 이름만 조회
+  // 로그인 화면용 (로그인 전): 주소 코드로 업체 이름 + 이용기간(언제까지 쓸 수 있는지) 조회
   async publicInfo(code) {
     const db = await loadDb();
     const c = db.companies.find((x) => x.code && x.code === String(code || '').toLowerCase());
-    return c ? { code: c.code, name: c.name } : null;
+    return c ? { code: c.code, name: c.name, periodStart: c.periodStart || '', periodEnd: c.periodEnd || '' } : null;
   },
 
   async list() {

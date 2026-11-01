@@ -398,7 +398,10 @@ test('서버 연결 점검(/api/rpc GET): 비밀값은 숨기고 설정·DB 상�
 
 test('업체 주소 코드: 로그인 화면 조회, 그 업체 계정만 로그인, 코드 중복·형식 검사', async () => {
   const anon = client();
-  assert.deepEqual(await anon.ok('companies', 'publicInfo', 'thegood'), { code: 'thegood', name: '더좋은집' });
+  const pub = await anon.ok('companies', 'publicInfo', 'thegood');
+  assert.equal(pub.name, '더좋은집');
+  assert.match(pub.periodEnd, /^\d{4}-\d{2}-\d{2}$/, '로그인 화면에 이용기간(끝나는 날) 표시');
+  assert.deepEqual(Object.keys(pub).sort(), ['code', 'name', 'periodEnd', 'periodStart'], '로그인 전에는 이름·이용기간만');
   assert.equal(await anon.ok('companies', 'publicInfo', 'nope'), null);
 
   const sup = client();
