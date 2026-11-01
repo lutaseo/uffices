@@ -5025,3 +5025,31 @@ a.btn-quick.blue:hover {
   background: #ffe1e1;
   color: #b00020;
 }
+
+/* 계약 등록 '시공정보': PC·태블릿은 그대로, 휴대폰에서는 접어 두고 제목을 누르면 펼침 */
+.fold-mobile-btn {
+  all: unset;
+  font: inherit;
+  cursor: default;
+}
+.fold-mobile-hint {
+  display: none;
+}
+@media screen and (max-width: 768px) {
+  .fold-mobile-btn {
+    cursor: pointer;
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .fold-mobile-hint {
+    display: inline;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1a6fe0;
+  }
+  .form-grid-table.fold-mobile:not(.open) {
+    display: none;
+  }
+}
