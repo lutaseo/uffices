@@ -277,7 +277,7 @@ function ContractList({ mode = 'main', engineers }) {
             수정
           </button>
         )}
-        {can('notify.send') && (
+        {(
           <button type="button" className="btn-kakao-talk sm" onClick={() => setKakaoTarget(item)}>
             알림톡
           </button>

@@ -12,7 +12,7 @@ export const SIGN_TOGETHER = ['줄눈', '청소'];
 // 시공종류
 export const WORK_TYPES = ['시공', 'AS', '하자보수'];
 
-export const RECEPTION_TYPES = ['음성계약', '박람회', '옵션', '사전계약', '무상시공'];
+export const RECEPTION_TYPES = ['박람회', '음성계약', '사전계약', '옵션', '무상시공']; // 맨 앞이 새 계약의 기본값
 
 // 시공상태(최종) — 고객 모바일웹에 표시되는 값
 export const WORK_STATUS = ['미정', '해피콜완료', '배정', '시공완료', '시공연기', '취소'];
@@ -123,7 +123,7 @@ export const ESIGN_STATUS = {
   SIGNED: '서명완료',
 };
 
-export const PAYMENT_METHODS = ['카드', '현금', '계좌이체'];
+export const PAYMENT_METHODS = ['계좌이체', '카드', '현금']; // 맨 앞이 새 입금 줄의 기본값
 
 // 계약목록 날짜검색 기준
 export const DATE_TYPES = [

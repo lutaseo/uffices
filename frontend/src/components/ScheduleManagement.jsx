@@ -402,7 +402,7 @@ export default function ScheduleManagement() {
                         {showAmount && <td className="text-right">{won(calcAmounts(row.contract).balance)}</td>}
                         <td>
                           <div className="row-actions">
-                            {can('notify.send') && (
+                            {(
                               <button type="button" className="btn-talk-yellow" title="담당기사 알림톡" onClick={() => setNotifyItem(row)}>
                                 💬
                               </button>

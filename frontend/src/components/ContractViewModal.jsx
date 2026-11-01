@@ -72,9 +72,7 @@ export default function ContractViewModal({ contractId, onClose, onChanged }) {
                   <input className="input-text full" readOnly value={signUrl} onFocus={(e) => e.target.select()} />
                   <button type="button" className="btn-dark-sm" onClick={copy}>링크 복사</button>
                   <a className="btn-dark-sm" href={signUrl} target="_blank" rel="noreferrer">열기</a>
-                  {can('notify.send') && (
-                    <button type="button" className="btn-kakao-talk" onClick={() => setKakaoOpen(true)}>알림톡으로 보내기</button>
-                  )}
+                  <button type="button" className="btn-kakao-talk" onClick={() => setKakaoOpen(true)}>알림톡으로 보내기</button>
                 </div>
               </>
             ) : (

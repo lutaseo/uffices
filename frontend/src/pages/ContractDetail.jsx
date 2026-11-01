@@ -14,6 +14,7 @@ import { backdrop } from '../utils/backdrop.js';
 import ContractViewModal from '../components/ContractViewModal.jsx';
 import { PAPER_MAX } from '../components/PaperPhotos.jsx';
 import PhotoViewer from '../components/PhotoViewer.jsx';
+import LineItems from '../components/LineItems.jsx';
 import { compressImage } from '../utils/image.js';
 
 const CIRCLED = ['①', '②', '③'];
@@ -241,16 +242,12 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
           <tr>
             <th>패키지</th>
             <td colSpan={3}>
-              {(selected.lineItems || []).map((l, i) => (
-                <div key={i}>
-                  {l.name}
-                  {l.qty > 1 && ` x${l.qty}`}
-                  {l.detail && <span className="sub-text"> — {l.detail}</span>}
-                </div>
-              ))}
+              <LineItems lines={(selected.lineItems || [])} kind="패키지" />
             </td>
             <th>추가시공품목</th>
-            <td className="pre-wrap">{selected.items}</td>
+            <td>
+              <LineItems lines={(selected.lineItems || [])} kind="추가시공품목" extra={selected.items} />
+            </td>
           </tr>
           {showAmount && (
             <tr>
@@ -306,7 +303,7 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
               <th>추가시공품목</th>
               <th>시공 등록</th>
               <th>시공기사</th>
-              {can('notify.send') && <th>알림톡</th>}
+              <th>알림톡</th>
               <th>관리</th>
             </tr>
           </thead>
@@ -331,11 +328,11 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
                   ))}
                 </td>
                 <td className="text-left">
-                  {(c.lineItems || []).map((l, i) => (
-                    <div key={i}>{l.name}</div>
-                  ))}
+                  <LineItems lines={c.lineItems} kind="패키지" withDetail={false} />
                 </td>
-                <td className="text-left pre-wrap items-cell">{c.items}</td>
+                <td className="text-left items-cell">
+                  <LineItems lines={c.lineItems} kind="추가시공품목" withDetail={false} extra={c.items} />
+                </td>
                 <td className="text-left nowrap">
                   {[0, 1, 2].map((i) => (
                     <div key={i}>
@@ -350,7 +347,7 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
                     </div>
                   ))}
                 </td>
-                {can('notify.send') && (
+                {(
                   <td onClick={(e) => e.stopPropagation()}>
                     <div className="talk-btn-grid">
                       {talkBrands.map((b) =>

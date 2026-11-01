@@ -1115,3 +1115,19 @@ test('비즈고 알림톡: 키는 Authorization 헤더로, 템플릿 자동 치�
     mock.close();
   }
 });
+
+test('알림톡: 따로 권한 없이 계약을 볼 수 있는 직원이면 모든 알림톡 발송, 기사는 불가', async () => {
+  await admin.ok('users', 'create', { loginId: 'talkmgr', password: 'talkmgr1234', name: '알림톡실장', permissions: ['contract.view'], dataScope: 'all' });
+  const mgr = client();
+  await mgr.ok('auth', 'login', 'talkmgr', 'talkmgr1234');
+  const [c] = await admin.ok('contracts', 'list', {});
+  const msg = { contractId: c.id, brand: '더좋은집', receiverName: '고객', receiverPhone: '010-1234-5678', message: '안내', target: '고객' };
+  assert.equal((await mgr.ok('notifications', 'send', { ...msg, template: '서명요청', templateKey: '서명요청' })).templateKey, '서명요청');
+  assert.equal((await mgr.ok('notifications', 'send', { ...msg, template: '계약완료', templateKey: '계약완료' })).templateKey, '계약완료');
+  assert.equal((await mgr.ok('notifications', 'send', { ...msg, template: '기사배정', templateKey: '기사배정_고객' })).templateKey, '기사배정_고객');
+  assert.ok((await mgr.ok('notifications', 'history', c.id)).length >= 3);
+  await admin.ok('engineers', 'save', { name: '알림톡기사', phone: '010-5252-6363', loginId: 'talkeng', password: 'talkeng1234' });
+  const eng = client();
+  await eng.ok('auth', 'login', 'talkeng', 'talkeng1234');
+  assert.equal((await eng('notifications', 'send', { ...msg, template: '계약완료', templateKey: '계약완료' })).status, 403, '기사는 불가');
+});

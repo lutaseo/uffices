@@ -10,6 +10,7 @@ import OffModal from '../components/OffModal.jsx';
 import { goBack, match, navigate, navigateForward } from '../router.js';
 import { useRefreshOnReturn } from '../utils/useRefreshOnReturn.js';
 import PhotoViewer from '../components/PhotoViewer.jsx';
+import LineItems from '../components/LineItems.jsx';
 
 // 기사모바일: 기사 계정으로 로그인하면 이 화면만 보입니다 (휴대폰 화면 기준).
 export default function EngineerApp({ route }) {
@@ -392,16 +393,12 @@ function ContractView({ id, step }) {
           <tr>
             <th>패키지</th>
             <td colSpan={3}>
-              {c.lineItems.map((l, i) => (
-                <div key={i}>
-                  {l.name}
-                  {l.qty > 1 && ` x${l.qty}`}
-                  {l.detail && <span className="sub-text"> — {l.detail}</span>}
-                </div>
-              ))}
+              <LineItems lines={c.lineItems} kind="패키지" />
             </td>
             <th>추가시공품목</th>
-            <td className="pre-wrap">{c.items}</td>
+            <td>
+              <LineItems lines={c.lineItems} kind="추가시공품목" extra={c.items} />
+            </td>
           </tr>
           <tr>
             <th>계약금액</th>
@@ -465,11 +462,11 @@ function ContractView({ id, step }) {
                   {x.status === '취소' && <div className="text-red sub-text">취소</div>}
                 </td>
                 <td className="text-left">
-                  {x.lineItems.map((l, i) => (
-                    <div key={i}>{l.name}</div>
-                  ))}
+                  <LineItems lines={x.lineItems} kind="패키지" withDetail={false} />
                 </td>
-                <td className="text-left pre-wrap items-cell">{x.items}</td>
+                <td className="text-left items-cell">
+                  <LineItems lines={x.lineItems} kind="추가시공품목" withDetail={false} extra={x.items} />
+                </td>
                 <td className="text-left nowrap">
                   {[0, 1, 2].map((i) => (
                     <div key={i}>

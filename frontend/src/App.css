@@ -4994,3 +4994,13 @@ a.btn-quick.blue:hover {
 .line-items .money-input .input-text {
   width: 110px;
 }
+
+/* 계약 상세·기사 화면의 패키지 / 추가시공품목 — 모두 진하게 (상세품목도 흐리지 않게) */
+.line-items-strong {
+  font-weight: 700;
+  color: #111;
+}
+.line-items-strong .line-detail-text {
+  font-weight: 700;
+  color: #111;
+}
