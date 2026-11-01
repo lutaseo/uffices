@@ -5036,6 +5036,10 @@ a.btn-quick.blue:hover {
 .fold-mobile-hint {
   display: none;
 }
+/* 휴대폰·태블릿에서만 보이는 접기 제목 (추가 시공 일정) */
+.fold-touch-only {
+  display: none;
+}
 @media screen and (max-width: 1100px), screen and (pointer: coarse) {
   .fold-mobile-btn {
     cursor: pointer;
@@ -5050,7 +5054,26 @@ a.btn-quick.blue:hover {
     font-weight: 600;
     color: #1a6fe0;
   }
+  .fold-touch-only {
+    display: block;
+    margin: 10px 0 6px;
+    padding: 8px 10px;
+    font-size: 14px;
+    background: #f1f6fd;
+    border-radius: 6px;
+  }
   .form-grid-table.fold-mobile:not(.open) {
     display: none;
   }
+}
+
+/* 계약 등록 현장 칸: '[ ] 동 [ ] 호  타입 [ ]  평 [ ]' — 이름표와 칸이 떨어지지 않게 */
+.field-pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.field-pair.labeled {
+  margin-left: 8px;
 }

@@ -401,11 +401,19 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
               <td className="label-col">현장<span className="star">*</span></td>
               <td className="input-col inline-fields">
                 <AptSearchInput value={form.aptName} onChange={(v) => set('aptName', v)} required />
-                <input className="input-text" name="dong" value={form.dong} onChange={onField} style={{ width: 70 }} /> 동
-                <input className="input-text" name="ho" value={form.ho} onChange={onField} style={{ width: 70 }} /> 호
-                <span>타입</span>
-                <input className="input-text" name="aptType" value={form.aptType} onChange={onField} style={{ width: 80 }} />
-                <input className="input-text" name="area" value={form.area} onChange={onField} style={{ width: 60 }} /> 평
+                {/* 이름표와 칸을 한 묶음으로 (줄이 바뀌어도 '호 타입'처럼 붙어 보이지 않게) */}
+                <span className="field-pair">
+                  <input className="input-text" name="dong" value={form.dong} onChange={onField} style={{ width: 70 }} /> 동
+                </span>
+                <span className="field-pair">
+                  <input className="input-text" name="ho" value={form.ho} onChange={onField} style={{ width: 70 }} /> 호
+                </span>
+                <span className="field-pair labeled">
+                  타입 <input className="input-text" name="aptType" value={form.aptType} onChange={onField} style={{ width: 80 }} />
+                </span>
+                <span className="field-pair labeled">
+                  평 <input className="input-text" name="area" value={form.area} onChange={onField} style={{ width: 60 }} />
+                </span>
               </td>
             </tr>
             <tr>
@@ -751,6 +759,7 @@ function ExtraWork({ no, work, products, showAmount, stepCtx, onChange, onRemove
   const amounts = calcAmounts({ ...work, payments, totalAmount: work.lineItems.length ? lineTotal : work.totalAmount });
   const setPay = (i, patch) => onChange({ payments: payments.map((p, j) => (j === i ? { ...p, ...patch } : p)) });
   const steps = work.schedules?.length ? work.schedules : [emptySchedule()];
+  const [schedOpen, setSchedOpen] = useState(false); // 일정 칸 펼침 (휴대폰·태블릿에서만 접힘)
   const setStep = (i, patch) => onChange({ schedules: steps.map((s, j) => (j === i ? { ...s, ...patch } : s)) });
   const radios = (field, values) =>
     values.map((v) => (
@@ -860,7 +869,13 @@ function ExtraWork({ no, work, products, showAmount, stepCtx, onChange, onRemove
           )}
         </tbody>
       </table>
-      <table className="form-grid-table extra-work-schedule">
+      {/* 휴대폰·태블릿: 일정 칸은 접어 두고 누르면 펼침 (PC는 제목 없이 항상 펼침) */}
+      <h4 className={`fold-mobile-title fold-touch-only ${schedOpen ? 'open' : ''}`}>
+        <button type="button" className="fold-mobile-btn" onClick={() => setSchedOpen((v) => !v)} aria-expanded={schedOpen}>
+          추가 시공 {no} 일정 ({work.category}) <span className="fold-mobile-hint">{schedOpen ? '▲ 접기' : '▼ 눌러서 펼치기'}</span>
+        </button>
+      </h4>
+      <table className={`form-grid-table extra-work-schedule fold-mobile ${schedOpen ? 'open' : ''}`}>
         <tbody>
           {steps.map((s, i) => (
             <tr key={i} className="schedule-step-row">
