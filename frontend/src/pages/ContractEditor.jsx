@@ -129,6 +129,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
   const [paper, setPaper] = useState({ saved: null, add: [], remove: [] }); // 실물 계약서 사진 (저장 뒤 올림)
   // 새 계약에서 [+ 시공 추가]로 함께 등록할 다른 시공들 (같은 고객·현장, 시공마다 계약이 따로 만들어짐)
   const [extras, setExtras] = useState([]);
+  const [schedOpen, setSchedOpen] = useState(false); // 시공정보 펼침 (휴대폰 화면에서만 접힘)
 
   // 작성 중에 뒤로가기·메뉴 등으로 실수로 나가지 않게: 처음 불러온 내용과 달라졌으면 나가기 전에 물어봄
   //   (저장·취소 버튼으로 나갈 때는 묻지 않음)
@@ -457,6 +458,12 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
               </td>
             </tr>
             <tr>
+              <td className="label-col">기사전달사항</td>
+              <td className="input-col">
+                <textarea className="input-text full" rows={2} name="engineerNote" value={form.engineerNote || ''} onChange={onField} placeholder="기사모바일에 표시됩니다 (예: 현관 비밀번호, 주차 안내, 고객 요청사항)" />
+              </td>
+            </tr>
+            <tr>
               <td className="label-col">고객 참고사항</td>
               <td className="input-col">
                 <textarea className="input-text full customer-note-input" rows={3} name="customerNote" value={form.customerNote || ''} onChange={onField} maxLength={1000} placeholder="고객에게 보이는 안내 (계약서·서명 화면에 표시) 예: 시공 당일 현관 비밀번호를 알려주세요. 시공 후 24시간 물 사용을 피해 주세요." />
@@ -621,8 +628,13 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
         )}
 
         {/* ---------------- 4. 시공정보 (일정·담당) ---------------- */}
-        <h3 className="form-section-title">&gt; 시공정보</h3>
-        <table className="form-grid-table">
+        {/* 휴대폰 화면에서는 기본으로 접어 두고 제목을 누르면 펼침 (PC·태블릿은 항상 펼침) */}
+        <h3 className={`form-section-title fold-mobile-title ${schedOpen ? 'open' : ''}`}>
+          <button type="button" className="fold-mobile-btn" onClick={() => setSchedOpen((v) => !v)} aria-expanded={schedOpen}>
+            &gt; 시공정보 <span className="fold-mobile-hint">{schedOpen ? '▲ 접기' : '▼ 눌러서 펼치기'}</span>
+          </button>
+        </h3>
+        <table className={`form-grid-table fold-mobile ${schedOpen ? 'open' : ''}`}>
           <tbody>
             {form.schedules.map((s, i) => {
               return (
@@ -648,12 +660,6 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
               );
             })}
 
-            <tr>
-              <td className="label-col">기사전달사항</td>
-              <td className="input-col" colSpan={5}>
-                <textarea className="input-text full" rows={2} name="engineerNote" value={form.engineerNote || ''} onChange={onField} placeholder="기사모바일에 표시됩니다 (예: 현관 비밀번호, 주차 안내, 고객 요청사항)" />
-              </td>
-            </tr>
             <tr>
               <td className="label-col">시공상태(최종)</td>
               <td className="input-col" colSpan={5}>
