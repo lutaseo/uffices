@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { API_MODE, companies } from '../api/index.js';
 import { usePageTitle } from '../utils/title.js';
+import { today } from '../utils/date.js';
 
 // companyCode: 업체 주소(veritybase.vercel.app/업체주소)로 들어오면 그 업체 로그인 화면
 // kind: 로그인 주소별 화면
@@ -74,6 +75,7 @@ export default function LoginPage({ companyCode = '', kind = 'staff' }) {
           <h1>{company ? `${company.name} VerityBase` : 'VerityBase'}</h1>
           <p className="login-kind">{label}</p>
           <p className="login-sub">{subText}</p>
+          {company?.periodEnd && <UsePeriod start={company.periodStart} end={company.periodEnd} />}
           {companyCode && company === null && <p className="login-error">존재하지 않는 업체 주소입니다 ({companyCode}). 주소를 확인해 주세요.</p>}
         </div>
 
@@ -112,5 +114,20 @@ export default function LoginPage({ companyCode = '', kind = 'staff' }) {
         )}
       </div>
     </div>
+  );
+}
+
+// 이용기간: 언제까지 쓸 수 있는지 + 남은 날 (만료·시작 전이면 그렇게 표시)
+function UsePeriod({ start, end }) {
+  const t = today();
+  const days = Math.round((Date.parse(end) - Date.parse(t)) / 86400000);
+  let note = `남은 기간 ${days}일`;
+  if (start && t < start) note = `${start}부터 사용 가능`;
+  else if (days < 0) note = '이용기간 만료';
+  else if (days === 0) note = '오늘까지';
+  return (
+    <p className={`login-period ${days < 0 ? 'expired' : days <= 30 ? 'soon' : ''}`}>
+      사용 가능 기간 <b>{start ? `${start} ~ ` : '~ '}{end}</b> 까지 · {note}
+    </p>
   );
 }

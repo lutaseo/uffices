@@ -5004,3 +5004,24 @@ a.btn-quick.blue:hover {
   font-weight: 700;
   color: #111;
 }
+
+/* 로그인 화면: 사용 가능 기간 (업체 이용기간) */
+.login-period {
+  margin: 10px 0 0;
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.15);
+  font-size: 13px;
+}
+.login-period b {
+  white-space: nowrap;
+}
+.login-period.soon {
+  background: #fff3cd;
+  color: #7a4f00;
+}
+.login-period.expired {
+  background: #ffe1e1;
+  color: #b00020;
+}
