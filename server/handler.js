@@ -127,7 +127,17 @@ const READ_ONLY = new Set([
 // 운영자가 특정 업체(args[0])의 자료를 읽고 쓰는 요청
 const SUPER_COMPANY_CALLS = new Set(['contracts.sampleAdd', 'contracts.sampleClear']);
 // 수정 로그를 남기지 않는 요청 (시연용 샘플)
-const NO_AUDIT = new Set(['contracts.sampleAdd', 'contracts.sampleClear']);
+// 수정로그에 남기지 않는 호출 — 시연 데이터, 고객 서명, 상품 등록·수정·삭제·가져오기, 아파트 가져오기
+const NO_AUDIT = new Set([
+  'contracts.sampleAdd',
+  'contracts.sampleClear',
+  'esign.sign',
+  'imports.products',
+  'apartments.importMany',
+  'apartments.fromContracts',
+]);
+const NO_AUDIT_SERVICES = new Set(['products']);
+const skipAudit = (name) => NO_AUDIT.has(name) || NO_AUDIT_SERVICES.has(name.split('.')[0]);
 
 const LIGHT_TABLES = {
   'auth.me': [],
@@ -304,7 +314,7 @@ export async function handleRpc({ body, headers }) {
     // 업무 코드가 저장(saveDb)한 내용만 반영. (예: 로그인 실패 횟수는 오류여도 저장됨)
     if (!readOnlyCall) {
       const changes = await persistChanges(client, before, ctx.committed, readOnly);
-      if (!error && changes.length && !NO_AUDIT.has(name)) await writeAuditLog(client, { name, session: sessionAtStart, db, scope, changes });
+      if (!error && changes.length && !skipAudit(name)) await writeAuditLog(client, { name, session: sessionAtStart, db, scope, changes });
     }
     await client.query('COMMIT');
     // 느린 요청 기록 (Vercel 로그에서 '[느림]' 으로 검색) — 다음에 느릴 때 원인을 바로 찾기 위함

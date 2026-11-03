@@ -1164,3 +1164,21 @@ test('계약 등록 → 계약자관리 자동 등록 (이름·연락처①②·
   assert.equal(all.length, 1, '같은 번호는 계약자 하나');
   assert.equal(all[0].contractCount, 2);
 });
+
+test('수정로그 제외: 고객 서명, 상품 등록·수정·삭제, 아파트 가져오기', async () => {
+  const tag = `${Date.now() % 1000000}`; // 시험 DB 에 남은 예전 기록과 섞이지 않게
+  const logs = async (q) => (await admin.ok('auditLogs', 'list', { q })).rows;
+  const p = await admin.ok('products', 'save', { name: `로그제외상품${tag}`, kind: '패키지', category: '줄눈', price: 100000 });
+  await admin.ok('products', 'save', { ...p, price: 120000 });
+  await admin.ok('products', 'remove', p.id);
+  assert.equal((await logs(`로그제외상품${tag}`)).length, 0, '상품은 안 남음');
+  await admin.ok('apartments', 'importMany', [{ name: `로그제외아파트${tag}`, sido: '서울특별시', sigungu: '강남구' }]);
+  assert.equal((await logs(`로그제외아파트${tag}`)).length, 0, '아파트 가져오기는 안 남음');
+  const who = `로그서명${tag}`;
+  const c = await admin.ok('contracts', 'create', { brand: '더좋은집', customerName: who, customerPhone: '010-4747-5858', aptName: '로그아파트', contractDate: '2026-11-03', workType: '시공', receptionType: '박람회', category: '줄눈' });
+  const { token } = await admin.ok('contracts', 'requestSign', c.id);
+  await client().ok('esign', 'sign', token, { signerName: who, signature: `data:image/png;base64,${'A'.repeat(200)}`, agreed: true });
+  const rows = await logs(who);
+  assert.ok(rows.some((r) => r.call === 'contracts.create'), '계약 등록은 남음');
+  assert.ok(!rows.some((r) => r.call === 'esign.sign'), '고객 서명은 안 남음');
+});
