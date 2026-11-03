@@ -15,7 +15,7 @@ import { setRuntimeAdapter } from '../frontend/src/api/runtime.js';
 import { ApiError } from '../frontend/src/api/core.js';
 import { bizgoConfigured, listSenders, sendAlimtalk, inquiryReport } from './bizgo.js';
 import { getPool, loadSnapshot, persistChanges, saveAuditLog, resolveCompanyId, contractByEsignToken, companyIdForCustomer, fingerprint } from './pg.js';
-import { AUDIT_KEEP_DAYS, buildAuditEntry } from '../frontend/src/api/audit.js';
+import { AUDIT_KEEP_DAYS, buildAuditEntry, skipAudit } from '../frontend/src/api/audit.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { bootstrap } from './bootstrap.js';
 import { COOKIE_NAME, decodeSession, encodeSession, parseCookies, sessionCookie } from './session.js';
@@ -127,17 +127,6 @@ const READ_ONLY = new Set([
 // 운영자가 특정 업체(args[0])의 자료를 읽고 쓰는 요청
 const SUPER_COMPANY_CALLS = new Set(['contracts.sampleAdd', 'contracts.sampleClear']);
 // 수정 로그를 남기지 않는 요청 (시연용 샘플)
-// 수정로그에 남기지 않는 호출 — 시연 데이터, 고객 서명, 상품 등록·수정·삭제·가져오기, 아파트 가져오기
-const NO_AUDIT = new Set([
-  'contracts.sampleAdd',
-  'contracts.sampleClear',
-  'esign.sign',
-  'imports.products',
-  'apartments.importMany',
-  'apartments.fromContracts',
-]);
-const NO_AUDIT_SERVICES = new Set(['products']);
-const skipAudit = (name) => NO_AUDIT.has(name) || NO_AUDIT_SERVICES.has(name.split('.')[0]);
 
 const LIGHT_TABLES = {
   'auth.me': [],

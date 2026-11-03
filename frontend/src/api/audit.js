@@ -6,6 +6,19 @@
 
 export const AUDIT_KEEP_DAYS = 14;
 
+// 수정로그에 남기지 않는 호출 — 시연 데이터, 고객 서명, 상품 등록·수정·삭제·가져오기, 아파트 가져오기
+//   서버는 이 호출을 기록하지 않고, 목록에서도 예전에 남은 같은 기록을 숨김
+const NO_AUDIT = new Set([
+  'contracts.sampleAdd',
+  'contracts.sampleClear',
+  'esign.sign',
+  'imports.products',
+  'apartments.importMany',
+  'apartments.fromContracts',
+]);
+const NO_AUDIT_SERVICES = new Set(['products']);
+export const skipAudit = (name) => NO_AUDIT.has(name) || NO_AUDIT_SERVICES.has(String(name || '').split('.')[0]);
+
 // 요청 이름 → 작업 이름 (없으면 '저장')
 const ACTIONS = {
   'contracts.create': '계약 등록',

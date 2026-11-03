@@ -1182,3 +1182,14 @@ test('수정로그 제외: 고객 서명, 상품 등록·수정·삭제, 아파�
   assert.ok(rows.some((r) => r.call === 'contracts.create'), '계약 등록은 남음');
   assert.ok(!rows.some((r) => r.call === 'esign.sign'), '고객 서명은 안 남음');
 });
+
+test('수정로그: 예전에 남은 고객 서명·상품·아파트 가져오기 기록도 목록에서 숨김', async () => {
+  const { getPool } = await import('../server/pg.js');
+  const companyId = (await admin.ok('auth', 'me')).user.companyId;
+  const tag = `예전기록${Date.now() % 1000000}`;
+  for (const call of ['esign.sign', 'products.save', 'products.remove', 'imports.products', 'apartments.importMany', 'contracts.update']) {
+    await getPool().query(`INSERT INTO audit_logs (company_id, data) VALUES ($1, $2::jsonb)`, [companyId, JSON.stringify({ action: `${tag} ${call}`, call, actor: { name: '시험' }, items: [] })]);
+  }
+  const { rows } = await admin.ok('auditLogs', 'list', { q: tag });
+  assert.deepEqual(rows.map((r) => r.call), ['contracts.update'], '계약 수정만 보임');
+});

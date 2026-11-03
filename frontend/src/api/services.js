@@ -24,7 +24,7 @@ import {
 import { ROLES, DATA_SCOPES, permissionsOf, isOwnScopeOnly, ALL_PERMISSION_KEYS } from '../auth/permissions.js';
 import { digitsOnly, formatPhone } from '../utils/format.js';
 import { CATEGORIES, DEPARTMENTS, brandTerms, termsSource } from '../constants.js';
-import { AUDIT_KEEP_DAYS, auditText } from './audit.js';
+import { AUDIT_KEEP_DAYS, auditText, skipAudit } from './audit.js';
 import {
   ApiError,
   authorize,
@@ -55,6 +55,7 @@ export const auditLogs = {
     const text = String(q || '').trim();
     const rows = (db.auditLogs || []).filter((r) => {
       if (r.at < since) return false;
+      if (skipAudit(r.call)) return false; // 지금은 남기지 않는 종류의 예전 기록 (고객 서명·상품·아파트 가져오기 등)
       const day = new Date(Date.parse(r.at) + 9 * 3600000).toISOString().slice(0, 10); // 한국 날짜
       if (from && day < from) return false;
       if (to && day > to) return false;
