@@ -302,6 +302,41 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
       </label>
     ));
 
+  // ---- 새 계약: [구분]을 여러 개 체크하면 체크한 구분마다 시공(계약)이 하나씩 (첫 번째는 본 시공, 나머지는 추가 시공)
+  const newExtra = (category) => ({ category, workType: WORK_TYPES[0], receptionType: form.receptionType, lineItems: [], items: '', totalAmount: '', discount: '', voucher: '', payments: [], schedules: [emptySchedule()] });
+  const usedCategories = [form.category, ...extras.map((x) => x.category)];
+  // 그 시공에 입력한 내용이 있는지 (빼기 전에 물어보려고)
+  const hasWork = (w) =>
+    (w.lineItems || []).length > 0 ||
+    (w.payments || []).some((p) => Number(p.amount)) ||
+    !!String(w.items || '').trim() ||
+    !!Number(w.totalAmount) ||
+    (w.schedules || []).some((x) => x.date || x.engineerId || x.teamId);
+  const toggleCategory = (c, on) => {
+    if (on) {
+      setExtras((prev) => [...prev, newExtra(c)]);
+      return;
+    }
+    const ask = (w) => !hasWork(w) || window.confirm(`${c} 시공에 입력한 시공내역·금액·입금·일정이 함께 빠집니다. 빼시겠습니까?`);
+    if (c === form.category) {
+      if (!extras.length) {
+        alert('시공 구분은 하나 이상 체크해야 합니다. 다른 구분을 먼저 체크한 뒤 빼 주세요.');
+        return;
+      }
+      if (!ask(form)) return;
+      // 본 시공을 빼면 첫 번째 추가 시공이 본 시공 자리로 올라옴
+      const [first, ...rest] = extras;
+      const steps = [...(first.schedules || [])];
+      while (steps.length < MAX_SCHEDULE_STEPS) steps.push(emptySchedule());
+      setForm((prev) => ({ ...prev, ...first, schedules: steps }));
+      setExtras(rest);
+      return;
+    }
+    const k = extras.map((x) => x.category).lastIndexOf(c);
+    if (k < 0 || !ask(extras[k])) return;
+    setExtras((prev) => prev.filter((_, j) => j !== k));
+  };
+
   const timeOpts = timeOptions(settings);
   const stepCtx = { settings, timeOpts, engineers, crewTeams, offs };
 
@@ -487,7 +522,20 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
           <tbody>
             <tr>
               <td className="label-col">구분</td>
-              <td className="input-col">{radios('category', CATEGORIES)}</td>
+              <td className="input-col">
+                {isEdit ? (
+                  radios('category', CATEGORIES)
+                ) : (
+                  <>
+                    {CATEGORIES.map((c) => (
+                      <label key={c} className="radio-item">
+                        <input type="checkbox" checked={usedCategories.includes(c)} onChange={(e) => toggleCategory(c, e.target.checked)} /> {c}
+                      </label>
+                    ))}
+                    <div className="sub-text">ⓘ 여러 개 체크하면 체크한 시공마다 아래에 입력 칸이 생기고, 계약도 시공마다 따로 만들어집니다.</div>
+                  </>
+                )}
+              </td>
             </tr>
             <tr>
               <td className="label-col">시공종류</td>
@@ -501,7 +549,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
         </table>
 
         {/* ---------------- 3. 시공내역 · 금액 ---------------- */}
-        <h3 className="form-section-title">&gt; 시공내역 · 금액</h3>
+        <h3 className="form-section-title">&gt; 시공내역 · 금액{extras.length > 0 && ` — ${form.category}`}</h3>
         <table className="form-grid-table">
           <tbody>
             <tr>
@@ -624,14 +672,13 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
               type="button"
               className="btn-dark-lg sm"
               onClick={() => {
-                const used = [form.category, ...extras.map((x) => x.category)];
-                const category = CATEGORIES.find((c) => c !== '기타' && !used.includes(c)) || CATEGORIES[0];
-                setExtras((prev) => [...prev, { category, workType: WORK_TYPES[0], receptionType: form.receptionType, lineItems: [], items: '', totalAmount: '', discount: '', voucher: '', payments: [], schedules: [emptySchedule()] }]);
+                const category = CATEGORIES.find((c) => c !== '기타' && !usedCategories.includes(c)) || CATEGORIES[0];
+                setExtras((prev) => [...prev, newExtra(category)]);
               }}
             >
               + 시공 추가
             </button>
-            <span className="sub-text">같은 고객·현장에 다른 시공(예: 줄눈 + 청소)을 함께 등록합니다. 시공마다 계약이 하나씩 만들어지고 일정(기사 배정)·입금도 시공별로 들어갑니다.</span>
+            <span className="sub-text">같은 고객·현장에 다른 시공(예: 줄눈 + 청소)을 함께 등록합니다. 위 [구분]에서 여러 개 체크해도 됩니다. 시공마다 계약이 하나씩 만들어지고 일정(기사 배정)·입금도 시공별로 들어갑니다.</span>
           </div>
         )}
 
@@ -771,7 +818,7 @@ function ExtraWork({ no, work, products, showAmount, stepCtx, onChange, onRemove
   return (
     <>
       <h3 className="form-section-title extra-work-title">
-        &gt; 추가 시공 {no}
+        &gt; 추가 시공 {no} — {work.category}
         <button type="button" className="btn-text-danger" onClick={onRemove}>
           이 시공 빼기
         </button>
@@ -1063,8 +1110,6 @@ function ProductLines({ products, category, all, onAll, lines, onLines }) {
                   <tr>
                     <th>상품명</th>
                     <th>상세품목</th>
-                    <th>수량</th>
-                    <th>단가</th>
                     <th>금액</th>
                     <th />
                   </tr>
@@ -1078,10 +1123,16 @@ function ProductLines({ products, category, all, onAll, lines, onLines }) {
                       <td data-label="상세품목">
                         <textarea className="input-text full line-detail" rows={detailRows(l.detail)} value={l.detail} onChange={(e) => setLine(i, { detail: e.target.value })} />
                       </td>
-                      <td data-label="수량"><input type="number" min="1" className="input-text" style={{ width: 60 }} value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} /></td>
-                      <td data-label="단가"><MoneyInput value={l.unitPrice} onChange={(v) => setLine(i, { unitPrice: v })} /></td>
-                      <td data-label="금액" className="text-right">{won((Number(l.qty) || 0) * (Number(l.unitPrice) || 0))}</td>
-                      <td>
+                      {/* 수량 칸은 없앰 (한 줄 = 1개). 예전에 수량을 2 이상으로 넣은 줄만 수량을 함께 보여 줌 */}
+                      <td data-label="금액" className="line-price">
+                        <MoneyInput value={l.unitPrice} onChange={(v) => setLine(i, { unitPrice: v })} />
+                        {Number(l.qty) > 1 && (
+                          <div className="sub-text">
+                            × {l.qty}개 = {won(Number(l.qty) * (Number(l.unitPrice) || 0))}원
+                          </div>
+                        )}
+                      </td>
+                      <td className="line-delete">
                         <button type="button" className="btn-text-danger" onClick={() => onLines(lines.filter((_, j) => j !== i))}>삭제</button>
                       </td>
                     </tr>
