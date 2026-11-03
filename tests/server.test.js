@@ -1134,3 +1134,18 @@ test('알림톡: 따로 권한 없이 계약을 볼 수 있는 직원이면 모�
   await eng.ok('auth', 'login', 'talkeng', 'talkeng1234');
   assert.equal((await eng('notifications', 'send', { ...msg, template: '계약완료', templateKey: '계약완료' })).status, 403, '기사는 불가');
 });
+
+test('현장 서명: 계약 등록 권한만 있어도 서명 요청(등록 직후 그 자리에서), 묶음 계약 번호를 돌려줌', async () => {
+  await admin.ok('users', 'create', { loginId: 'onsitemgr', password: 'onsite1234', name: '현장서명실장', permissions: ['contract.view', 'contract.create'], dataScope: 'all' });
+  const mgr = client();
+  await mgr.ok('auth', 'login', 'onsitemgr', 'onsite1234');
+  const base = { brand: '더좋은집', customerName: '현장서명고객', customerPhone: '010-8282-9393', aptName: '현장서명아파트', dong: '1', ho: '101', contractDate: '2026-11-03', workType: '시공', receptionType: '박람회' };
+  const a = await mgr.ok('contracts', 'create', { ...base, category: '줄눈' });
+  const b = await mgr.ok('contracts', 'create', { ...base, category: '청소' });
+  const r = await mgr.ok('contracts', 'requestSign', a.id);
+  assert.deepEqual([...r.ids].sort((x, y) => x - y), [a.id, b.id].sort((x, y) => x - y), '줄눈·청소는 한 장으로');
+  await admin.ok('users', 'create', { loginId: 'viewonlymgr', password: 'viewonly1234', name: '조회만실장', permissions: ['contract.view'], dataScope: 'all' });
+  const v = client();
+  await v.ok('auth', 'login', 'viewonlymgr', 'viewonly1234');
+  assert.equal((await v('contracts', 'requestSign', a.id)).status, 403, '조회만 가능하면 서명 요청 불가');
+});

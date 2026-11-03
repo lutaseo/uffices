@@ -4987,6 +4987,7 @@ a.btn-quick.blue:hover {
   background: #fff7ed;
 }
 .line-items .line-detail {
+  font-family: inherit;
   min-height: 34px;
   resize: vertical;
   white-space: pre-wrap;
@@ -5076,4 +5077,85 @@ a.btn-quick.blue:hover {
 }
 .field-pair.labeled {
   margin-left: 8px;
+}
+
+/* 계약 등록 상품 줄 — 휴대폰: 표 대신 카드처럼 (상품명·상세품목을 한 줄 전체로, 금액·삭제는 그 아래) */
+@media screen and (max-width: 768px) {
+  .product-group .line-items {
+    display: block;
+    overflow: visible;
+  }
+  .product-group .line-items thead {
+    display: none;
+  }
+  .product-group .line-items tbody,
+  .product-group .line-items tr,
+  .product-group .line-items td {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .product-group .line-items tr {
+    border: 1px solid #dce1e8;
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin: 8px 0;
+    background: #fff;
+  }
+  .product-group .line-items td {
+    border: 0;
+    padding: 3px 0;
+  }
+  .product-group .line-items td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 2px;
+  }
+  /* 상세품목은 글 길이만큼 칸이 늘어남 (전부 보이게) */
+  .product-group .line-items .line-detail {
+    min-height: 60px;
+    field-sizing: content;
+    max-height: none;
+  }
+  .product-group .line-items td.line-price {
+    display: inline-block;
+    width: auto;
+  }
+  .product-group .line-items td.line-delete {
+    display: inline-block;
+    width: auto;
+    float: right;
+    margin-top: 22px;
+  }
+}
+
+/* 계약 등록 직후 현장 서명 (화면 전체) */
+.onsite-sign {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  background: #eef2f7;
+  display: flex;
+  flex-direction: column;
+}
+.onsite-sign-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #1a6fe0;
+  color: #fff;
+}
+.onsite-sign-actions {
+  display: flex;
+  gap: 6px;
+}
+.onsite-sign-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
