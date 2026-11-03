@@ -1149,3 +1149,18 @@ test('현장 서명: 계약 등록 권한만 있어도 서명 요청(등록 직�
   await v.ok('auth', 'login', 'viewonlymgr', 'viewonly1234');
   assert.equal((await v('contracts', 'requestSign', a.id)).status, 403, '조회만 가능하면 서명 요청 불가');
 });
+
+test('계약 등록 → 계약자관리 자동 등록 (이름·연락처①②·주소=현장), 같은 번호면 기존 계약자에 연결하고 빈 칸만 채움', async () => {
+  const base = { brand: '더좋은집', contractDate: '2026-11-03', workType: '시공', receptionType: '박람회', category: '줄눈' };
+  const c = await admin.ok('contracts', 'create', { ...base, customerName: '자동계약자', customerPhone: '010-6161-7272', customerPhone2: '010-6161-8383', aptName: '자동힐스', dong: '101', ho: '1203' });
+  let [cust] = await admin.ok('customers', 'list', '010-6161-7272');
+  assert.equal(cust.id, c.customerId);
+  assert.equal(cust.name, '자동계약자');
+  assert.equal(cust.phone2, '010-6161-8383');
+  assert.equal(cust.address1, '자동힐스 101동 1203호');
+  assert.equal(cust.contractCount, 1);
+  await admin.ok('contracts', 'create', { ...base, category: '청소', customerName: '자동계약자', customerPhone: '010-6161-7272', aptName: '자동힐스', dong: '101', ho: '1203' });
+  const all = await admin.ok('customers', 'list', '010-6161-7272');
+  assert.equal(all.length, 1, '같은 번호는 계약자 하나');
+  assert.equal(all[0].contractCount, 2);
+});

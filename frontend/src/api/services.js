@@ -576,6 +576,16 @@ export const customers = {
     const q = query.trim();
     const qDigits = digitsOnly(q);
     const visibleIds = new Set(visibleContracts(db, user).map((c) => c.customerId));
+    // 계약자별 계약 수 + 가장 최근 계약 (주소·연락처②가 비어 있는 예전 계약자는 최근 계약의 현장·연락처로 채워 보여 줌)
+    const byCustomer = new Map();
+    db.contracts.forEach((x) => {
+      if (x.companyId !== user.companyId || x.deletedAt) return;
+      const e = byCustomer.get(x.customerId) || { count: 0, last: null };
+      e.count += 1;
+      if (!e.last || x.id > e.last.id) e.last = x;
+      byCustomer.set(x.customerId, e);
+    });
+    const siteOf = (x) => (x?.aptName ? [x.aptName, x.dong && `${x.dong}동`, x.ho && `${x.ho}호`].filter(Boolean).join(' ') : '');
     return db.customers
       .filter((c) => c.companyId === user.companyId)
       // 본인 건만 보는 실장은 본인 계약에 연결된 계약자만
@@ -587,10 +597,15 @@ export const customers = {
           (qDigits && (digitsOnly(c.phone1).includes(qDigits) || digitsOnly(c.phone2).includes(qDigits))),
       )
       .sort((a, b) => b.id - a.id)
-      .map((c) => ({
-        ...clone(c),
-        contractCount: db.contracts.filter((x) => x.customerId === c.id && !x.deletedAt).length,
-      }));
+      .map((c) => {
+        const e = byCustomer.get(c.id);
+        return {
+          ...clone(c),
+          address1: c.address1 || siteOf(e?.last),
+          phone2: c.phone2 || (e?.last?.customerPhone2 && digitsOnly(e.last.customerPhone2) !== digitsOnly(c.phone1) ? e.last.customerPhone2 : ''),
+          contractCount: e?.count || 0,
+        };
+      });
   },
 
   async findByPhone(phone) {

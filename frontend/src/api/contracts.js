@@ -393,11 +393,20 @@ function diffContract(db, before, after) {
   return changes;
 }
 
-// 전화번호로 계약자를 찾고 없으면 자동 등록
-function upsertCustomerForContract(db, user, name, phone, phone2) {
+// 전화번호로 계약자를 찾고 없으면 자동 등록 (계약자관리에 자동으로 생김)
+//   site: 계약의 현장(아파트·동·호) → 계약자 주소로. 이미 있는 계약자는 비어 있는 칸(연락처②·주소)만 채움
+const siteAddress = (site) => {
+  const apt = String(site?.aptName || '').trim();
+  if (!apt) return '';
+  return [apt, site.dong && `${site.dong}동`, site.ho && `${site.ho}호`].filter(Boolean).join(' ');
+};
+function upsertCustomerForContract(db, user, name, phone, phone2, site) {
   const d = digitsOnly(phone);
   let cust = db.customers.find((c) => c.companyId === user.companyId && digitsOnly(c.phone1) === d);
-  if (!cust) {
+  if (cust) {
+    if (!cust.phone2 && phone2 && digitsOnly(phone2) !== d) cust.phone2 = phone2;
+    if (!cust.address1 && siteAddress(site)) cust.address1 = siteAddress(site);
+  } else {
     cust = {
       id: nextId(db, 'customers'),
       companyId: user.companyId,
@@ -407,7 +416,7 @@ function upsertCustomerForContract(db, user, name, phone, phone2) {
       phone2: phone2 || '',
       email: '',
       zipcode: '',
-      address1: '',
+      address1: siteAddress(site),
       address2: '',
       createdBy: user.id,
       createdAt: nowIso(),
@@ -502,7 +511,7 @@ export const contracts = {
     const { db, user } = await authorize('contract.create');
     const fields = normalizeContractInput(db, user, data, null);
     assertSchedulesAssignable(db, user, fields.schedules, [], null);
-    const cust = upsertCustomerForContract(db, user, fields.customerName, fields.customerPhone, fields.customerPhone2);
+    const cust = upsertCustomerForContract(db, user, fields.customerName, fields.customerPhone, fields.customerPhone2, fields);
     const contract = {
       totalAmount: 0,
       discount: 0,
@@ -625,7 +634,7 @@ export const contracts = {
       if (changed) c.esign = { ...c.esign, status: ESIGN_STATUS.NONE, token: null, previousSignedAt: c.esign.signedAt };
     }
     if (fields.customerPhone !== c.customerPhone) {
-      c.customerId = upsertCustomerForContract(db, user, c.customerName, fields.customerPhone, fields.customerPhone2).id;
+      c.customerId = upsertCustomerForContract(db, user, c.customerName, fields.customerPhone, fields.customerPhone2, { ...c, ...fields }).id;
     }
     Object.assign(c, fields, { updatedAt: nowIso() });
     if ('payments' in fields) {
@@ -1545,7 +1554,7 @@ export const imports = {
           input.totalAmount = (Number(input.discount) || 0) + (Number(input.voucher) || 0);
         }
         const fields = normalizeContractInput(db, user, input, null);
-        const cust = upsertCustomerForContract(db, user, fields.customerName, fields.customerPhone, fields.customerPhone2);
+        const cust = upsertCustomerForContract(db, user, fields.customerName, fields.customerPhone, fields.customerPhone2, fields);
         const contract = {
           totalAmount: 0,
           discount: 0,
