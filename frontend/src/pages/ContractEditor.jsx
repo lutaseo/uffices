@@ -43,6 +43,7 @@ import {
 import { today } from '../utils/date.js';
 import { formatPhone, won } from '../utils/format.js';
 import ContractViewModal from '../components/ContractViewModal.jsx';
+import OnSiteSign from '../components/OnSiteSign.jsx';
 
 const CIRCLED = ['①', '②', '③'];
 
@@ -130,6 +131,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
   // 새 계약에서 [+ 시공 추가]로 함께 등록할 다른 시공들 (같은 고객·현장, 시공마다 계약이 따로 만들어짐)
   const [extras, setExtras] = useState([]);
   const [schedOpen, setSchedOpen] = useState(false); // 시공정보 펼침 (휴대폰·태블릿에서만 접힘)
+  const [signFlow, setSignFlow] = useState(null); // 등록 직후 현장 서명 { ids, saved }
 
   // 작성 중에 뒤로가기·메뉴 등으로 실수로 나가지 않게: 처음 불러온 내용과 달라졌으면 나가기 전에 물어봄
   //   (저장·취소 버튼으로 나갈 때는 묻지 않음)
@@ -259,6 +261,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
       }
       // [+ 시공 추가]로 넣은 시공: 같은 고객·현장 정보로 시공마다 계약을 하나씩 더 만듦 (일정·입금도 그 계약에)
       const nos = [saved.no];
+      const newIds = [saved.id];
       const failed = [];
       if (!isEdit) {
         const SHARED = ['brand', 'customerName', 'customerPhone', 'customerPhone2', 'ownerId', 'aptName', 'dong', 'ho', 'aptType', 'area', 'contractDate', 'moveInDate', 'approval', 'taxInvoice', 'cashReceipt', 'customerNote'];
@@ -268,6 +271,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
             const pays = w.payments || [];
             let made = await contractApi.create({ ...base, ...w, schedules: keepSteps(w.schedules || [emptySchedule()]), payments: pays.map(strip), status: '미정' });
             nos.push(made.no);
+            newIds.push(made.id);
             // 추가 시공의 영수증 사진도 그 계약의 입금별로 올림 (금액 0인 줄은 저장되지 않아 순서가 같음)
             const keptPays = pays.filter((p) => Number(p.amount));
             for (let i = 0; i < keptPays.length; i++) {
@@ -287,7 +291,13 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
       }
       if (failed.length) alert(`계약 No.${nos.join(', No.')} 은 등록되었지만 추가 시공 일부를 등록하지 못했습니다.\n${failed.join('\n')}\n계약 상세의 [시공등록]으로 다시 추가해 주세요.`);
       else if (photoError) alert(`계약은 저장되었지만 사진 일부를 올리지 못했습니다.\n${photoError}\n계약 수정에서 다시 첨부해 주세요.`);
-      else alert(isEdit ? '저장되었습니다.' : `계약이 등록되었습니다. (No.${nos.join(', No.')})`);
+      else if (isEdit) alert('저장되었습니다.');
+      // 새 계약: 저장이 끝난 뒤 그 자리에서 고객 서명을 받을지 물어봄 (서명 → 계약완료 알림톡)
+      if (!isEdit && window.confirm(`계약이 등록되었습니다. (No.${nos.join(', No.')})\n\n지금 이 기기에서 고객 서명을 받으시겠습니까?\n[취소]를 누르면 나중에 계약서 보기에서 서명 링크를 보낼 수 있습니다.`)) {
+        releaseGuard.current();
+        setSignFlow({ ids: newIds, saved });
+        return;
+      }
       close(saved, isEdit);
     } catch (err) {
       handleError(err);
@@ -794,6 +804,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
       )}
 
       {viewOpen && <ContractViewModal contractId={contractId} onClose={() => setViewOpen(false)} />}
+      {signFlow && <OnSiteSign ids={signFlow.ids} onClose={() => close(signFlow.saved, false)} />}
     </div>
   );
 }

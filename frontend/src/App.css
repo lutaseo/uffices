@@ -5131,3 +5131,31 @@ a.btn-quick.blue:hover {
     margin-top: 22px;
   }
 }
+
+/* 계약 등록 직후 현장 서명 (화면 전체) */
+.onsite-sign {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  background: #eef2f7;
+  display: flex;
+  flex-direction: column;
+}
+.onsite-sign-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #1a6fe0;
+  color: #fff;
+}
+.onsite-sign-actions {
+  display: flex;
+  gap: 6px;
+}
+.onsite-sign-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}

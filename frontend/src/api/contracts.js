@@ -4,7 +4,7 @@
 // ============================================================
 
 import { loadDb, saveDb, nextId, publicBaseUrl, clientInfo, getSession, setSession, alimtalkGateway, hashPassword } from './runtime.js';
-import { ApiError, authorize, clone, findContract, isLoginIdTaken, nowIso, validatePassword, visibleContracts } from './core.js';
+import { ApiError, authorize, authorizeAny, clone, findContract, isLoginIdTaken, nowIso, validatePassword, visibleContracts } from './core.js';
 import { addHistory, assigneeOf, contractListView, contractView, hideAmounts } from './views.js';
 import { assertAssignable } from './schedule.js';
 import { invalidateNumbers, numberOf } from './numbering.js';
@@ -927,8 +927,9 @@ export const contracts = {
 
   // POST /api/contracts/:id/esign  → 고객에게 서명 링크 발송
   //   같은 계약자·현장의 서명 안 된 계약(줄눈·청소 등)을 한 링크로 묶어 한 번에 서명
+  //   서명요청 권한, 또는 계약 등록 권한(등록 직후 그 자리에서 고객 서명 받기)이 있으면 됨
   async requestSign(id) {
-    const { db, user } = await authorize('esign.send');
+    const { db, user } = await authorizeAny(['esign.send', 'contract.create']);
     const c = findContract(db, user, id);
     if (c.deletedAt) throw new ApiError('휴지통에 있는 계약입니다.');
     if (c.esign?.status === ESIGN_STATUS.SIGNED) throw new ApiError('이미 서명이 완료된 계약입니다.');
@@ -941,7 +942,7 @@ export const contracts = {
       addHistory(x, user, together ? `전자서명 요청 (${together} 한 장으로)` : '전자서명 요청');
     }
     saveDb(db);
-    return { token, url: signUrlOf(token), count: list.length };
+    return { token, url: signUrlOf(token), count: list.length, ids: list.map((x) => x.id) };
   },
 };
 

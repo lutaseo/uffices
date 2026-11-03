@@ -4,7 +4,8 @@ import { esign } from '../api/index.js';
 import ContractDocument from '../components/ContractDocument.jsx';
 
 // 고객용 전자서명 페이지 (/sign/:token). 로그인 없이 링크로만 접근합니다.
-export default function SignPage({ token }) {
+//   계약 등록 직후 그 자리에서 서명받을 때(OnSiteSign)도 같은 화면을 씀 — onDone: 서명 완료 뒤 부를 함수
+export default function SignPage({ token, onDone }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [agreed, setAgreed] = useState(false);
@@ -86,6 +87,7 @@ export default function SignPage({ token }) {
       const mark = (c) => ({ ...c, esign: { ...c.esign, status: '서명완료', signerName: signerName.trim(), signature, signedAt } });
       setData((d) => ({ ...d, contract: mark(d.contract), contracts: (d.contracts || [d.contract]).map(mark) }));
       setDone(true);
+      onDone?.();
     } catch (e) {
       alert(e.message);
       setSubmitting(false);
