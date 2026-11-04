@@ -52,12 +52,14 @@ export function splitSite(text) {
 
 const RECEPTION = { 박람: '박람회', 음성: '음성계약', 사전: '사전계약', 옵션: '옵션', 무상: '무상시공' };
 
-// "① : 2026-10-15(9:00)" → { date, time }
+// "① : 2026-10-15(9:00)" → { date, time } / "(오전)"·"(오후)" → ampm (시간 미정 오전·오후)
 function parseWhen(text) {
   const t = String(text || '').replace(/^[①②③]\s*:\s*/, '');
   const date = (t.match(/\d{4}-\d{2}-\d{2}/) || [''])[0];
   const tm = (t.match(/\((\d{1,2}):(\d{2})\)/) || []).slice(1);
-  return { date, time: tm.length ? `${tm[0].padStart(2, '0')}:${tm[1]}` : '' };
+  if (tm.length) return { date, time: `${tm[0].padStart(2, '0')}:${tm[1]}` };
+  const ampm = /\(\s*오전/.test(t) ? 'AM' : /\(\s*오후/.test(t) ? 'PM' : '';
+  return { date, time: '', ...(ampm ? { ampm } : {}) };
 }
 const who = (text) => String(text || '').replace(/^[①②③]\s*:\s*/, '').trim();
 

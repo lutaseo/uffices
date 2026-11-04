@@ -1283,3 +1283,37 @@ test('로그인 주소별 첫 화면 이름 (링크 미리보기·홈 화면): /
   await page({ query: { code: 'thegood', kind: 'm', manifest: '1' }, headers: { host: 'test.local' } }, res);
   assert.equal(JSON.parse(res.body).short_name, '더좋은집 기사');
 });
+
+test('계약 가져오기: 시공일자 ①② (시간·오전/오후), 기사 ①② 배정, 시공완료일까지 — 기사 이름 앞 표시가 달라도 같은 기사로', async () => {
+  const { parseLegacyHtml, mapLegacyRow } = await import('../frontend/src/utils/legacyImport.js');
+  await admin.ok('imports', 'engineers', [{ name: '박영노' }, { name: '줄)김준영2' }]);
+  const tr = (no, d1, w1, d2, w2, status) => `<tr>
+    <td>${no}</td><td>더좋은집</td><td>줄눈</td><td>박람</td><td>시공</td><td>${status}</td><td>2026-05-02</td>
+    <td>일정확인고객${no}(승인)</td><td>010-7272-${String(no).slice(-4)}</td><td>일정아파트101-${no}</td><td>84A</td>
+    <td>1,000,000</td><td>할인금액 : 0</td><td>상품권 : 0</td><td>1,000,000</td><td>0</td><td>1,000,000</td>
+    <td>① : ${d1}</td><td>② : ${d2}</td><td>${status}</td><td>① : ${w1}</td><td>② : ${w2}</td><td></td><td></td><td></td><td></td></tr>`;
+  const html = `<table><thead><tr><td>번호</td></tr></thead><tbody>
+    ${tr(9101, '2026-06-03(10:30)', '청)박영노', '2026-06-04(오후)', '김준영2', '시공완료')}
+    ${tr(9102, '2026-06-05(오전)', '', '', '', '미정')}
+  </tbody></table>`;
+  const rows = parseLegacyHtml(html).map(mapLegacyRow);
+  assert.deepEqual(rows[0].schedules.map((s) => [s.date, s.time, s.ampm || '', s.engineerName]), [
+    ['2026-06-03', '10:30', '', '청)박영노'],
+    ['2026-06-04', '', 'PM', '김준영2'],
+  ]);
+  const r = await admin.ok('imports', 'contracts', rows);
+  assert.equal(r.created, 2, JSON.stringify(r.errors));
+  assert.deepEqual(r.newEngineers, [], "'청)박영노'·'김준영2'는 이미 있는 '박영노'·'줄)김준영2'와 같은 기사 (새로 안 만듦)");
+  const engs = await admin.ok('engineers', 'list');
+  const idOf = (n) => engs.find((e) => e.name === n).id;
+  const list = await admin.ok('contracts', 'list', {});
+  const full = await admin.ok('contracts', 'get', list.find((x) => x.customerName === '일정확인고객9101').id);
+  assert.deepEqual(full.schedules.slice(0, 2).map((s) => [s.date, s.time, s.ampm, s.engineerId]), [
+    ['2026-06-03', '10:30', '', idOf('박영노')],
+    ['2026-06-04', '', 'PM', idOf('줄)김준영2')],
+  ]);
+  assert.equal(full.status, '시공완료');
+  assert.equal(full.completedDate, '2026-06-04', '완료일 = 마지막 시공일');
+  const day = await admin.ok('schedules', 'list', { from: '2026-06-03', to: '2026-06-05' });
+  assert.ok(day.some((x) => x.contract?.customerName === '일정확인고객9102' && !x.engineerId), '기사 없는 일정도 달력에 (미정)');
+});

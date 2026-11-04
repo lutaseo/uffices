@@ -1552,10 +1552,13 @@ export const imports = {
     const company = db.companies.find((c) => c.id === user.companyId);
     const result = { created: 0, skipped: 0, errors: [], newEngineers: [], newBrands: [] };
     const done = new Set(db.contracts.filter((c) => c.companyId === user.companyId && c.legacyNo).map((c) => String(c.legacyNo)));
+    // 기사 찾기: 같은 이름 → 없으면 앞 표시('청)', '줄)' 등)와 띄어쓰기를 빼고 같은 이름 (중복 기사가 생기지 않게)
+    const bare = (s) => String(s || '').replace(/^[가-힣,]+\)\s*/, '').replace(/\s+/g, '');
     const engineerFor = (name) => {
       const n = String(name || '').trim();
       if (!n) return null;
-      let e = db.engineers.find((x) => x.companyId === user.companyId && x.name === n);
+      const mine = db.engineers.filter((x) => x.companyId === user.companyId);
+      let e = mine.find((x) => x.name === n) || (bare(n) ? mine.filter((x) => bare(x.name) === bare(n)) : []).find((x, _, all) => all.length === 1);
       if (!e) {
         e = newEngineer(db, user, { name: n });
         result.newEngineers.push(n);
