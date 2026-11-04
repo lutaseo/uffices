@@ -90,11 +90,12 @@ test('비로그인·허용 외 호출 차단', async () => {
   assert.equal((await admin('nope', 'list')).status, 400);
 });
 
-test('실장 권한: 본인 작성 건만, 금액 숨김, 삭제 불가, 승인대기로 등록', async () => {
+test('실장 권한: 본인 작성 건만, 금액·입금은 기본으로 보임(매출 합계는 따로), 삭제 불가, 승인대기로 등록', async () => {
   const all = await admin.ok('contracts', 'list', {});
   const mine = await manager.ok('contracts', 'list', {});
   assert.ok(mine.length > 0 && mine.length < all.length);
-  assert.ok(mine.every((c) => c.totalAmount === null));
+  assert.ok(mine.every((c) => typeof c.totalAmount === 'number'), '실장도 계약 금액은 보임');
+  assert.ok((await manager.ok('auth', 'me')).user.permissions.every((p) => p !== 'sales.total'), '회사 매출 합계는 체크한 실장만');
   const other = all.find((c) => !mine.some((m) => m.id === c.id));
   assert.equal((await manager('contracts', 'get', other.id)).status, 404);
   assert.equal((await manager('contracts', 'moveToTrash', [mine[0].id])).status, 403);
@@ -246,7 +247,7 @@ test('계약 상세: 같은 계약자·현장 시공 묶음, 입금/환불/수�
   assert.equal(calcAmounts(c).refund, 0);
   assert.ok(c.history.some((h) => h.action === '입금 수정'));
 
-  assert.equal((await manager('contracts', 'addPayment', a.id, { amount: 1000 })).status, 403, '수정 권한 없는 실장은 입금 등록 불가');
+  assert.ok([403, 404].includes((await manager('contracts', 'addPayment', a.id, { amount: 1000 })).status), '본인 계약이 아닌 실장은 입금 등록 불가');
 
   await admin.ok('contracts', 'addNote', b.id, '고객 통화: 오전 선호');
   const g2 = await admin.ok('contracts', 'group', a.id);

@@ -33,7 +33,8 @@ export const PERMISSIONS = [
   { key: 'contract.create', group: '계약관리', label: '계약 등록', short: '계약등록' },
   { key: 'contract.edit', group: '계약관리', label: '계약 수정', short: '계약수정' },
   { key: 'contract.delete', group: '계약관리', label: '계약 삭제/휴지통', short: '계약삭제' },
-  { key: 'contract.amount', group: '계약관리', label: '금액·입금 정보 보기', short: '금액보기' },
+  // 금액·입금 정보·패키지 가격은 실장 모두 기본으로 봄 (체크 목록에 안 나옴). 회사 매출 합계(sales.total)만 사람마다 체크
+  { key: 'contract.amount', group: '계약관리', label: '금액·입금 정보 보기', short: '금액보기', always: true },
   { key: 'sales.total', group: '계약관리', label: '회사 매출 합계 보기 (목록 상단 합계·통계 금액·엑셀 금액)', short: '매출합계' },
   { key: 'contract.approve', group: '계약관리', label: '계약 승인/미승인 처리', short: '계약승인' },
   { key: 'esign.send', group: '전자계약', label: '전자계약 서명요청', short: '서명요청' },
@@ -47,6 +48,10 @@ export const PERMISSIONS = [
 ];
 
 export const ALL_PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
+// 실장이면 체크하지 않아도 항상 있는 권한
+export const STAFF_ALWAYS = PERMISSIONS.filter((p) => p.always).map((p) => p.key);
+// 사용자관리 화면에서 체크하는 권한 (항상 있는 것은 뺌)
+export const CHECKABLE_PERMISSIONS = PERMISSIONS.filter((p) => !p.always);
 
 // 실장 계정 생성 시 기본으로 체크될 권한
 export const DEFAULT_MANAGER_PERMISSIONS = [
@@ -66,7 +71,7 @@ export const DATA_SCOPES = {
 export function permissionsOf(user) {
   if (!user) return [];
   if (user.role === ROLES.ADMIN) return ALL_PERMISSION_KEYS;
-  if (user.role === ROLES.MANAGER) return user.permissions || [];
+  if (user.role === ROLES.MANAGER) return [...new Set([...(user.permissions || []), ...STAFF_ALWAYS])];
   return []; // SUPER 는 업무 데이터가 아닌 업체/계정 관리만 수행
 }
 

@@ -566,25 +566,16 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
             <tr>
               <td className="label-col">시공선택</td>
               <td className="input-col">
-                {showAmount ? (
-                  <>
-                    <ProductLines
-                      products={productList}
-                      category={form.category}
-                      all={allProducts}
-                      onAll={setAllProducts}
-                      lines={form.lineItems}
-                      onLines={(lines) => set('lineItems', lines)}
-                    />
-                  </>
-                ) : (
-                  <div>
-                    {(form.lineItems || []).map((l, i) => (
-                      <div key={i}>· {l.name}{l.qty > 1 ? ` x${l.qty}` : ''}</div>
-                    ))}
-                    <span className="sub-text">상품/금액 수정은 '금액·입금 정보 보기' 권한이 필요합니다.</span>
-                  </div>
-                )}
+                {/* 시공선택은 누구나, 가격은 '금액·입금 정보 보기' 권한이 있을 때만 보임 (없으면 상품관리 가격으로 자동) */}
+                <ProductLines
+                  products={productList}
+                  category={form.category}
+                  all={allProducts}
+                  onAll={setAllProducts}
+                  lines={form.lineItems}
+                  onLines={(lines) => set('lineItems', lines)}
+                  showPrice={showAmount}
+                />
               </td>
             </tr>
             <tr>
@@ -850,21 +841,20 @@ function ExtraWork({ no, work, products, showAmount, stepCtx, onChange, onRemove
             <td className="label-col">접수형태</td>
             <td className="input-col">{radios('receptionType', RECEPTION_TYPES)}</td>
           </tr>
-          {showAmount && (
-            <tr>
-              <td className="label-col">시공선택</td>
-              <td className="input-col">
-                <ProductLines
-                  products={products}
-                  category={work.category}
-                  all={all}
-                  onAll={setAll}
-                  lines={work.lineItems}
-                  onLines={(lines) => onChange({ lineItems: lines })}
-                />
-              </td>
-            </tr>
-          )}
+          <tr>
+            <td className="label-col">시공선택</td>
+            <td className="input-col">
+              <ProductLines
+                products={products}
+                category={work.category}
+                all={all}
+                onAll={setAll}
+                lines={work.lineItems}
+                onLines={(lines) => onChange({ lineItems: lines })}
+                showPrice={showAmount}
+              />
+            </td>
+          </tr>
           <tr>
             <td className="label-col">추가 시공내용</td>
             <td className="input-col">
@@ -1071,7 +1061,7 @@ const ADDON = '추가시공품목';
 // 상세품목 칸 높이: 줄바꿈과 글자 수에 맞춰 (최대 6줄, 넘으면 스크롤)
 const detailRows = (text) => Math.min(6, Math.max(1, String(text || '').split('\n').reduce((n, x) => n + Math.max(1, Math.ceil(x.length / 26)), 0)));
 const kindOfProduct = (p) => (p && p.kind && p.kind !== '패키지' ? ADDON : '패키지');
-function ProductLines({ products, category, all, onAll, lines, onLines }) {
+function ProductLines({ products, category, all, onAll, lines, onLines, showPrice = true }) {
   // 이름 가나다순, 숫자는 크기대로 (메디알레1 → 2 → … → 10), 이름이 같으면 등록 번호순
   const byName = (a, b) => String(a.name || '').trim().localeCompare(String(b.name || '').trim(), 'ko', { numeric: true }) || a.id - b.id;
   // 줄의 종류: 상품관리의 그 상품 구분이 기준 (상품 번호로, 없으면 같은 이름으로 찾음 — 예전 프로그램에서 가져온 계약은 이름만 있음)
@@ -1092,7 +1082,7 @@ function ProductLines({ products, category, all, onAll, lines, onLines }) {
     const detail = [p.detail, p.freeDetail && `[무료시공] ${p.freeDetail}`].filter(Boolean).join('\n');
     onLines([...lines, { productId: p.id, kind, name: p.name, detail, qty: 1, unitPrice: p.price }]);
   };
-  const label = (g, p) => `${all ? `[${p.category}] ` : ''}${p.name} — ${won(p.price)}원`;
+  const label = (g, p) => `${all ? `[${p.category}] ` : ''}${p.name}${showPrice ? ` — ${won(p.price)}원` : ''}`;
   return (
     <div className="product-picker">
       {groups.map((g) => {
@@ -1123,7 +1113,7 @@ function ProductLines({ products, category, all, onAll, lines, onLines }) {
                   <tr>
                     <th>상품명</th>
                     <th>상세품목</th>
-                    <th>금액</th>
+                    {showPrice && <th>금액</th>}
                     <th />
                   </tr>
                 </thead>
@@ -1137,14 +1127,16 @@ function ProductLines({ products, category, all, onAll, lines, onLines }) {
                         <textarea className="input-text full line-detail" rows={detailRows(l.detail)} value={l.detail} onChange={(e) => setLine(i, { detail: e.target.value })} />
                       </td>
                       {/* 수량 칸은 없앰 (한 줄 = 1개). 예전에 수량을 2 이상으로 넣은 줄만 수량을 함께 보여 줌 */}
-                      <td data-label="금액" className="line-price">
-                        <MoneyInput value={l.unitPrice} onChange={(v) => setLine(i, { unitPrice: v })} />
-                        {Number(l.qty) > 1 && (
-                          <div className="sub-text">
-                            × {l.qty}개 = {won(Number(l.qty) * (Number(l.unitPrice) || 0))}원
-                          </div>
-                        )}
-                      </td>
+                      {showPrice && (
+                        <td data-label="금액" className="line-price">
+                          <MoneyInput value={l.unitPrice} onChange={(v) => setLine(i, { unitPrice: v })} />
+                          {Number(l.qty) > 1 && (
+                            <div className="sub-text">
+                              × {l.qty}개 = {won(Number(l.qty) * (Number(l.unitPrice) || 0))}원
+                            </div>
+                          )}
+                        </td>
+                      )}
                       <td className="line-delete">
                         <button type="button" className="btn-text-danger" onClick={() => onLines(lines.filter((_, j) => j !== i))}>삭제</button>
                       </td>
