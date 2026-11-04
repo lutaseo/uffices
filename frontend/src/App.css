@@ -5292,3 +5292,47 @@ a.btn-quick.blue:hover {
   border: 1px solid rgba(255, 255, 255, 0.7);
   color: #fff;
 }
+
+/* 일정관리: 글씨를 더 진하고 크게 (잘 보이게) */
+.calendar-cell .schedule-badge {
+  color: #111;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: -0.2px;
+}
+.calendar-cell .schedule-badge.unassigned {
+  color: #d1123f;
+  font-weight: 800;
+}
+.calendar-cell .day-total {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0b57c5;
+}
+.calendar-cell .off-box {
+  font-size: 12px;
+  font-weight: 600;
+}
+.calendar-cell .off-box-title {
+  font-size: 11.5px;
+  opacity: 1;
+}
+.schedule-detail-table {
+  font-size: 13px;
+}
+.schedule-detail-table td {
+  color: #111;
+}
+.schedule-detail-table td .sub-text {
+  color: #444;
+}
+.day-off-list {
+  color: #111;
+}
+@media screen and (max-width: 768px) {
+  .calendar-cell .schedule-badge,
+  .calendar-cell .off-box {
+    font-size: 11px;
+  }
+}

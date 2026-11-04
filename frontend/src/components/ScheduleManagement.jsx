@@ -363,7 +363,6 @@ export default function ScheduleManagement() {
                   <tr>
                     <th>구분</th>
                     <th>시공자</th>
-                    <th>회차</th>
                     <th>시간</th>
                     <th>계약자</th>
                     <th>아파트/동호수</th>
@@ -376,7 +375,7 @@ export default function ScheduleManagement() {
                 <tbody>
                   {details.length === 0 ? (
                     <tr>
-                      <td colSpan={showAmount ? 10 : 9} className="no-data">
+                      <td colSpan={showAmount ? 9 : 8} className="no-data">
                         {selectedDate} 일자에 배정된 시공 일정이 없습니다.
                       </td>
                     </tr>
@@ -385,7 +384,6 @@ export default function ScheduleManagement() {
                       <tr key={`${row.contract.id}-${row.stepIndex}`}>
                         <td>{row.contract.category}</td>
                         <td>{row.assigneeName || <span className="text-red">미배정</span>}</td>
-                        <td>{row.stepIndex + 1}차</td>
                         <td>{timeLabel(row) || '-'}</td>
                         <td>
                           {row.contract.customerName}
