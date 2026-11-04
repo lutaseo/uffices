@@ -48,6 +48,10 @@ import WorkRecord from '../components/WorkRecord.jsx';
 
 const CIRCLED = ['①', '②', '③'];
 
+// 새 계약의 입금 줄 (계약 등록 때 입금은 필수 — 처음부터 한 줄 있음, 영수증 사진은 선택)
+const firstPayment = () => ({ date: today(), kind: '계약금', method: PAYMENT_METHODS[0], amount: '', memo: '' });
+const hasPaid = (payments) => (payments || []).some((p) => Number(p.amount) > 0);
+
 const emptySchedule = () => ({ date: '', time: '', ampm: '', assignType: ASSIGN_TYPES.ENGINEER, engineerId: '', teamId: '', memo: '' });
 
 // 기사의 담당시공에 이 구분이 들어 있는지 (예전 데이터는 category 글자로 판단)
@@ -101,7 +105,7 @@ function initialForm(contract, company, user) {
     discount: '',
     voucher: '',
     discountReason: '',
-    payments: [],
+    payments: [firstPayment()],
     happyCallMemo: '',
     customerNote: '',
   };
@@ -230,6 +234,18 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
       alert('상품명이 비어 있는 줄이 있습니다. 상품명을 입력하거나 그 줄을 삭제해 주세요.');
       return;
     }
+    // 새 계약은 입금(계약금) 필수 — 본 시공과 [+ 시공 추가]로 늘린 시공 모두
+    if (!isEdit && showAmount) {
+      if (!hasPaid(form.payments)) {
+        alert(`입금 내역을 입력해 주세요. (${form.category} 계약금 등 입금액)\n영수증 사진은 없어도 됩니다.`);
+        return;
+      }
+      const k = extras.findIndex((w) => !hasPaid(w.payments));
+      if (k >= 0) {
+        alert(`추가 시공 ${k + 1} (${extras[k].category})의 입금 내역을 입력해 주세요.\n영수증 사진은 없어도 됩니다.`);
+        return;
+      }
+    }
     if (showAmount && amounts.balance < 0 && !window.confirm(`입금액이 실계약금보다 ${won(-amounts.balance)}원 많습니다. 그대로 저장하시겠습니까?`)) return;
     // 비어 있는 뒤쪽 회차는 저장하지 않음 (①은 항상 유지)
     const keepSteps = (list) => list.filter((s, i) => i === 0 || s.date || s.engineerId || s.teamId || s.time || s.ampm || s.mobileStatus);
@@ -314,7 +330,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
     ));
 
   // ---- 새 계약: [구분]을 여러 개 체크하면 체크한 구분마다 시공(계약)이 하나씩 (첫 번째는 본 시공, 나머지는 추가 시공)
-  const newExtra = (category) => ({ category, workType: WORK_TYPES[0], receptionType: form.receptionType, lineItems: [], items: '', totalAmount: '', discount: '', voucher: '', payments: [], schedules: [emptySchedule()] });
+  const newExtra = (category) => ({ category, workType: WORK_TYPES[0], receptionType: form.receptionType, lineItems: [], items: '', totalAmount: '', discount: '', voucher: '', payments: [firstPayment()], schedules: [emptySchedule()] });
   const usedCategories = [form.category, ...extras.map((x) => x.category)];
   // 그 시공에 입력한 내용이 있는지 (빼기 전에 물어보려고)
   const hasWork = (w) =>
@@ -613,7 +629,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
                   </td>
                 </tr>
                 <tr>
-                  <td className="label-col">입금 내역</td>
+                  <td className="label-col">입금 내역{!isEdit && <span className="star">*</span>}</td>
                   <td className="input-col">
                     {form.payments.map((p, i) => (
                       <div key={i} className="inline-fields schedule-row">
@@ -885,7 +901,9 @@ function ExtraWork({ no, work, products, showAmount, stepCtx, onChange, onRemove
           )}
           {showAmount && (
             <tr>
-              <td className="label-col">입금 내역</td>
+              <td className="label-col">
+                입금 내역<span className="star">*</span>
+              </td>
               <td className="input-col">
                 {payments.map((p, i) => (
                   <div key={i} className="inline-fields schedule-row">
