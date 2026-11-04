@@ -22,6 +22,14 @@ try {
   // 저장소를 못 쓰는 브라우저면 지울 것도 없음
 }
 const ENTRY_KEY = 'loginEntry';
+// 로그인한 채로 /t 를 열었을 때 상담실장 화면으로 바꾸기용
+export function setLoginEntry(kind) {
+  try {
+    localStorage.setItem(ENTRY_KEY, kind);
+  } catch {
+    // 저장 안 되는 브라우저면 그대로
+  }
+}
 // 마지막으로 로그인한 주소 종류 (로그아웃 뒤 같은 로그인 화면으로 돌아가기용)
 export function loginEntry() {
   try {

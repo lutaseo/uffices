@@ -10,9 +10,25 @@
   "functions": {
     "api/rpc.js": {
       "maxDuration": 60
+    },
+    "api/page.js": {
+      "maxDuration": 10,
+      "includeFiles": "frontend/dist/index.html"
     }
   },
   "rewrites": [
+    {
+      "source": "/:code([A-Za-z0-9-]+)",
+      "destination": "/api/page?code=:code"
+    },
+    {
+      "source": "/:code([A-Za-z0-9-]+)/:kind(t|m|c)",
+      "destination": "/api/page?code=:code&kind=:kind"
+    },
+    {
+      "source": "/:code([A-Za-z0-9-]+)/c/:token",
+      "destination": "/api/page?code=:code&kind=c"
+    },
     {
       "source": "/((?!api/).*)",
       "destination": "/index.html"

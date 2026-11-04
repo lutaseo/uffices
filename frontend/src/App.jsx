@@ -8,7 +8,7 @@ import { ROLES, ROLE_LABELS } from './auth/permissions.js';
 import { formatKoreanDate, today } from './utils/date.js';
 import { usePageTitle } from './utils/title.js';
 
-import LoginPage, { loginEntry } from './pages/LoginPage.jsx';
+import LoginPage, { loginEntry, setLoginEntry } from './pages/LoginPage.jsx';
 import SignPage from './pages/SignPage.jsx';
 import CustomerApp from './pages/CustomerApp.jsx';
 import EngineerApp from './pages/EngineerApp.jsx';
@@ -122,7 +122,49 @@ function CompanyGate({ route }) {
   }, [wrongBase, code, route.path]);
   if (wrongBase) return null;
   if (user.role === ROLES.ENGINEER) return <EngineerApp route={route} />;
+  if (route.path === '/t') return <ConsultSwitch />;
   return <MainLayout route={route} />;
+}
+
+// 로그인한 채로 /업체/t (상담실장 주소)를 열었을 때
+//   실장(직원) 계정 → 상담실장 화면(상담홈)으로 바꿈 / 관리자 계정 → /t 는 직원 전용이라 안내 (로그아웃하고 실장으로)
+function ConsultSwitch() {
+  const { user, logout } = useAuth();
+  const staff = user.role === ROLES.MANAGER;
+  useEffect(() => {
+    if (!staff) return;
+    setLoginEntry('manager');
+    navigate('/consult', { replace: true });
+  }, [staff]);
+  if (staff) return null;
+  return (
+    <div className="login-bg">
+      <div className="login-card consult-switch">
+        <div className="login-left">
+          <h1>상담실장 화면</h1>
+          <p className="login-sub">
+            지금 <b>{user.name}({ROLE_LABELS[user.role] || user.role})</b> 계정으로 로그인되어 있습니다.
+            <br />
+            상담실장 화면(/t)은 실장(직원) 계정 전용입니다.
+          </p>
+        </div>
+        <div className="login-form">
+          <button
+            type="button"
+            onClick={async () => {
+              await logout();
+              navigate('/t', { replace: true });
+            }}
+          >
+            로그아웃하고 상담실장으로 로그인
+          </button>
+          <button type="button" className="consult-switch-back" onClick={() => navigate('/', { replace: true })}>
+            지금 계정으로 계속 (일반화면)
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // 주소가 어느 메뉴에 속하는지
@@ -186,7 +228,7 @@ function MainLayout({ route }) {
 
   // 탭 이름: '계약관리 · 더좋은집 VerityBase', AS관리·휴지통 등 하위 메뉴면 그 이름, 운영자는 'VerityBase 운영자'
   const currentSub = current?.subs?.length > 1 ? current.subs.find((s) => (s.key === 'main' ? path === s.path || /^\/contracts\/(\d+|new)/.test(path) : path.startsWith(s.path))) : null;
-  const pageName = (currentSub || current)?.label || '';
+  const pageName = path === '/consult' ? '상담홈' : path === '/contracts/new' ? '계약 등록' : (currentSub || current)?.label || '';
   usePageTitle(
     `${pageName ? `${pageName} · ` : ''}${company ? `${company.name} VerityBase` : 'VerityBase 운영자'}${consult ? ' (상담실장)' : ''}`,
     company ? `${company.name}${consult ? ' 상담' : ''}` : 'VerityBase 운영자',
