@@ -1317,3 +1317,28 @@ test('계약 가져오기: 시공일자 ①② (시간·오전/오후), 기사 �
   const day = await admin.ok('schedules', 'list', { from: '2026-06-03', to: '2026-06-05' });
   assert.ok(day.some((x) => x.contract?.customerName === '일정확인고객9102' && !x.engineerId), '기사 없는 일정도 달력에 (미정)');
 });
+
+test('계약 가져오기 [파일대로 맞추기]: 이미 가져온 계약의 시공일·기사·시공상태만 갱신, 비어 있는 회차·입금은 그대로', async () => {
+  await admin.ok('imports', 'engineers', [{ name: '맞춤기사' }]);
+  const base = { legacyNo: '9301', brand: '더좋은집', category: '줄눈', receptionType: '박람회', workType: '시공', contractDate: '2026-07-01', customerName: '맞춤고객', customerPhone: '010-9393-1010', aptName: '맞춤아파트', dong: '1', ho: '101', totalAmount: 500000, discount: 0, voucher: 0, payments: [{ date: '2026-07-01', kind: '계약금', method: '계좌이체', amount: 100000 }] };
+  await admin.ok('imports', 'contracts', [{ ...base, status: '미정', schedules: [{ date: '', time: '', engineerName: '' }] }]);
+  const list = await admin.ok('contracts', 'list', {});
+  const id = list.find((x) => x.customerName === '맞춤고객').id;
+  // 우리 쪽에서 ②회차를 직접 입력해 둠
+  const before = await admin.ok('contracts', 'get', id);
+  await admin.ok('contracts', 'update', id, { ...before, schedules: [before.schedules[0], { date: '2026-07-20', time: '14:00', assignType: 'engineer' }] });
+  const fileRow = { ...base, status: '시공완료', completedDate: '2026-07-10', schedules: [{ date: '2026-07-10', time: '09:00', engineerName: '청)맞춤기사' }, { date: '', time: '', engineerName: '' }] };
+  const skip = await admin.ok('imports', 'contracts', [fileRow]);
+  assert.deepEqual([skip.created, skip.skipped, skip.updated], [0, 1, 0], '맞추기 없이는 건너뜀');
+  const r = await admin.ok('imports', 'contracts', [fileRow], { sync: true });
+  assert.deepEqual([r.created, r.updated], [0, 1]);
+  const after = await admin.ok('contracts', 'get', id);
+  const engId = (await admin.ok('engineers', 'list')).find((e) => e.name === '맞춤기사').id;
+  assert.deepEqual([after.schedules[0].date, after.schedules[0].time, after.schedules[0].engineerId], ['2026-07-10', '09:00', engId], '①회차는 파일대로 (앞 표시 달라도 같은 기사)');
+  assert.equal(after.schedules[1].date, '2026-07-20', '파일에 없는 ②회차는 우리 입력 유지');
+  assert.deepEqual([after.status, after.completedDate], ['시공완료', '2026-07-10']);
+  assert.equal(after.payments.length, 1, '입금 그대로');
+  assert.ok(after.history.some((h) => /파일로 일정 맞춤/.test(h.action)), '변경이력');
+  const again = await admin.ok('imports', 'contracts', [fileRow], { sync: true });
+  assert.deepEqual([again.updated, again.skipped], [0, 1], '바뀐 게 없으면 건너뜀');
+});
