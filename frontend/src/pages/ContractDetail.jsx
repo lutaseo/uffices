@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { contracts as contractApi } from '../api/index.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { BRANDS, CATEGORIES } from '../constants.js';
@@ -36,7 +36,8 @@ const scheduleLine = (s) => (s?.date ? `${s.date}(${timeLabel(s) || '무관'})` 
 //   onNewWork(contract)       같은 현장에 시공 추가
 //   onOpenGroup(contractId)   다른 현장 계약으로 이동 (계약자 탭)
 //   initialTab                처음 열 탭 (상담홈의 [상담내역] → '상담내역')
-export default function ContractDetail({ contractId, initialTab, onBack, onEdit, onNewWork, onOpenGroup }) {
+//   focus                     'progress' 면 진행상황(기사 시공 기록)으로 바로 스크롤 (시공 기록 [자세히 보기])
+export default function ContractDetail({ contractId, initialTab, focus, onBack, onEdit, onNewWork, onOpenGroup }) {
   const { company, can, handleError } = useAuth();
   const showAmount = can('contract.amount');
   const brands = company?.brands?.length ? company.brands : BRANDS;
@@ -54,6 +55,13 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
   const [viewId, setViewId] = useState(null);
   const [noteText, setNoteText] = useState('');
   const [noteTarget, setNoteTarget] = useState(contractId);
+  // 시공 기록 [자세히 보기]로 들어오면 불러온 뒤 진행상황 위치로 이동 (한 번만)
+  const focused = useRef(false);
+  useEffect(() => {
+    if (focus !== 'progress' || !data || focused.current) return;
+    focused.current = true;
+    requestAnimationFrame(() => document.getElementById('work-progress')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }, [focus, data]);
 
   const load = useCallback(async () => {
     try {
@@ -571,7 +579,7 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
 
   const progressSection = (
     <>
-      <h3 className="form-section-title">&gt; 진행상황</h3>
+      <h3 className="form-section-title" id="work-progress">&gt; 진행상황</h3>
       <div className="table-responsive">
         <table className="detail-table">
           <thead>
