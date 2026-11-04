@@ -249,10 +249,12 @@ function ReportForm({ contractId, step, onReported }) {
   };
   const [checked, setChecked] = useState(initialChecked);
   const [material, setMaterial] = useState(step.workRecord?.material || '');
+  const [note, setNote] = useState(step.workRecord?.note || '');
   useEffect(() => {
     setD({ mobileStatus: step.mobileStatus || '', memo: step.mobileMemo || '' });
     setChecked(initialChecked());
     setMaterial(step.workRecord?.material || '');
+    setNote(step.workRecord?.note || '');
   }, [step.mobileStatus, step.mobileMemo, step.workRecord]); // eslint-disable-line react-hooks/exhaustive-deps
   const toggle = (k) =>
     setChecked((prev) => {
@@ -261,7 +263,7 @@ function ReportForm({ contractId, step, onReported }) {
       else next.add(k);
       return next;
     });
-  const completing = d.mobileStatus === '시공완료' && scope.length > 0;
+  const completing = d.mobileStatus === '시공완료'; // 상품이 없는 계약도 자재·직접 적기 칸은 나옴
 
   const report = async () => {
     const all = scope.flatMap((g) => g.parts.map((p) => ({ k: scopeKey(g.group, p), p })));
@@ -274,7 +276,7 @@ function ReportForm({ contractId, step, onReported }) {
         stepIndex: step.stepIndex,
         mobileStatus: d.mobileStatus,
         memo: d.memo,
-        ...(completing ? { done, undone, material } : {}),
+        ...(completing ? { done, undone, material, note } : {}),
       });
       alert('보고되었습니다. 사무실 계약서에 바로 표시됩니다.');
       onReported?.();
@@ -295,7 +297,7 @@ function ReportForm({ contractId, step, onReported }) {
       </div>
       {completing && (
         <div className="scope-check">
-          <div className="scope-check-title">✔ 시공한 범위를 확인해 주세요 <span className="sub-text">(못 한 곳은 체크를 풀어 주세요)</span></div>
+          {scope.length > 0 && <div className="scope-check-title">✔ 시공한 범위를 확인해 주세요 <span className="sub-text">(못 한 곳은 체크를 풀어 주세요)</span></div>}
           {scope.map((g) => (
             <div key={g.group} className="scope-group">
               <div className="scope-group-name">{g.group}</div>
@@ -310,6 +312,14 @@ function ReportForm({ contractId, step, onReported }) {
             </div>
           ))}
           <input className="input-text full" placeholder="사용 자재·색상 (예: 빅라이언 화이트, 폴리 실버)" value={material} onChange={(e) => setMaterial(e.target.value)} maxLength={200} />
+          <textarea
+            className="input-text full scope-note"
+            rows={3}
+            placeholder="시공 내용 직접 적기 (체크로 애매한 것 — 예: 샤워벽은 절반만 시공, 나머지는 다음 방문 / 고객 요청으로 현관 추가)"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            maxLength={1000}
+          />
         </div>
       )}
       {step.workRecord && d.mobileStatus === '시공완료' && <WorkRecord record={step.workRecord} compact />}

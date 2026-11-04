@@ -5219,3 +5219,8 @@ a.btn-quick.blue:hover {
 .work-record b {
   margin-right: 4px;
 }
+.scope-check .scope-note {
+  font-family: inherit;
+  font-size: 15px;
+  resize: vertical;
+}
