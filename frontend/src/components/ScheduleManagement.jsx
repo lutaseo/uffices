@@ -302,12 +302,12 @@ export default function ScheduleManagement() {
                       </div>
                     )}
                     <div className="schedule-tag-list">
-                      {summary.slice(0, 6).map(([k, n]) => (
+                      {/* 예전 프로그램처럼 그날 기사별 건수를 모두 표시 (기사 배정 안 된 일정은 '미정') */}
+                      {summary.map(([k, n]) => (
                         <div key={k} className={`schedule-badge ${k === '미배정' ? 'unassigned' : ''}`}>
-                          {k} : {n}건
+                          {k === '미배정' ? '미정' : k} : {n}건
                         </div>
                       ))}
-                      {summary.length > 6 && <div className="schedule-badge more">…</div>}
                     </div>
                   </div>
                 );
