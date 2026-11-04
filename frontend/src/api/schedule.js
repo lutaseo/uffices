@@ -30,7 +30,7 @@ import { addHistory, assigneeOf, contractView } from './views.js';
 import { numberOf } from './numbering.js';
 import { DEFAULT_SCHEDULE_SETTINGS, MOBILE_STATUS, OFF_LABEL } from '../constants.js';
 import { inRange, isDateKey, today } from '../utils/date.js';
-import { calcAmounts, scopeOf } from '../utils/contract.js';
+import { calcAmounts, materialText, scopeOf } from '../utils/contract.js';
 import { formatAddress } from '../utils/format.js';
 
 export const settingsOf = (company) => ({ ...DEFAULT_SCHEDULE_SETTINGS, ...(company?.scheduleSettings || {}) });
@@ -269,7 +269,11 @@ export const scheduleSettings = {
     if (![10, 15, 20, 30, 60].includes(interval)) throw new ApiError('시간 간격을 선택해 주세요.');
     const maxPerDay = Math.max(0, Math.floor(Number(data.maxPerDay) || 0));
     const company = companyOf(db, user);
-    company.scheduleSettings = { amEnd: data.amEnd, startTime: data.startTime, endTime: data.endTime, interval, maxPerDay };
+    // 시공 자재 목록: 한 줄에 하나, 같은 이름은 한 번만, 최대 100개
+    const materials = Array.isArray(data.materials)
+      ? [...new Set(data.materials.map((x) => String(x || '').trim().slice(0, 50)).filter(Boolean))].slice(0, 100)
+      : settingsOf(company).materials;
+    company.scheduleSettings = { amEnd: data.amEnd, startTime: data.startTime, endTime: data.endTime, interval, maxPerDay, materials };
     saveDb(db);
     return clone(company.scheduleSettings);
   },
@@ -404,7 +408,8 @@ export const engineerApp = {
   // 시공완료 보고: done(한 범위)·undone(못 한 범위)·material(사용 자재·색상) → 회차의 '시공 기록'(누가·언제·무엇을·무엇으로)
   //   note: 체크로 애매한 부분을 직접 적은 글 (예: 샤워벽은 절반만, 나머지 다음 방문)
   //   items: [{ text, done, material, worker }] 항목별 완료·자재·작업자(팀장), helpers: 함께한 팀장·작업자
-  async report({ contractId, stepIndex, mobileStatus, memo, done, undone, material, note, items, helpers }) {
+  //   material + color: 자재와 번호(색상) — 예: 크린파파 위너스 + 101 → '크린파파 위너스 101번'
+  async report({ contractId, stepIndex, mobileStatus, memo, done, undone, material, color, note, items, helpers }) {
     const { db, user } = await authorizeEngineer();
     const c = db.contracts.find((x) => x.id === Number(contractId) && x.companyId === user.companyId && !x.deletedAt);
     const s = c?.schedules[stepIndex];
@@ -420,7 +425,7 @@ export const engineerApp = {
     const list = Array.isArray(items)
       ? items
           .slice(0, 100)
-          .map((x) => ({ text: str(x?.text, 200), done: x?.done !== false, material: str(x?.material, 100), worker: str(x?.worker, 50) }))
+          .map((x) => ({ text: str(x?.text, 200), done: x?.done !== false, material: str(x?.material, 100), color: str(x?.color, 30), worker: str(x?.worker, 50) }))
           .filter((x) => x.text)
       : null;
     const has = list || Array.isArray(done) || Array.isArray(undone) || material || note || helpers;
@@ -431,6 +436,7 @@ export const engineerApp = {
             done: list ? list.filter((x) => x.done).map((x) => x.text) : texts(done),
             undone: list ? list.filter((x) => !x.done).map((x) => x.text) : texts(undone),
             material: str(material, 200),
+            color: str(color, 30),
             helpers: str(helpers, 200),
             note: str(note, 1000),
             by: user.name,
@@ -441,11 +447,11 @@ export const engineerApp = {
     else delete s.workRecord; // 시공완료가 아니면 예전 기록은 지움 (헷갈리지 않게)
     const fields = [{ label: `모바일웹 ${stepIndex + 1}`, from: before, to: s.mobileStatus || '입력 전' }];
     if (record) {
-      const line = (x) => [x.text, x.material || record.material, x.worker].filter(Boolean).join(' / ');
+      const line = (x) => [x.text, x.material || x.color ? materialText(x.material, x.color) : materialText(record.material, record.color), x.worker].filter(Boolean).join(' / ');
       fields.push({ label: '완료', from: '', to: (list ? list.filter((x) => x.done).map(line) : record.done).join(', ') || '-' });
       if (record.undone.length) fields.push({ label: '미시공', from: '', to: record.undone.join(', ') });
       if (record.helpers) fields.push({ label: '함께한 사람', from: '', to: record.helpers });
-      if (record.material) fields.push({ label: '자재·색상', from: '', to: record.material });
+      if (record.material || record.color) fields.push({ label: '자재', from: '', to: materialText(record.material, record.color) });
       if (record.note) fields.push({ label: '시공 내용', from: '', to: record.note });
     }
     addHistory(c, user, `기사 보고 (${stepIndex + 1}차)`, fields);

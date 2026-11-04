@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { materialText } from '../utils/contract.js';
 
 // 기사 시공 기록 (시공완료 보고 때 남김) — 누가 · 언제 · 어떤 항목을 · 무슨 자재로 · 누구와
 //   record: { items: [{ text, done, material, worker }], done, undone, material, helpers, note, by, at }
@@ -55,7 +56,7 @@ export default function WorkRecord({ record, full = false, onMore }) {
             {done.map((x) => (
               <li key={x.text}>
                 {x.text}
-                {(x.material || x.worker) && <span className="work-record-meta"> — {[x.material, x.worker].filter(Boolean).join(' / ')}</span>}
+                {(x.material || x.color || x.worker) && <span className="work-record-meta"> — {[materialText(x.material, x.color), x.worker].filter(Boolean).join(' / ')}</span>}
               </li>
             ))}
           </ul>
@@ -66,9 +67,9 @@ export default function WorkRecord({ record, full = false, onMore }) {
           <b>미시공</b> {record.undone.join(', ')}
         </div>
       )}
-      {record.material && (
+      {(record.material || record.color) && (
         <div>
-          <b>{record.items ? '공통 자재·색상' : '자재·색상'}</b> {record.material}
+          <b>{record.items ? '공통 자재' : '자재'}</b> {materialText(record.material, record.color)}
         </div>
       )}
       {record.note && (

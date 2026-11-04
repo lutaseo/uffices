@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePageTitle } from '../utils/title.js';
 import { API_MODE, engineerApp } from '../api/index.js';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { MOBILE_STATUS, OFF_LABEL } from '../constants.js';
+import { DEFAULT_SCHEDULE_SETTINGS, MOBILE_STATUS, OFF_LABEL } from '../constants.js';
 import { timeLabel } from '../utils/contract.js';
 import { WEEKDAYS, addDays, formatKoreanDate, toDateKey, today } from '../utils/date.js';
 import { won } from '../utils/format.js';
@@ -240,7 +240,9 @@ function ScheduleCard({ s, onReported }) {
 const scopeKey = (g, p) => `${g}|${p}`;
 // 시공완료 보고: 항목마다 완료 체크(기본 체크) + 자재·색상 + 작업자(팀장), 함께한 사람, 직접 적기
 function ReportForm({ contractId, step, onReported }) {
-  const { handleError } = useAuth();
+  const { handleError, company } = useAuth();
+  const materials = company?.scheduleSettings?.materials || DEFAULT_SCHEDULE_SETTINGS.materials; // 설정 > 일정관리설정의 시공 자재 목록
+  const listId = `materials-${contractId}-${step.stepIndex}`;
   const [d, setD] = useState({ mobileStatus: step.mobileStatus || '', memo: step.mobileMemo || '' });
   const scope = step.scope || [];
   // 항목별 입력값 { [key]: { done, material, worker } } — 지난 기록이 있으면 그 값으로 시작
@@ -252,19 +254,21 @@ function ReportForm({ contractId, step, onReported }) {
       scope.flatMap((g) =>
         g.parts.map((p) => {
           const old = prev.get(p);
-          return [scopeKey(g.group, p), { done: old ? old.done !== false : !undone.has(p), material: old?.material || '', worker: old?.worker || '' }];
+          return [scopeKey(g.group, p), { done: old ? old.done !== false : !undone.has(p), material: old?.material || '', color: old?.color || '', worker: old?.worker || '' }];
         }),
       ),
     );
   };
   const [rows, setRows] = useState(initialRows);
   const [material, setMaterial] = useState(step.workRecord?.material || '');
+  const [color, setColor] = useState(step.workRecord?.color || '');
   const [helpers, setHelpers] = useState(step.workRecord?.helpers || '');
   const [note, setNote] = useState(step.workRecord?.note || '');
   useEffect(() => {
     setD({ mobileStatus: step.mobileStatus || '', memo: step.mobileMemo || '' });
     setRows(initialRows());
     setMaterial(step.workRecord?.material || '');
+    setColor(step.workRecord?.color || '');
     setHelpers(step.workRecord?.helpers || '');
     setNote(step.workRecord?.note || '');
   }, [step.mobileStatus, step.mobileMemo, step.workRecord]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -281,7 +285,7 @@ function ReportForm({ contractId, step, onReported }) {
         stepIndex: step.stepIndex,
         mobileStatus: d.mobileStatus,
         memo: d.memo,
-        ...(completing ? { items, material, helpers, note } : {}),
+        ...(completing ? { items, material, color, helpers, note } : {}),
       });
       alert('보고되었습니다. 사무실 계약서에 바로 표시됩니다.');
       onReported?.();
@@ -309,7 +313,7 @@ function ReportForm({ contractId, step, onReported }) {
               <div className="scope-group-name">{g.group}</div>
               {g.parts.map((p) => {
                 const k = scopeKey(g.group, p);
-                const r = rows[k] || { done: true, material: '', worker: '' };
+                const r = rows[k] || { done: true, material: '', color: '', worker: '' };
                 return (
                   <div key={k} className={`scope-row ${r.done ? '' : 'undone'}`}>
                     <label className="scope-item">
@@ -317,8 +321,9 @@ function ReportForm({ contractId, step, onReported }) {
                     </label>
                     {r.done && (
                       <div className="scope-row-fields">
-                        <input className="input-text" placeholder="자재·색상" value={r.material} onChange={(e) => setRow(k, { material: e.target.value })} maxLength={100} />
-                        <input className="input-text" placeholder="작업자(팀장)" value={r.worker} onChange={(e) => setRow(k, { worker: e.target.value })} maxLength={50} />
+                        <input className="input-text mat" list={listId} placeholder="자재 (눌러서 고르기)" value={r.material} onChange={(e) => setRow(k, { material: e.target.value })} maxLength={100} />
+                        <input className="input-text num" placeholder="번호" value={r.color} onChange={(e) => setRow(k, { color: e.target.value })} maxLength={30} />
+                        <input className="input-text worker" placeholder="작업자(팀장)" value={r.worker} onChange={(e) => setRow(k, { worker: e.target.value })} maxLength={50} />
                       </div>
                     )}
                   </div>
@@ -326,13 +331,18 @@ function ReportForm({ contractId, step, onReported }) {
               })}
             </div>
           ))}
-          <input
-            className="input-text full"
-            placeholder={scope.length ? '공통 자재·색상 (항목에 안 적으면 이것으로)' : '사용 자재·색상 (예: 빅라이언 화이트)'}
-            value={material}
-            onChange={(e) => setMaterial(e.target.value)}
-            maxLength={200}
-          />
+          <div className="scope-common">
+            <span className="sub-text">{scope.length ? '공통 자재 (항목에 안 적으면 이것으로)' : '사용 자재'}</span>
+            <div className="scope-row-fields">
+              <input className="input-text mat" list={listId} placeholder="자재 (눌러서 고르기)" value={material} onChange={(e) => setMaterial(e.target.value)} maxLength={200} />
+              <input className="input-text num" placeholder="번호" value={color} onChange={(e) => setColor(e.target.value)} maxLength={30} />
+            </div>
+          </div>
+          <datalist id={listId}>
+            {materials.map((m) => (
+              <option key={m} value={m} />
+            ))}
+          </datalist>
           <textarea
             className="input-text full scope-note"
             rows={3}

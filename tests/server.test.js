@@ -1219,7 +1219,7 @@ test('기사 시공 기록: 시공완료 때 범위(완료·미시공)·자재 �
     memo: '',
     items: [
       { text: '욕실2곳 바닥(빅라이언)', done: true, material: '빅라이언 화이트', worker: '' },
-      { text: '현관s.v(폴리)', done: true, material: '폴리 실버', worker: '김민수 팀장' },
+      { text: '현관s.v(폴리)', done: true, material: '크린파파 위너스', color: '101', worker: '김민수 팀장' },
       { text: '욕조벽ㄷ자(폴리)', done: false },
       { text: '베란다 줄눈', done: true },
     ],
@@ -1233,7 +1233,8 @@ test('기사 시공 기록: 시공완료 때 범위(완료·미시공)·자재 �
   assert.equal(rec.material, '빅라이언 화이트');
   assert.equal(rec.note, '욕조벽은 절반만, 나머지 다음 방문', '직접 적은 시공 내용');
   assert.equal(rec.helpers, '김민수 팀장', '함께한 사람');
-  assert.deepEqual(rec.items[1], { text: '현관s.v(폴리)', done: true, material: '폴리 실버', worker: '김민수 팀장' }, '항목별 자재·작업자');
+  assert.deepEqual(rec.items[1], { text: '현관s.v(폴리)', done: true, material: '크린파파 위너스', color: '101', worker: '김민수 팀장' }, '항목별 자재·번호·작업자');
+  assert.ok(got.history.some((h) => h.changes?.some((x) => x.label === '완료' && x.to.includes('크린파파 위너스 101번'))), '변경이력: 자재 101번');
   assert.deepEqual(rec.done, ['욕실2곳 바닥(빅라이언)', '현관s.v(폴리)', '베란다 줄눈']);
   assert.ok(rec.by && rec.at, '누가·언제');
   assert.ok(got.history.some((h) => h.changes?.some((x) => x.label === '미시공')), '변경이력에도 남음');
@@ -1243,4 +1244,15 @@ test('기사 시공 기록: 시공완료 때 범위(완료·미시공)·자재 �
   await eng.ok('engineerApp', 'report', { contractId: c.id, stepIndex: 0, mobileStatus: '시공연기요청', memo: '' });
   got = await admin.ok('contracts', 'get', c.id);
   assert.equal(got.schedules[0].workRecord, undefined, '시공완료가 아니면 지움');
+});
+
+test('일정관리설정: 시공 자재 목록 저장 (빈 줄·중복 제거), 기사 화면에서도 보임', async () => {
+  const cur = await admin.ok('scheduleSettings', 'get');
+  assert.ok(Array.isArray(cur.materials) && cur.materials.length > 0, '기본 자재 목록');
+  const saved = await admin.ok('scheduleSettings', 'save', { ...cur, materials: ['크린파파 위너스', '', '빅라이언', '빅라이언 ', '케라폭시'] });
+  assert.deepEqual(saved.materials, ['크린파파 위너스', '빅라이언', '케라폭시']);
+  const eng = client();
+  await eng.ok('auth', 'login', 'gong', 'gong1234');
+  assert.deepEqual((await eng.ok('auth', 'me')).company.scheduleSettings.materials, ['크린파파 위너스', '빅라이언', '케라폭시']);
+  await admin.ok('scheduleSettings', 'save', cur);
 });

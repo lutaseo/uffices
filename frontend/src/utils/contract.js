@@ -185,3 +185,9 @@ export function scopeOf(c) {
     .map((g) => ({ ...g, parts: g.parts.filter((p) => !seen.has(`${g.group}|${p}`) && seen.add(`${g.group}|${p}`)) }))
     .filter((g) => g.parts.length);
 }
+
+// 자재 + 번호(색상) → '크린파파 위너스 101번' (번호가 숫자로 끝나면 '번'을 붙임)
+export function materialText(material, color) {
+  const c = String(color || '').trim();
+  return [String(material || '').trim(), c && (/\d$/.test(c) ? `${c}번` : c)].filter(Boolean).join(' ');
+}

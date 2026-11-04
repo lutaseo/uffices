@@ -42,6 +42,8 @@ export const DEFAULT_SCHEDULE_SETTINGS = {
   endTime: '20:00',
   interval: 30,
   maxPerDay: 0, // 기사 1인 하루 최대 배정 건수 (0 = 제한 없음)
+  // 시공 자재 목록 — 기사가 시공완료 보고 때 골라 쓰고 번호(색상)만 적음 (예: 크린파파 위너스 101번)
+  materials: ['크린파파 위너스', '빅라이언', '케라폭시', '폴리'],
 };
 
 // 입금 구분

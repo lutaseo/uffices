@@ -514,6 +514,7 @@ export function ScheduleSettings() {
         <ul className="notice-list">
           <li>계약서/일정관리의 시간 선택 목록과 기사 휴무(오전/오후) 판단 기준을 설정합니다.</li>
           <li>기사 1인 하루 최대 배정 건수를 정하면 초과 배정이 차단됩니다. (0 = 제한 없음)</li>
+          <li>시공 자재 목록은 기사 모바일 시공완료 보고 때 고르는 목록입니다. 기사는 자재를 고르고 번호(색상)만 적습니다. (예: 크린파파 위너스 101번)</li>
         </ul>
       </div>
       <form onSubmit={save}>
@@ -543,6 +544,19 @@ export function ScheduleSettings() {
               <td className="label-col">하루 최대 배정</td>
               <td className="input-col">
                 {f('maxPerDay', { type: 'number', min: 0, style: { width: 80 } })} 건 / 기사 1인
+              </td>
+            </tr>
+            <tr>
+              <td className="label-col">시공 자재 목록</td>
+              <td className="input-col">
+                <textarea
+                  className="input-text full"
+                  rows={6}
+                  value={(form.materials || []).join('\n')}
+                  onChange={(e) => setForm({ ...form, materials: e.target.value.split('\n') })}
+                  placeholder={'한 줄에 하나씩\n크린파파 위너스\n빅라이언'}
+                />
+                <div className="sub-text">한 줄에 자재 하나씩 적어 주세요. 번호(색상)는 기사가 현장에서 적습니다.</div>
               </td>
             </tr>
           </tbody>
