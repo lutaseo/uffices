@@ -158,3 +158,30 @@ export function kindBreakdown(byKind, fmt) {
     .map((k) => `${k} ${fmt(byKind[k])}`)
     .join(' · ');
 }
+
+// 시공 범위 체크 목록 (기사 모바일 '시공완료' 보고용)
+//   상품 줄마다 상세품목을 '+'·줄바꿈으로 나눠 한 칸씩 (예: '욕실2곳 바닥(빅라이언)' / '현관s.v(폴리)')
+//   상세품목 앞의 '상품명 :' 머리는 뺌, 상세품목이 없으면 상품명 한 칸, '추가 시공내용' 글도 줄마다 한 칸
+const squash = (t) => String(t || '').replace(/\s+/g, '');
+export function scopeOf(c) {
+  const groups = (c.lineItems || []).map((l) => {
+    let detail = String(l.detail || '');
+    const head = /^([^:\n]{1,40}):\s*/.exec(detail);
+    if (head && (squash(l.name).includes(squash(head[1])) || squash(head[1]).includes(squash(l.name)))) detail = detail.slice(head[0].length);
+    const parts = detail
+      .split(/\n|\+/)
+      .map((x) => x.trim())
+      .filter(Boolean);
+    return { group: l.name, parts: parts.length ? parts : [l.name] };
+  });
+  const extra = String(c.items || '')
+    .split('\n')
+    .map((x) => x.trim())
+    .filter(Boolean);
+  if (extra.length) groups.push({ group: '추가 시공내용', parts: extra });
+  // 같은 글이 두 번 나오면 체크가 헷갈리므로 한 번만
+  const seen = new Set();
+  return groups
+    .map((g) => ({ ...g, parts: g.parts.filter((p) => !seen.has(`${g.group}|${p}`) && seen.add(`${g.group}|${p}`)) }))
+    .filter((g) => g.parts.length);
+}

@@ -126,6 +126,7 @@ function normalizeSchedules(db, user, input = [], prev = []) {
       mobileMemo: old.mobileMemo || '',
       reportedAt: old.reportedAt || null,
       reportedBy: old.reportedBy || '',
+      ...(old.workRecord ? { workRecord: old.workRecord } : {}), // 기사 시공 기록도 기사만 변경
     };
   });
   if (!out.length) out.push(normalizeSchedules(db, user, [{}])[0]);

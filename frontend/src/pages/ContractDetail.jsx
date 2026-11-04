@@ -15,6 +15,7 @@ import ContractViewModal from '../components/ContractViewModal.jsx';
 import { PAPER_MAX } from '../components/PaperPhotos.jsx';
 import PhotoViewer from '../components/PhotoViewer.jsx';
 import LineItems from '../components/LineItems.jsx';
+import WorkRecord from '../components/WorkRecord.jsx';
 import { compressImage } from '../utils/image.js';
 
 const CIRCLED = ['①', '②', '③'];
@@ -604,7 +605,10 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
                 <td>{c.completedDate}</td>
                 <td>{s.reportedBy || '-'}</td>
                 <td>{s.assigneeName}</td>
-                <td className="text-left">{s.mobileMemo}</td>
+                <td className="text-left">
+                  {s.mobileMemo}
+                  <WorkRecord record={s.workRecord} compact />
+                </td>
               </tr>
             ))}
           </tbody>

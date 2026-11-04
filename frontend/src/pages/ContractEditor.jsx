@@ -44,6 +44,7 @@ import { today } from '../utils/date.js';
 import { formatPhone, won } from '../utils/format.js';
 import ContractViewModal from '../components/ContractViewModal.jsx';
 import OnSiteSign from '../components/OnSiteSign.jsx';
+import WorkRecord from '../components/WorkRecord.jsx';
 
 const CIRCLED = ['①', '②', '③'];
 
@@ -714,6 +715,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
                           {s.reportedBy} · {s.reportedAt && new Date(s.reportedAt).toLocaleString('ko-KR')}
                         </div>
                         {s.mobileMemo && <div className="sub-text">“{s.mobileMemo}”</div>}
+                        <WorkRecord record={s.workRecord} compact />
                       </>
                     ) : (
                       <span className="sub-text">
