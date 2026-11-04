@@ -5159,3 +5159,63 @@ a.btn-quick.blue:hover {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
+
+/* 기사 모바일: 시공완료 때 시공 범위 체크 */
+.scope-check {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid #cfe0f7;
+  border-radius: 8px;
+  background: #f5f9ff;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.scope-check-title {
+  font-weight: 700;
+}
+.scope-group-name {
+  font-weight: 700;
+  font-size: 13px;
+  margin-top: 4px;
+}
+.scope-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 4px;
+  font-size: 15px;
+  line-height: 1.35;
+}
+.scope-item input {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  margin-top: 1px;
+}
+.scope-item.undone {
+  color: #c62828;
+  text-decoration: line-through;
+}
+
+/* 사무실 화면: 기사 시공 기록 (누가·언제·완료·미시공·자재) */
+.work-record {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-left: 3px solid #1a6fe0;
+  background: #f5f9ff;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+}
+.work-record-head {
+  font-weight: 700;
+}
+.work-record-head span {
+  font-weight: 400;
+  color: #555;
+  margin-left: 4px;
+}
+.work-record b {
+  margin-right: 4px;
+}

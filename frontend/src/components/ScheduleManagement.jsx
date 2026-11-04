@@ -13,6 +13,7 @@ import { WEEKDAYS, formatKoreanDate, toDateKey, today } from '../utils/date.js';
 import { formatAddress, won } from '../utils/format.js';
 import { downloadExcel } from '../utils/excel.js';
 import KakaoModal from './KakaoModal.jsx';
+import WorkRecord from './WorkRecord.jsx';
 import ContractViewModal from './ContractViewModal.jsx';
 import OffModal from './OffModal.jsx';
 import { backdrop } from '../utils/backdrop.js';
@@ -397,6 +398,7 @@ export default function ScheduleManagement() {
                         <td>
                           {row.mobileStatus || <span className="sub-text">입력 전</span>}
                           {row.mobileMemo && <div className="sub-text">“{row.mobileMemo}”</div>}
+                          <WorkRecord record={row.workRecord} compact />
                         </td>
                         <td>{row.contract.status}</td>
                         {showAmount && <td className="text-right">{won(calcAmounts(row.contract).balance)}</td>}

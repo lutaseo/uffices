@@ -10,6 +10,7 @@ import OffModal from '../components/OffModal.jsx';
 import { goBack, match, navigate, navigateForward } from '../router.js';
 import { useRefreshOnReturn } from '../utils/useRefreshOnReturn.js';
 import PhotoViewer from '../components/PhotoViewer.jsx';
+import WorkRecord from '../components/WorkRecord.jsx';
 import LineItems from '../components/LineItems.jsx';
 
 // 기사모바일: 기사 계정으로 로그인하면 이 화면만 보입니다 (휴대폰 화면 기준).
@@ -235,16 +236,46 @@ function ScheduleCard({ s, onReported }) {
 }
 
 // 현장 보고 (상태 + 메모) → 사무실 계약서 '모바일웹' 칸에 표시
+//   '시공완료'를 고르면 시공 범위 체크(한 것 / 못 한 것) + 사용 자재·색상 → 사무실에 '시공 기록'(누가·언제·무엇을·무엇으로)
+const scopeKey = (g, p) => `${g}|${p}`;
 function ReportForm({ contractId, step, onReported }) {
   const { handleError } = useAuth();
   const [d, setD] = useState({ mobileStatus: step.mobileStatus || '', memo: step.mobileMemo || '' });
+  const scope = step.scope || [];
+  // 처음엔 모두 체크 (지난 기록이 있으면 그때 못 한 것만 빼고)
+  const initialChecked = () => {
+    const undone = new Set(step.workRecord?.undone || []);
+    return new Set(scope.flatMap((g) => g.parts.filter((p) => !undone.has(p)).map((p) => scopeKey(g.group, p))));
+  };
+  const [checked, setChecked] = useState(initialChecked);
+  const [material, setMaterial] = useState(step.workRecord?.material || '');
   useEffect(() => {
     setD({ mobileStatus: step.mobileStatus || '', memo: step.mobileMemo || '' });
-  }, [step.mobileStatus, step.mobileMemo]);
+    setChecked(initialChecked());
+    setMaterial(step.workRecord?.material || '');
+  }, [step.mobileStatus, step.mobileMemo, step.workRecord]); // eslint-disable-line react-hooks/exhaustive-deps
+  const toggle = (k) =>
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
+  const completing = d.mobileStatus === '시공완료' && scope.length > 0;
 
   const report = async () => {
+    const all = scope.flatMap((g) => g.parts.map((p) => ({ k: scopeKey(g.group, p), p })));
+    const done = all.filter((x) => checked.has(x.k)).map((x) => x.p);
+    const undone = all.filter((x) => !checked.has(x.k)).map((x) => x.p);
+    if (completing && undone.length && !window.confirm(`체크하지 않은 범위 ${undone.length}개는 '미시공'으로 사무실에 보고됩니다.\n${undone.join(', ')}\n\n보고할까요?`)) return;
     try {
-      await engineerApp.report({ contractId, stepIndex: step.stepIndex, mobileStatus: d.mobileStatus, memo: d.memo });
+      await engineerApp.report({
+        contractId,
+        stepIndex: step.stepIndex,
+        mobileStatus: d.mobileStatus,
+        memo: d.memo,
+        ...(completing ? { done, undone, material } : {}),
+      });
       alert('보고되었습니다. 사무실 계약서에 바로 표시됩니다.');
       onReported?.();
     } catch (e) {
@@ -262,6 +293,26 @@ function ReportForm({ contractId, step, onReported }) {
         <input className="input-text" placeholder="보고 메모 (선택)" value={d.memo} onChange={(e) => setD({ ...d, memo: e.target.value })} />
         <button type="button" className="btn-confirm" onClick={report}>보고</button>
       </div>
+      {completing && (
+        <div className="scope-check">
+          <div className="scope-check-title">✔ 시공한 범위를 확인해 주세요 <span className="sub-text">(못 한 곳은 체크를 풀어 주세요)</span></div>
+          {scope.map((g) => (
+            <div key={g.group} className="scope-group">
+              <div className="scope-group-name">{g.group}</div>
+              {g.parts.map((p) => {
+                const k = scopeKey(g.group, p);
+                return (
+                  <label key={k} className={`scope-item ${checked.has(k) ? '' : 'undone'}`}>
+                    <input type="checkbox" checked={checked.has(k)} onChange={() => toggle(k)} /> {p}
+                  </label>
+                );
+              })}
+            </div>
+          ))}
+          <input className="input-text full" placeholder="사용 자재·색상 (예: 빅라이언 화이트, 폴리 실버)" value={material} onChange={(e) => setMaterial(e.target.value)} maxLength={200} />
+        </div>
+      )}
+      {step.workRecord && d.mobileStatus === '시공완료' && <WorkRecord record={step.workRecord} compact />}
       {step.reportedAt && <div className="sub-text">마지막 보고: {new Date(step.reportedAt).toLocaleString('ko-KR')}</div>}
     </>
   );

@@ -1193,3 +1193,36 @@ test('수정로그: 예전에 남은 고객 서명·상품·아파트 가져오�
   const { rows } = await admin.ok('auditLogs', 'list', { q: tag });
   assert.deepEqual(rows.map((r) => r.call), ['contracts.update'], '계약 수정만 보임');
 });
+
+test('기사 시공 기록: 시공완료 때 범위(완료·미시공)·자재 → 누가·언제와 함께 저장, 사무실 수정에도 유지, 다른 상태면 지움', async () => {
+  const eng = client();
+  await eng.ok('auth', 'login', 'gong', 'gong1234');
+  const engId = (await eng.ok('auth', 'me')).user.engineerId;
+  const c = await admin.ok('contracts', 'create', {
+    ...base,
+    customerName: '범위고객',
+    customerPhone: '010-3434-5656',
+    category: '줄눈',
+    lineItems: [{ name: '진아리채2', detail: '진아리채2 : 욕실2곳 바닥(빅라이언)+현관s.v(폴리) + 욕조벽ㄷ자(폴리)', qty: 1, unitPrice: 500000 }],
+    items: '베란다 줄눈',
+    schedules: [{ date: '2026-12-15', time: '10:00', assignType: 'engineer', engineerId: engId }],
+  });
+  const mine = (await eng.ok('engineerApp', 'mySchedules', { from: '2026-12-15', to: '2026-12-15' })).find((x) => x.contractId === c.id);
+  assert.deepEqual(mine.scope, [
+    { group: '진아리채2', parts: ['욕실2곳 바닥(빅라이언)', '현관s.v(폴리)', '욕조벽ㄷ자(폴리)'] },
+    { group: '추가 시공내용', parts: ['베란다 줄눈'] },
+  ], "상세품목을 '+'로 나누고 '상품명 :' 머리는 뺌");
+  await eng.ok('engineerApp', 'report', { contractId: c.id, stepIndex: 0, mobileStatus: '시공완료', memo: '', done: ['욕실2곳 바닥(빅라이언)', '현관s.v(폴리)', '베란다 줄눈'], undone: ['욕조벽ㄷ자(폴리)'], material: '빅라이언 화이트' });
+  let got = await admin.ok('contracts', 'get', c.id);
+  const rec = got.schedules[0].workRecord;
+  assert.deepEqual(rec.undone, ['욕조벽ㄷ자(폴리)']);
+  assert.equal(rec.material, '빅라이언 화이트');
+  assert.ok(rec.by && rec.at, '누가·언제');
+  assert.ok(got.history.some((h) => h.changes?.some((x) => x.label === '미시공')), '변경이력에도 남음');
+  await admin.ok('contracts', 'update', c.id, { ...got, memo: '사무실 수정' });
+  got = await admin.ok('contracts', 'get', c.id);
+  assert.equal(got.schedules[0].workRecord?.material, '빅라이언 화이트', '사무실이 계약을 고쳐도 유지');
+  await eng.ok('engineerApp', 'report', { contractId: c.id, stepIndex: 0, mobileStatus: '시공연기요청', memo: '' });
+  got = await admin.ok('contracts', 'get', c.id);
+  assert.equal(got.schedules[0].workRecord, undefined, '시공완료가 아니면 지움');
+});
