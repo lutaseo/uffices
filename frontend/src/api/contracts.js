@@ -232,6 +232,34 @@ function normalizeContractInput(db, user, data, existing) {
       seen.add(id);
       return normalizePayment(p, id);
     });
+  } else if (Array.isArray(data.lineItems)) {
+    // 금액 권한이 없어도 시공선택(패키지·추가시공품목)은 가능 — 가격은 화면에서 안 보이므로 서버가 정함
+    //   이미 있던 줄(같은 상품·이름)은 원래 가격·수량 그대로, 새로 고른 상품은 상품관리 가격, 직접입력은 0원
+    //   할인·상품권·입금은 바꾸지 않음
+    const blank = (l) => !String(l.name || '').trim();
+    if (data.lineItems.some((l) => blank(l) && String(l.detail || '').trim())) throw new ApiError('상품명이 비어 있는 줄이 있습니다. 상품명을 입력하거나 그 줄을 삭제해 주세요.');
+    const prev = existing?.lineItems || [];
+    const used = new Set();
+    out.lineItems = data.lineItems
+      .filter((l) => !blank(l))
+      .map((l) => {
+        const name = String(l.name).trim();
+        const productId = l.productId ? Number(l.productId) : null;
+        const k = prev.findIndex((x, j) => !used.has(j) && x.name === name && (x.productId || null) === productId);
+        if (k >= 0) used.add(k);
+        const product = productId && db.products.find((x) => x.id === productId && x.companyId === user.companyId);
+        return {
+          productId,
+          ...(l.kind === '추가시공품목' || l.kind === '패키지' ? { kind: l.kind } : {}),
+          name,
+          detail: l.detail || '',
+          qty: k >= 0 ? prev[k].qty || 1 : 1,
+          unitPrice: k >= 0 ? prev[k].unitPrice || 0 : Math.max(0, Number(product?.price) || 0),
+        };
+      });
+    out.totalAmount = out.lineItems.length ? out.lineItems.reduce((sum, l) => sum + l.qty * l.unitPrice, 0) : existing ? existing.totalAmount || 0 : 0;
+    const off = (Number(existing?.discount) || 0) + (Number(existing?.voucher) || 0);
+    if (off > out.totalAmount) throw new ApiError('할인/상품권 금액이 시공총액보다 커집니다. 관리자에게 금액 조정을 요청해 주세요.');
   }
   return out;
 }

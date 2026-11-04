@@ -4,7 +4,7 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import {
   DATA_SCOPES,
   DEFAULT_MANAGER_PERMISSIONS,
-  PERMISSIONS,
+  CHECKABLE_PERMISSIONS as PERMISSIONS,
   ROLES,
   permissionsOf,
 } from '../auth/permissions.js';
