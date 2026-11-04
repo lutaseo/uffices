@@ -1256,3 +1256,29 @@ test('일정관리설정: 시공 자재 목록 저장 (빈 줄·중복 제거), 
   assert.deepEqual((await eng.ok('auth', 'me')).company.scheduleSettings.materials, ['크린파파 위너스', '빅라이언', '케라폭시']);
   await admin.ok('scheduleSettings', 'save', cur);
 });
+
+test('로그인 주소별 첫 화면 이름 (링크 미리보기·홈 화면): /업체, /t, /m, /c', async () => {
+  const { pageMeta, injectMeta, manifestFor, validCode } = await import('../server/page.js');
+  const html = '<html><head><title>VerityBase - 계약관리</title><link rel="manifest" href="/manifest.webmanifest" /><meta name="apple-mobile-web-app-title" content="VerityBase" /></head><body></body></html>';
+  const m = pageMeta('thegood', 'm', '더좋은집');
+  assert.equal(m.title, '기사모바일 · 더좋은집 VerityBase');
+  assert.equal(m.short, '더좋은집 기사');
+  assert.equal(pageMeta('thegood', 't', '더좋은집').short, '더좋은집 상담');
+  assert.equal(pageMeta('thegood', '', '더좋은집').title, '일반화면 · 더좋은집 VerityBase');
+  assert.equal(pageMeta('thegood', 'c', '더좋은집').title, '내 계약 확인 · 더좋은집');
+  const out = injectMeta(html, m);
+  assert.match(out, /<title>기사모바일 · 더좋은집 VerityBase<\/title>/);
+  assert.match(out, /apple-mobile-web-app-title" content="더좋은집 기사"/);
+  assert.match(out, /og:title" content="기사모바일 · 더좋은집 VerityBase"/);
+  assert.match(out, /rel="manifest" href="\/api\/page\?manifest=1&amp;code=thegood&amp;kind=m"/);
+  assert.deepEqual([manifestFor(m).short_name, manifestFor(m).start_url], ['더좋은집 기사', '/thegood/m']);
+  assert.equal(pageMeta('contracts', '', '아무개'), null, '화면 이름은 업체 주소가 아님');
+  assert.equal(validCode('admin'), false);
+  assert.equal(injectMeta(html, null), html, '업체를 못 찾으면 원래 화면 그대로');
+  assert.ok(!injectMeta(html, pageMeta('thegood', '', '<b>"x"')).includes('<b>"x"'), '이름 속 특수문자 처리');
+  // 서버 함수: 실제 업체 이름을 DB에서 찾아 넣음
+  const { default: page } = await import('../api/page.js');
+  const res = { headers: {}, setHeader(k, v) { this.headers[k] = v; }, status(c) { this.code = c; return this; }, send(b) { this.body = b; return this; } };
+  await page({ query: { code: 'thegood', kind: 'm', manifest: '1' }, headers: { host: 'test.local' } }, res);
+  assert.equal(JSON.parse(res.body).short_name, '더좋은집 기사');
+});
