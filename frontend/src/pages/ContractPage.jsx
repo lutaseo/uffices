@@ -72,6 +72,7 @@ export default function ContractPage({ route }) {
         key={detail.id}
         contractId={Number(detail.id)}
         initialTab={query.get('tab') || undefined}
+        focus={query.get('focus') || undefined}
         onBack={() => goBack('/contracts')}
         onEdit={(c) => navigateForward(`/contracts/${c.id}/edit`)}
         onNewWork={(c, category) => navigateForward(`/contracts/new?from=${c.id}${category ? `&category=${encodeURIComponent(category)}` : ''}`)}

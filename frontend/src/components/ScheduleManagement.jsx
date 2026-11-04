@@ -398,7 +398,7 @@ export default function ScheduleManagement() {
                         <td>
                           {row.mobileStatus || <span className="sub-text">입력 전</span>}
                           {row.mobileMemo && <div className="sub-text">“{row.mobileMemo}”</div>}
-                          <WorkRecord record={row.workRecord} compact />
+                          <WorkRecord record={row.workRecord} onMore={() => navigateForward(`/contracts/${row.contract.id}?tab=${encodeURIComponent('시공관리')}&focus=progress`)} />
                         </td>
                         <td>{row.contract.status}</td>
                         {showAmount && <td className="text-right">{won(calcAmounts(row.contract).balance)}</td>}

@@ -8,7 +8,7 @@ import {
   users as userApi,
 } from '../api/index.js';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { setLeaveGuard } from '../router.js';
+import { navigateForward, setLeaveGuard } from '../router.js';
 import MoneyInput from '../components/MoneyInput.jsx';
 import PaymentPhotos from '../components/PaymentPhotos.jsx';
 import PaperPhotos from '../components/PaperPhotos.jsx';
@@ -715,7 +715,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
                           {s.reportedBy} · {s.reportedAt && new Date(s.reportedAt).toLocaleString('ko-KR')}
                         </div>
                         {s.mobileMemo && <div className="sub-text">“{s.mobileMemo}”</div>}
-                        <WorkRecord record={s.workRecord} compact />
+                        <WorkRecord record={s.workRecord} onMore={() => navigateForward(`/contracts/${contractId}?tab=${encodeURIComponent('시공관리')}&focus=progress`)} />
                       </>
                     ) : (
                       <span className="sub-text">

@@ -403,7 +403,8 @@ export const engineerApp = {
   // 기사 현장 보고 → 계약서 '모바일웹 ①②③' 에 표시
   // 시공완료 보고: done(한 범위)·undone(못 한 범위)·material(사용 자재·색상) → 회차의 '시공 기록'(누가·언제·무엇을·무엇으로)
   //   note: 체크로 애매한 부분을 직접 적은 글 (예: 샤워벽은 절반만, 나머지 다음 방문)
-  async report({ contractId, stepIndex, mobileStatus, memo, done, undone, material, note }) {
+  //   items: [{ text, done, material, worker }] 항목별 완료·자재·작업자(팀장), helpers: 함께한 팀장·작업자
+  async report({ contractId, stepIndex, mobileStatus, memo, done, undone, material, note, items, helpers }) {
     const { db, user } = await authorizeEngineer();
     const c = db.contracts.find((x) => x.id === Number(contractId) && x.companyId === user.companyId && !x.deletedAt);
     const s = c?.schedules[stepIndex];
@@ -414,18 +415,37 @@ export const engineerApp = {
     s.mobileMemo = memo || '';
     s.reportedAt = nowIso();
     s.reportedBy = user.name;
-    const texts = (v) => (Array.isArray(v) ? v.map((x) => String(x || '').trim().slice(0, 200)).filter(Boolean).slice(0, 100) : []);
+    const str = (v, n) => String(v || '').trim().slice(0, n);
+    const texts = (v) => (Array.isArray(v) ? v.map((x) => str(x, 200)).filter(Boolean).slice(0, 100) : []);
+    const list = Array.isArray(items)
+      ? items
+          .slice(0, 100)
+          .map((x) => ({ text: str(x?.text, 200), done: x?.done !== false, material: str(x?.material, 100), worker: str(x?.worker, 50) }))
+          .filter((x) => x.text)
+      : null;
+    const has = list || Array.isArray(done) || Array.isArray(undone) || material || note || helpers;
     const record =
-      s.mobileStatus === '시공완료' && (Array.isArray(done) || Array.isArray(undone) || material || note)
-        ? { done: texts(done), undone: texts(undone), material: String(material || '').trim().slice(0, 200), note: String(note || '').trim().slice(0, 1000), by: user.name, at: s.reportedAt }
+      s.mobileStatus === '시공완료' && has
+        ? {
+            ...(list ? { items: list } : {}),
+            done: list ? list.filter((x) => x.done).map((x) => x.text) : texts(done),
+            undone: list ? list.filter((x) => !x.done).map((x) => x.text) : texts(undone),
+            material: str(material, 200),
+            helpers: str(helpers, 200),
+            note: str(note, 1000),
+            by: user.name,
+            at: s.reportedAt,
+          }
         : null;
     if (record) s.workRecord = record;
     else delete s.workRecord; // 시공완료가 아니면 예전 기록은 지움 (헷갈리지 않게)
     const fields = [{ label: `모바일웹 ${stepIndex + 1}`, from: before, to: s.mobileStatus || '입력 전' }];
     if (record) {
-      fields.push({ label: '완료 범위', from: '', to: record.done.join(', ') || '-' });
+      const line = (x) => [x.text, x.material || record.material, x.worker].filter(Boolean).join(' / ');
+      fields.push({ label: '완료', from: '', to: (list ? list.filter((x) => x.done).map(line) : record.done).join(', ') || '-' });
       if (record.undone.length) fields.push({ label: '미시공', from: '', to: record.undone.join(', ') });
-      if (record.material) fields.push({ label: '사용 자재·색상', from: '', to: record.material });
+      if (record.helpers) fields.push({ label: '함께한 사람', from: '', to: record.helpers });
+      if (record.material) fields.push({ label: '자재·색상', from: '', to: record.material });
       if (record.note) fields.push({ label: '시공 내용', from: '', to: record.note });
     }
     addHistory(c, user, `기사 보고 (${stepIndex + 1}차)`, fields);

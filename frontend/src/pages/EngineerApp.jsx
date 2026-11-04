@@ -238,45 +238,50 @@ function ScheduleCard({ s, onReported }) {
 // 현장 보고 (상태 + 메모) → 사무실 계약서 '모바일웹' 칸에 표시
 //   '시공완료'를 고르면 시공 범위 체크(한 것 / 못 한 것) + 사용 자재·색상 → 사무실에 '시공 기록'(누가·언제·무엇을·무엇으로)
 const scopeKey = (g, p) => `${g}|${p}`;
+// 시공완료 보고: 항목마다 완료 체크(기본 체크) + 자재·색상 + 작업자(팀장), 함께한 사람, 직접 적기
 function ReportForm({ contractId, step, onReported }) {
   const { handleError } = useAuth();
   const [d, setD] = useState({ mobileStatus: step.mobileStatus || '', memo: step.mobileMemo || '' });
   const scope = step.scope || [];
-  // 처음엔 모두 체크 (지난 기록이 있으면 그때 못 한 것만 빼고)
-  const initialChecked = () => {
-    const undone = new Set(step.workRecord?.undone || []);
-    return new Set(scope.flatMap((g) => g.parts.filter((p) => !undone.has(p)).map((p) => scopeKey(g.group, p))));
+  // 항목별 입력값 { [key]: { done, material, worker } } — 지난 기록이 있으면 그 값으로 시작
+  const initialRows = () => {
+    const rec = step.workRecord || {};
+    const prev = new Map((rec.items || []).map((x) => [x.text, x]));
+    const undone = new Set(rec.undone || []);
+    return Object.fromEntries(
+      scope.flatMap((g) =>
+        g.parts.map((p) => {
+          const old = prev.get(p);
+          return [scopeKey(g.group, p), { done: old ? old.done !== false : !undone.has(p), material: old?.material || '', worker: old?.worker || '' }];
+        }),
+      ),
+    );
   };
-  const [checked, setChecked] = useState(initialChecked);
+  const [rows, setRows] = useState(initialRows);
   const [material, setMaterial] = useState(step.workRecord?.material || '');
+  const [helpers, setHelpers] = useState(step.workRecord?.helpers || '');
   const [note, setNote] = useState(step.workRecord?.note || '');
   useEffect(() => {
     setD({ mobileStatus: step.mobileStatus || '', memo: step.mobileMemo || '' });
-    setChecked(initialChecked());
+    setRows(initialRows());
     setMaterial(step.workRecord?.material || '');
+    setHelpers(step.workRecord?.helpers || '');
     setNote(step.workRecord?.note || '');
   }, [step.mobileStatus, step.mobileMemo, step.workRecord]); // eslint-disable-line react-hooks/exhaustive-deps
-  const toggle = (k) =>
-    setChecked((prev) => {
-      const next = new Set(prev);
-      if (next.has(k)) next.delete(k);
-      else next.add(k);
-      return next;
-    });
-  const completing = d.mobileStatus === '시공완료'; // 상품이 없는 계약도 자재·직접 적기 칸은 나옴
+  const setRow = (k, patch) => setRows((prev) => ({ ...prev, [k]: { ...prev[k], ...patch } }));
+  const completing = d.mobileStatus === '시공완료'; // 상품이 없는 계약도 자재·함께한 사람·직접 적기 칸은 나옴
 
   const report = async () => {
-    const all = scope.flatMap((g) => g.parts.map((p) => ({ k: scopeKey(g.group, p), p })));
-    const done = all.filter((x) => checked.has(x.k)).map((x) => x.p);
-    const undone = all.filter((x) => !checked.has(x.k)).map((x) => x.p);
-    if (completing && undone.length && !window.confirm(`체크하지 않은 범위 ${undone.length}개는 '미시공'으로 사무실에 보고됩니다.\n${undone.join(', ')}\n\n보고할까요?`)) return;
+    const items = scope.flatMap((g) => g.parts.map((p) => ({ text: p, ...(rows[scopeKey(g.group, p)] || { done: true }) })));
+    const undone = items.filter((x) => !x.done).map((x) => x.text);
+    if (completing && undone.length && !window.confirm(`체크하지 않은 항목 ${undone.length}개는 '미시공'으로 사무실에 보고됩니다.\n${undone.join(', ')}\n\n보고할까요?`)) return;
     try {
       await engineerApp.report({
         contractId,
         stepIndex: step.stepIndex,
         mobileStatus: d.mobileStatus,
         memo: d.memo,
-        ...(completing ? { done, undone, material, note } : {}),
+        ...(completing ? { items, material, helpers, note } : {}),
       });
       alert('보고되었습니다. 사무실 계약서에 바로 표시됩니다.');
       onReported?.();
@@ -297,32 +302,49 @@ function ReportForm({ contractId, step, onReported }) {
       </div>
       {completing && (
         <div className="scope-check">
-          {scope.length > 0 && <div className="scope-check-title">✔ 시공한 범위를 확인해 주세요 <span className="sub-text">(못 한 곳은 체크를 풀어 주세요)</span></div>}
+          <div className="scope-check-title">🧾 시공 기록</div>
+          <input className="input-text full" placeholder="함께한 팀장·작업자 (예: 김민수 팀장, 이지훈)" value={helpers} onChange={(e) => setHelpers(e.target.value)} maxLength={200} />
           {scope.map((g) => (
             <div key={g.group} className="scope-group">
               <div className="scope-group-name">{g.group}</div>
               {g.parts.map((p) => {
                 const k = scopeKey(g.group, p);
+                const r = rows[k] || { done: true, material: '', worker: '' };
                 return (
-                  <label key={k} className={`scope-item ${checked.has(k) ? '' : 'undone'}`}>
-                    <input type="checkbox" checked={checked.has(k)} onChange={() => toggle(k)} /> {p}
-                  </label>
+                  <div key={k} className={`scope-row ${r.done ? '' : 'undone'}`}>
+                    <label className="scope-item">
+                      <input type="checkbox" checked={r.done} onChange={(e) => setRow(k, { done: e.target.checked })} /> {p}
+                    </label>
+                    {r.done && (
+                      <div className="scope-row-fields">
+                        <input className="input-text" placeholder="자재·색상" value={r.material} onChange={(e) => setRow(k, { material: e.target.value })} maxLength={100} />
+                        <input className="input-text" placeholder="작업자(팀장)" value={r.worker} onChange={(e) => setRow(k, { worker: e.target.value })} maxLength={50} />
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
           ))}
-          <input className="input-text full" placeholder="사용 자재·색상 (예: 빅라이언 화이트, 폴리 실버)" value={material} onChange={(e) => setMaterial(e.target.value)} maxLength={200} />
+          <input
+            className="input-text full"
+            placeholder={scope.length ? '공통 자재·색상 (항목에 안 적으면 이것으로)' : '사용 자재·색상 (예: 빅라이언 화이트)'}
+            value={material}
+            onChange={(e) => setMaterial(e.target.value)}
+            maxLength={200}
+          />
           <textarea
             className="input-text full scope-note"
             rows={3}
-            placeholder="시공 내용 직접 적기 (체크로 애매한 것 — 예: 샤워벽은 절반만 시공, 나머지는 다음 방문 / 고객 요청으로 현관 추가)"
+            placeholder="직접 적기 (예: 고객 요청으로 현관 추가 시공, 샤워벽은 다음 방문)"
             value={note}
             onChange={(e) => setNote(e.target.value)}
             maxLength={1000}
           />
+          {scope.length > 0 && <div className="sub-text">못 한 항목만 체크를 풀어 주세요. 작업자를 비워 두면 보고하는 본인으로 기록됩니다.</div>}
         </div>
       )}
-      {step.workRecord && d.mobileStatus === '시공완료' && <WorkRecord record={step.workRecord} compact />}
+      {step.workRecord && d.mobileStatus === '시공완료' && <WorkRecord record={step.workRecord} />}
       {step.reportedAt && <div className="sub-text">마지막 보고: {new Date(step.reportedAt).toLocaleString('ko-KR')}</div>}
     </>
   );
