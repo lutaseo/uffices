@@ -1212,11 +1212,12 @@ test('기사 시공 기록: 시공완료 때 범위(완료·미시공)·자재 �
     { group: '진아리채2', parts: ['욕실2곳 바닥(빅라이언)', '현관s.v(폴리)', '욕조벽ㄷ자(폴리)'] },
     { group: '추가 시공내용', parts: ['베란다 줄눈'] },
   ], "상세품목을 '+'로 나누고 '상품명 :' 머리는 뺌");
-  await eng.ok('engineerApp', 'report', { contractId: c.id, stepIndex: 0, mobileStatus: '시공완료', memo: '', done: ['욕실2곳 바닥(빅라이언)', '현관s.v(폴리)', '베란다 줄눈'], undone: ['욕조벽ㄷ자(폴리)'], material: '빅라이언 화이트' });
+  await eng.ok('engineerApp', 'report', { contractId: c.id, stepIndex: 0, mobileStatus: '시공완료', memo: '', done: ['욕실2곳 바닥(빅라이언)', '현관s.v(폴리)', '베란다 줄눈'], undone: ['욕조벽ㄷ자(폴리)'], material: '빅라이언 화이트', note: '욕조벽은 절반만, 나머지 다음 방문' });
   let got = await admin.ok('contracts', 'get', c.id);
   const rec = got.schedules[0].workRecord;
   assert.deepEqual(rec.undone, ['욕조벽ㄷ자(폴리)']);
   assert.equal(rec.material, '빅라이언 화이트');
+  assert.equal(rec.note, '욕조벽은 절반만, 나머지 다음 방문', '직접 적은 시공 내용');
   assert.ok(rec.by && rec.at, '누가·언제');
   assert.ok(got.history.some((h) => h.changes?.some((x) => x.label === '미시공')), '변경이력에도 남음');
   await admin.ok('contracts', 'update', c.id, { ...got, memo: '사무실 수정' });

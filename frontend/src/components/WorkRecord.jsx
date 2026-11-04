@@ -20,6 +20,11 @@ export default function WorkRecord({ record, compact = false }) {
           <b>미시공</b> {record.undone.join(', ')}
         </div>
       )}
+      {record.note && (
+        <div className="pre-wrap">
+          <b>내용</b> {record.note}
+        </div>
+      )}
       {record.material && (
         <div>
           <b>자재·색상</b> {record.material}

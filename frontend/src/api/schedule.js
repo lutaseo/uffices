@@ -402,7 +402,8 @@ export const engineerApp = {
 
   // 기사 현장 보고 → 계약서 '모바일웹 ①②③' 에 표시
   // 시공완료 보고: done(한 범위)·undone(못 한 범위)·material(사용 자재·색상) → 회차의 '시공 기록'(누가·언제·무엇을·무엇으로)
-  async report({ contractId, stepIndex, mobileStatus, memo, done, undone, material }) {
+  //   note: 체크로 애매한 부분을 직접 적은 글 (예: 샤워벽은 절반만, 나머지 다음 방문)
+  async report({ contractId, stepIndex, mobileStatus, memo, done, undone, material, note }) {
     const { db, user } = await authorizeEngineer();
     const c = db.contracts.find((x) => x.id === Number(contractId) && x.companyId === user.companyId && !x.deletedAt);
     const s = c?.schedules[stepIndex];
@@ -415,8 +416,8 @@ export const engineerApp = {
     s.reportedBy = user.name;
     const texts = (v) => (Array.isArray(v) ? v.map((x) => String(x || '').trim().slice(0, 200)).filter(Boolean).slice(0, 100) : []);
     const record =
-      s.mobileStatus === '시공완료' && (Array.isArray(done) || Array.isArray(undone) || material)
-        ? { done: texts(done), undone: texts(undone), material: String(material || '').trim().slice(0, 200), by: user.name, at: s.reportedAt }
+      s.mobileStatus === '시공완료' && (Array.isArray(done) || Array.isArray(undone) || material || note)
+        ? { done: texts(done), undone: texts(undone), material: String(material || '').trim().slice(0, 200), note: String(note || '').trim().slice(0, 1000), by: user.name, at: s.reportedAt }
         : null;
     if (record) s.workRecord = record;
     else delete s.workRecord; // 시공완료가 아니면 예전 기록은 지움 (헷갈리지 않게)
@@ -425,6 +426,7 @@ export const engineerApp = {
       fields.push({ label: '완료 범위', from: '', to: record.done.join(', ') || '-' });
       if (record.undone.length) fields.push({ label: '미시공', from: '', to: record.undone.join(', ') });
       if (record.material) fields.push({ label: '사용 자재·색상', from: '', to: record.material });
+      if (record.note) fields.push({ label: '시공 내용', from: '', to: record.note });
     }
     addHistory(c, user, `기사 보고 (${stepIndex + 1}차)`, fields);
     saveDb(db);
