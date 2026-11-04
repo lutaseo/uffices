@@ -17,20 +17,20 @@ import { normalizeSido, parseApartmentText } from '../../utils/apartmentImport.j
 const BATCH = 20; // 실서비스 DB 가 멀어도 한 번 요청이 시간 제한(60초) 안에 끝나도록 작게
 
 // 시간 초과·일시 오류면 잠시 뒤 더 작게 나눠 다시 시도 (이미 저장된 건은 서버가 건너뜀)
-async function sendWithRetry(rows, tries = 3) {
+async function sendWithRetry(rows, options = {}, tries = 3) {
   try {
-    return await imports.contracts(rows);
+    return await imports.contracts(rows, options);
   } catch (err) {
     const retryable = err.code === 'SERVER' || err.code === 'NETWORK';
     if (!retryable || tries <= 1) throw err;
     await new Promise((r) => setTimeout(r, 1500));
     if (rows.length > 5) {
       const half = Math.ceil(rows.length / 2);
-      const a = await sendWithRetry(rows.slice(0, half), tries - 1);
-      const b = await sendWithRetry(rows.slice(half), tries - 1);
-      return { created: a.created + b.created, skipped: a.skipped + b.skipped, errors: [...a.errors, ...b.errors], newEngineers: [...a.newEngineers, ...b.newEngineers], newBrands: [...a.newBrands, ...b.newBrands] };
+      const a = await sendWithRetry(rows.slice(0, half), options, tries - 1);
+      const b = await sendWithRetry(rows.slice(half), options, tries - 1);
+      return { created: a.created + b.created, skipped: a.skipped + b.skipped, updated: (a.updated || 0) + (b.updated || 0), errors: [...a.errors, ...b.errors], newEngineers: [...a.newEngineers, ...b.newEngineers], newBrands: [...a.newBrands, ...b.newBrands] };
     }
-    return sendWithRetry(rows, tries - 1);
+    return sendWithRetry(rows, options, tries - 1);
   }
 }
 
@@ -158,6 +158,7 @@ function EngineerImport() {
 function ContractImport() {
   const { handleError } = useAuth();
   const [preview, setPreview] = useState(null);
+  const [sync, setSync] = useState(true); // 이미 가져온 계약도 시공일·기사·시공상태를 파일대로
   const [progress, setProgress] = useState(null);
   const [result, setResult] = useState(null);
 
@@ -192,13 +193,14 @@ function ContractImport() {
 
   const run = async () => {
     const { rows } = preview;
-    const sum = { created: 0, skipped: 0, errors: [], newEngineers: [], newBrands: [] };
+    const sum = { created: 0, skipped: 0, updated: 0, errors: [], newEngineers: [], newBrands: [] };
     setProgress({ done: 0, total: rows.length });
     try {
       for (let i = 0; i < rows.length; i += BATCH) {
-        const r = await sendWithRetry(rows.slice(i, i + BATCH));
+        const r = await sendWithRetry(rows.slice(i, i + BATCH), { sync });
         sum.created += r.created;
         sum.skipped += r.skipped;
+        sum.updated += r.updated || 0;
         sum.errors.push(...r.errors);
         sum.newEngineers.push(...r.newEngineers);
         sum.newBrands.push(...r.newBrands);
@@ -241,6 +243,10 @@ function ContractImport() {
               {preview.noSite > 0 && <tr><td className="label-col">확인 필요</td><td className="input-col text-red">현장(아파트) 표기가 없는 계약 {preview.noSite}건 → "(현장 미입력)"으로 가져옵니다.</td></tr>}
             </tbody>
           </table>
+          <label className="radio-item import-sync">
+            <input type="checkbox" checked={sync} onChange={(e) => setSync(e.target.checked)} /> 이미 가져온 계약도 <b>시공일 · 시공담당(기사) · 시공상태</b>를 이 파일대로 맞추기
+            <div className="sub-text">입금·서명·사진·상담내역·기사 시공 기록은 그대로 둡니다. 파일에서 비어 있는 회차는 지금 입력된 일정을 지우지 않습니다.</div>
+          </label>
           <div className="import-actions">
             <button type="button" className="btn-dark-lg sm" disabled={!!progress} onClick={run}>{progress ? `가져오는 중... ${progress.done}/${progress.total}` : `계약 ${preview.rows.length}건 가져오기`}</button>
             <button type="button" className="btn-dark-lg sm cancel" disabled={!!progress} onClick={() => setPreview(null)}>취소</button>
@@ -250,7 +256,7 @@ function ContractImport() {
       )}
       {result && (
         <div className="import-result">
-          ✔ 새로 가져옴 {result.created}건 · 이미 있어 건너뜀 {result.skipped}건 · 실패 {result.errors.length}건
+          ✔ 새로 가져옴 {result.created}건{result.updated ? ` · 일정 맞춤 ${result.updated}건` : ''} · 이미 있어 건너뜀 {result.skipped}건 · 실패 {result.errors.length}건
           {result.newBrands.length > 0 && <div>브랜드 추가: {[...new Set(result.newBrands)].join(', ')}</div>}
           {result.newEngineers.length > 0 && <div>기사 자동 등록: {[...new Set(result.newEngineers)].join(', ')}</div>}
           {result.errors.slice(0, 50).map((e, i) => (

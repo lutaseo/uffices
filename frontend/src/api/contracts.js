@@ -1377,6 +1377,40 @@ function authorizeImport(ctx) {
   return ctx;
 }
 
+// 예전 프로그램 파일로 이미 가져온 계약의 시공일·기사·시공상태 맞추기 (바뀐 것이 있으면 true)
+//   회차마다 파일에 날짜나 기사가 있을 때만 바꿈 (파일이 비어 있으면 우리 쪽 입력 유지)
+//   기사 보고(모바일웹·시공 기록)는 그대로, 시공상태는 파일이 '미정'이 아닐 때만
+function syncFromLegacy(db, user, c, r, engineerFor) {
+  const changes = [];
+  const steps = [...(c.schedules || [])];
+  (r.schedules || []).slice(0, MAX_SCHEDULE_STEPS).forEach((f, i) => {
+    if (!f.date && !f.engineerName) return;
+    const cur = steps[i] || { assignType: ASSIGN_TYPES.ENGINEER, engineerId: null, teamId: null, memo: '' };
+    const next = { ...cur };
+    if (f.date) Object.assign(next, { date: f.date, time: f.time || '', ampm: f.time ? '' : f.ampm || '' });
+    if (f.engineerName) Object.assign(next, { assignType: ASSIGN_TYPES.ENGINEER, engineerId: engineerFor(f.engineerName), teamId: null });
+    const label = `${i + 1}차`;
+    if ((cur.date || '') !== (next.date || '') || (cur.time || '') !== (next.time || '') || (cur.ampm || '') !== (next.ampm || '')) {
+      changes.push({ label: `시공일 ${label}`, from: [cur.date, cur.time].filter(Boolean).join(' ') || '-', to: [next.date, next.time || (next.ampm === 'AM' ? '오전' : next.ampm === 'PM' ? '오후' : '')].filter(Boolean).join(' ') });
+    }
+    if ((cur.engineerId || null) !== (next.engineerId || null) || cur.assignType !== next.assignType) {
+      const nameOf = (id) => db.engineers.find((e) => e.id === id)?.name || '-';
+      changes.push({ label: `시공담당 ${label}`, from: nameOf(cur.engineerId), to: nameOf(next.engineerId) });
+    }
+    steps[i] = next;
+  });
+  if (r.status && r.status !== '미정' && WORK_STATUS.includes(r.status) && r.status !== c.status) {
+    changes.push({ label: '시공상태', from: c.status, to: r.status });
+    c.status = r.status;
+    if (r.status === '시공완료') c.completedDate = r.completedDate || c.completedDate || '';
+    if (r.status === '취소') Object.assign(c, { canceledDate: r.canceledDate || c.canceledDate || '', cancelReason: c.cancelReason || r.cancelReason || '' });
+  }
+  if (!changes.length) return false;
+  c.schedules = steps;
+  addHistory(c, user, `기존 프로그램 파일로 일정 맞춤 (예전 번호 ${c.legacyNo})`, changes);
+  return true;
+}
+
 function newEngineer(db, user, { name, loginId = '', phone = '', categories }) {
   const cats = categories && categories.length ? categories : categoriesFromName(name);
   const e = {
@@ -1547,11 +1581,13 @@ export const imports = {
     return result;
   },
 
-  async contracts(rows = []) {
+  //   options.sync: 이미 가져온 계약(같은 예전 번호)도 시공일·기사·시공상태를 파일대로 맞춤 (그 밖의 항목은 그대로)
+  async contracts(rows = [], options = {}) {
     const { db, user } = authorizeImport(await authorize('contract.create'));
     const company = db.companies.find((c) => c.id === user.companyId);
-    const result = { created: 0, skipped: 0, errors: [], newEngineers: [], newBrands: [] };
-    const done = new Set(db.contracts.filter((c) => c.companyId === user.companyId && c.legacyNo).map((c) => String(c.legacyNo)));
+    const result = { created: 0, skipped: 0, updated: 0, errors: [], newEngineers: [], newBrands: [] };
+    const byLegacy = new Map(db.contracts.filter((c) => c.companyId === user.companyId && c.legacyNo).map((c) => [String(c.legacyNo), c]));
+    const done = new Set(byLegacy.keys());
     // 기사 찾기: 같은 이름 → 없으면 앞 표시('청)', '줄)' 등)와 띄어쓰기를 빼고 같은 이름 (중복 기사가 생기지 않게)
     const bare = (s) => String(s || '').replace(/^[가-힣,]+\)\s*/, '').replace(/\s+/g, '');
     const engineerFor = (name) => {
@@ -1569,7 +1605,9 @@ export const imports = {
     rows.slice(0, IMPORT_BATCH_MAX).forEach((r) => {
       const key = String(r.legacyNo || '').trim();
       if (key && done.has(key)) {
-        result.skipped += 1;
+        const c = options.sync && byLegacy.get(key);
+        if (c && !c.deletedAt && syncFromLegacy(db, user, c, r, engineerFor)) result.updated += 1;
+        else result.skipped += 1;
         return;
       }
       try {
