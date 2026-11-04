@@ -287,7 +287,14 @@ export default function ScheduleManagement() {
                     onClick={() => setSelectedDate(dateKey)}
                   >
                     <div className={`day-number ${dow === 0 ? 'sunday' : ''} ${dow === 6 ? 'saturday' : ''}`}>
-                      {Number(dateKey.slice(8))}
+                      {dateKey === today() ? (
+                        <span>
+                          <span className="today-num">{Number(dateKey.slice(8))}</span>
+                          <span className="today-label">오늘</span>
+                        </span>
+                      ) : (
+                        Number(dateKey.slice(8))
+                      )}
                       {list.length > 0 && <span className="day-total">{list.length}건</span>}
                     </div>
                     {offList.length > 0 && (
