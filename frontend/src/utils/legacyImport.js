@@ -127,3 +127,14 @@ export function categoriesFromName(name) {
   if (!m) return [];
   return [...new Set(m[1].split(',').map((k) => PREFIX[k.trim()]).filter(Boolean))];
 }
+
+// 예전 계약 줄과 우리 계약이 같은 계약인지 찾는 열쇠 [정확히, 느슨하게]
+//   예전 '번호'는 목록 줄 번호라 예전 프로그램에서 계약을 지우면 당겨져서 쓰지 않음
+const looseText = (v) => String(v || '').replace(/\s+/g, '');
+export function legacyKeys(x) {
+  const phone = String(x.customerPhone || '').replace(/\D/g, '');
+  return [
+    [x.contractDate, x.category, phone, looseText(x.customerName), looseText(x.aptName), looseText(x.dong), looseText(x.ho)].join('|'),
+    [x.contractDate, x.category, phone].join('|'),
+  ];
+}

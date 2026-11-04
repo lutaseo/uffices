@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { apartments, imports } from '../../api/index.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
-import { categoriesFromName, mapLegacyRow, parseLegacyHtml } from '../../utils/legacyImport.js';
+import { categoriesFromName, legacyKeys, mapLegacyRow, parseLegacyHtml } from '../../utils/legacyImport.js';
 import { won } from '../../utils/format.js';
 import { CATEGORIES } from '../../constants.js';
 import { parseProductText } from '../../utils/productImport.js';
@@ -206,6 +206,15 @@ function ContractImport() {
         sum.newBrands.push(...r.newBrands);
         setProgress({ done: Math.min(i + BATCH, rows.length), total: rows.length });
       }
+      // 같은 계약이 두 번 들어간 것 정리 (예전에 번호로 찾다가 생긴 중복) — 파일에 있는 수보다 많은 것만
+      if (sync) {
+        const counts = {};
+        rows.forEach((r) => {
+          const k = legacyKeys(r)[0];
+          counts[k] = (counts[k] || 0) + 1;
+        });
+        sum.trashed = (await imports.contractDuplicates(counts)).trashed;
+      }
       setPreview(null);
     } catch (err) {
       handleError(err);
@@ -256,7 +265,7 @@ function ContractImport() {
       )}
       {result && (
         <div className="import-result">
-          ✔ 새로 가져옴 {result.created}건{result.updated ? ` · 일정 맞춤 ${result.updated}건` : ''} · 이미 있어 건너뜀 {result.skipped}건 · 실패 {result.errors.length}건
+          ✔ 새로 가져옴 {result.created}건{result.updated ? ` · 일정 맞춤 ${result.updated}건` : ''}{result.trashed ? ` · 중복 정리(휴지통) ${result.trashed}건` : ''} · 이미 있어 건너뜀 {result.skipped}건 · 실패 {result.errors.length}건
           {result.newBrands.length > 0 && <div>브랜드 추가: {[...new Set(result.newBrands)].join(', ')}</div>}
           {result.newEngineers.length > 0 && <div>기사 자동 등록: {[...new Set(result.newEngineers)].join(', ')}</div>}
           {result.errors.slice(0, 50).map((e, i) => (
