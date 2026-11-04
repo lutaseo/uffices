@@ -715,7 +715,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
                           {s.reportedBy} · {s.reportedAt && new Date(s.reportedAt).toLocaleString('ko-KR')}
                         </div>
                         {s.mobileMemo && <div className="sub-text">“{s.mobileMemo}”</div>}
-                        <WorkRecord record={s.workRecord} compact />
+                        <WorkRecord record={s.workRecord} />
                       </>
                     ) : (
                       <span className="sub-text">

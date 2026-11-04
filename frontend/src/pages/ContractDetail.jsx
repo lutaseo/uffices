@@ -607,7 +607,7 @@ export default function ContractDetail({ contractId, initialTab, onBack, onEdit,
                 <td>{s.assigneeName}</td>
                 <td className="text-left">
                   {s.mobileMemo}
-                  <WorkRecord record={s.workRecord} compact />
+                  <WorkRecord record={s.workRecord} full />
                 </td>
               </tr>
             ))}

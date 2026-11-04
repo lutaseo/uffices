@@ -5224,3 +5224,43 @@ a.btn-quick.blue:hover {
   font-size: 15px;
   resize: vertical;
 }
+.work-record.summary {
+  border-left-width: 3px;
+  padding: 4px 8px;
+}
+.work-record-more {
+  margin-left: 6px;
+  font-size: 12px;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: #1a6fe0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.work-record-items {
+  margin: 2px 0 2px 16px;
+  padding: 0;
+}
+.work-record-meta {
+  color: #1a6fe0;
+}
+/* 기사 모바일: 항목별 자재·작업자 칸 */
+.scope-row {
+  padding: 4px 0;
+  border-bottom: 1px dashed #dce6f3;
+}
+.scope-row.undone .scope-item {
+  color: #c62828;
+  text-decoration: line-through;
+}
+.scope-row-fields {
+  display: flex;
+  gap: 6px;
+  margin: 2px 0 4px 28px;
+}
+.scope-row-fields .input-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+}
