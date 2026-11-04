@@ -32,7 +32,7 @@ import { inRange, isDateKey, isoToDateKey, today } from '../utils/date.js';
 import { digitsOnly, formatAddress, formatPhone, won } from '../utils/format.js';
 import { calcAmounts, firstScheduleDate } from '../utils/contract.js';
 import { ALIMTALK_TEMPLATES } from '../utils/alimtalk.js';
-import { categoriesFromName } from '../utils/legacyImport.js';
+import { categoriesFromName, legacyKeys } from '../utils/legacyImport.js';
 
 // ------------------------------------------------------------
 // 검색
@@ -1380,15 +1380,30 @@ function authorizeImport(ctx) {
 // 예전 프로그램 파일로 이미 가져온 계약의 시공일·기사·시공상태 맞추기 (바뀐 것이 있으면 true)
 //   회차마다 파일에 날짜나 기사가 있을 때만 바꿈 (파일이 비어 있으면 우리 쪽 입력 유지)
 //   기사 보고(모바일웹·시공 기록)는 그대로, 시공상태는 파일이 '미정'이 아닐 때만
+//   예전 번호로 잘못 맞춰졌던 계약(바로잡기 전)은 '정확히' 파일대로: 파일이 비어 있는 회차는 비우고, 시공상태도 '미정'까지 파일대로
+const OLD_SYNC_MARK = '기존 프로그램 파일로 일정 맞춤'; // 예전 번호로 찾던 때의 기록 (잘못 맞춰졌을 수 있음)
+const SYNC_MARK = '기존 프로그램 파일 일정 반영';
+const FIX_MARK = '기존 프로그램 파일로 일정 바로잡음';
+function needsRepair(c) {
+  const h = (c.history || []).map((x) => x.action || '');
+  const last = h.findLastIndex((a) => a.startsWith(OLD_SYNC_MARK));
+  return last >= 0 && !h.slice(last + 1).some((a) => a.startsWith(FIX_MARK));
+}
 function syncFromLegacy(db, user, c, r, engineerFor) {
+  const exact = needsRepair(c);
   const changes = [];
   const steps = [...(c.schedules || [])];
-  (r.schedules || []).slice(0, MAX_SCHEDULE_STEPS).forEach((f, i) => {
-    if (!f.date && !f.engineerName) return;
+  const fileSteps = r.schedules || [];
+  const count = exact ? Math.max(2, fileSteps.length) : fileSteps.length;
+  for (let i = 0; i < Math.min(count, MAX_SCHEDULE_STEPS); i++) {
+    const f = fileSteps[i] || { date: '', time: '', engineerName: '' };
+    if (!exact && !f.date && !f.engineerName) continue;
+    if (exact && !steps[i] && !f.date && !f.engineerName) continue;
     const cur = steps[i] || { assignType: ASSIGN_TYPES.ENGINEER, engineerId: null, teamId: null, memo: '' };
     const next = { ...cur };
-    if (f.date) Object.assign(next, { date: f.date, time: f.time || '', ampm: f.time ? '' : f.ampm || '' });
+    if (f.date || exact) Object.assign(next, { date: f.date || '', time: f.time || '', ampm: f.time ? '' : f.ampm || '' });
     if (f.engineerName) Object.assign(next, { assignType: ASSIGN_TYPES.ENGINEER, engineerId: engineerFor(f.engineerName), teamId: null });
+    else if (exact) Object.assign(next, { assignType: ASSIGN_TYPES.ENGINEER, engineerId: null, teamId: null });
     const label = `${i + 1}차`;
     if ((cur.date || '') !== (next.date || '') || (cur.time || '') !== (next.time || '') || (cur.ampm || '') !== (next.ampm || '')) {
       changes.push({ label: `시공일 ${label}`, from: [cur.date, cur.time].filter(Boolean).join(' ') || '-', to: [next.date, next.time || (next.ampm === 'AM' ? '오전' : next.ampm === 'PM' ? '오후' : '')].filter(Boolean).join(' ') });
@@ -1398,17 +1413,33 @@ function syncFromLegacy(db, user, c, r, engineerFor) {
       changes.push({ label: `시공담당 ${label}`, from: nameOf(cur.engineerId), to: nameOf(next.engineerId) });
     }
     steps[i] = next;
-  });
-  if (r.status && r.status !== '미정' && WORK_STATUS.includes(r.status) && r.status !== c.status) {
+  }
+  if (r.status && WORK_STATUS.includes(r.status) && r.status !== c.status && (exact || r.status !== '미정')) {
     changes.push({ label: '시공상태', from: c.status, to: r.status });
     c.status = r.status;
     if (r.status === '시공완료') c.completedDate = r.completedDate || c.completedDate || '';
     if (r.status === '취소') Object.assign(c, { canceledDate: r.canceledDate || c.canceledDate || '', cancelReason: c.cancelReason || r.cancelReason || '' });
+    if (exact && r.status !== '시공완료') c.completedDate = '';
+    if (exact && r.status !== '취소') Object.assign(c, { canceledDate: '', cancelReason: c.cancelReason === '기존 프로그램에서 취소' ? '' : c.cancelReason || '' });
   }
-  if (!changes.length) return false;
+  if (!changes.length && !exact) return false;
   c.schedules = steps;
-  addHistory(c, user, `기존 프로그램 파일로 일정 맞춤 (예전 번호 ${c.legacyNo})`, changes);
+  addHistory(c, user, `${exact ? FIX_MARK : SYNC_MARK} (예전 번호 ${c.legacyNo})`, changes);
   return true;
+}
+
+
+// 가져오기로만 생기고 아무 작업도 안 한 계약인지 (중복 정리 대상)
+const IMPORT_ONLY = /^(기존 프로그램에서 가져옴|기존 프로그램 파일)/;
+function importOnly(db, c) {
+  return (
+    (c.history || []).every((h) => IMPORT_ONLY.test(h.action || '')) &&
+    (c.esign?.status || ESIGN_STATUS.NONE) === ESIGN_STATUS.NONE &&
+    !c.paperPhotoCount &&
+    !(c.notes || []).length &&
+    (c.payments || []).every((p) => p.memo === '기존 프로그램 입금액') &&
+    !(c.schedules || []).some((s) => s.mobileStatus || s.workRecord)
+  );
 }
 
 function newEngineer(db, user, { name, loginId = '', phone = '', categories }) {
@@ -1581,13 +1612,60 @@ export const imports = {
     return result;
   },
 
-  //   options.sync: 이미 가져온 계약(같은 예전 번호)도 시공일·기사·시공상태를 파일대로 맞춤 (그 밖의 항목은 그대로)
+  // 가져오기 뒤 중복 정리: counts = { 계약 열쇠: 파일에 있는 수 } — 우리 쪽이 더 많으면
+  //   가져오기로만 생기고 아무 작업도 안 한 나중 계약을 휴지통으로 (되살리기 가능)
+  async contractDuplicates(counts = {}) {
+    const { db, user } = authorizeImport(await authorize('contract.create'));
+    const groups = new Map();
+    db.contracts
+      .filter((c) => c.companyId === user.companyId && c.legacyNo && !c.deletedAt)
+      .forEach((c) => {
+        const k = legacyKeys(c)[0];
+        if (counts[k]) groups.set(k, [...(groups.get(k) || []), c]);
+      });
+    let trashed = 0;
+    groups.forEach((list, k) => {
+      let extra = list.length - Number(counts[k] || 0);
+      if (extra <= 0) return;
+      for (const c of [...list].sort((a, b) => b.id - a.id)) {
+        if (extra <= 0) break;
+        if (!importOnly(db, c)) continue;
+        c.deletedAt = nowIso();
+        addHistory(c, user, '가져오기 중복 정리 (같은 계약이 두 번 들어와 휴지통으로)');
+        extra -= 1;
+        trashed += 1;
+      }
+    });
+    if (trashed) {
+      invalidateNumbers(db);
+      saveDb(db);
+    }
+    return { trashed };
+  },
+
+  //   options.sync: 이미 가져온 계약도 시공일·기사·시공상태를 파일대로 맞춤 (그 밖의 항목은 그대로)
   async contracts(rows = [], options = {}) {
     const { db, user } = authorizeImport(await authorize('contract.create'));
     const company = db.companies.find((c) => c.id === user.companyId);
     const result = { created: 0, skipped: 0, updated: 0, errors: [], newEngineers: [], newBrands: [] };
-    const byLegacy = new Map(db.contracts.filter((c) => c.companyId === user.companyId && c.legacyNo).map((c) => [String(c.legacyNo), c]));
-    const done = new Set(byLegacy.keys());
+    // 이미 가져온 계약 찾기 — 예전 프로그램 '번호'는 목록 줄 번호라 예전에서 계약을 지우면 당겨짐 (번호로 찾으면 다른 계약이 됨)
+    //   그래서 계약일·구분·연락처·고객명·현장(아파트·동·호)으로 찾고, 못 찾으면 계약일·구분·연락처로 한 번 더
+    const imported = db.contracts.filter((c) => c.companyId === user.companyId && c.legacyNo);
+    const pools = [new Map(), new Map()];
+    imported.forEach((c) => legacyKeys(c).forEach((k, i) => pools[i].set(k, [...(pools[i].get(k) || []), c])));
+    const used = new Set();
+    const findExisting = (r) => {
+      const ks = legacyKeys(r);
+      for (let i = 0; i < ks.length; i++) {
+        // 휴지통에 있는 것보다 살아 있는 계약 먼저, 그다음 먼저 만든 계약
+        const c = (pools[i].get(ks[i]) || []).filter((x) => !used.has(x.id)).sort((a, b) => !!a.deletedAt - !!b.deletedAt || a.id - b.id)[0];
+        if (c) {
+          used.add(c.id);
+          return c;
+        }
+      }
+      return null;
+    };
     // 기사 찾기: 같은 이름 → 없으면 앞 표시('청)', '줄)' 등)와 띄어쓰기를 빼고 같은 이름 (중복 기사가 생기지 않게)
     const bare = (s) => String(s || '').replace(/^[가-힣,]+\)\s*/, '').replace(/\s+/g, '');
     const engineerFor = (name) => {
@@ -1604,9 +1682,10 @@ export const imports = {
 
     rows.slice(0, IMPORT_BATCH_MAX).forEach((r) => {
       const key = String(r.legacyNo || '').trim();
-      if (key && done.has(key)) {
-        const c = options.sync && byLegacy.get(key);
-        if (c && !c.deletedAt && syncFromLegacy(db, user, c, r, engineerFor)) result.updated += 1;
+      const existing = findExisting(r);
+      if (existing) {
+        if (key) existing.legacyNo = key; // 지금 파일의 번호로
+        if (options.sync && !existing.deletedAt && syncFromLegacy(db, user, existing, r, engineerFor)) result.updated += 1;
         else result.skipped += 1;
         return;
       }
@@ -1644,7 +1723,8 @@ export const imports = {
         };
         addHistory(contract, user, `기존 프로그램에서 가져옴 (예전 번호 ${key || '-'})`);
         db.contracts.push(contract);
-        if (key) done.add(key);
+        used.add(contract.id); // 같은 요청 안에서 같은 줄이 또 오면 이 계약으로 (중복 생성 방지)
+        legacyKeys(contract).forEach((k, i) => pools[i].set(k, [...(pools[i].get(k) || []), contract]));
         result.created += 1;
       } catch (e) {
         result.errors.push({ legacyNo: key, customerName: r.customerName || '', message: e.message });

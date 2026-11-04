@@ -1338,7 +1338,61 @@ test('계약 가져오기 [파일대로 맞추기]: 이미 가져온 계약의 �
   assert.equal(after.schedules[1].date, '2026-07-20', '파일에 없는 ②회차는 우리 입력 유지');
   assert.deepEqual([after.status, after.completedDate], ['시공완료', '2026-07-10']);
   assert.equal(after.payments.length, 1, '입금 그대로');
-  assert.ok(after.history.some((h) => /파일로 일정 맞춤/.test(h.action)), '변경이력');
+  assert.ok(after.history.some((h) => /파일 일정 반영/.test(h.action)), '변경이력');
   const again = await admin.ok('imports', 'contracts', [fileRow], { sync: true });
   assert.deepEqual([again.updated, again.skipped], [0, 1], '바뀐 게 없으면 건너뜀');
+});
+
+test('계약 가져오기: 예전 번호가 당겨져도(예전 프로그램에서 계약 삭제) 계약일·구분·연락처·고객·현장으로 같은 계약을 찾고, 잘못 맞춰진 계약은 바로잡음', async () => {
+  await admin.ok('imports', 'engineers', [{ name: '청)번호기사' }, { name: '코)번호코팅' }]);
+  const common = { brand: '더좋은집', receptionType: '박람회', workType: '시공', contractDate: '2026-08-01', totalAmount: 300000, discount: 0, voucher: 0, payments: [] };
+  const clean = { ...common, legacyNo: '8801', category: '청소', customerName: '번호고객갑', customerPhone: '010-4848-1111', aptName: '번호아파트', dong: '107', ho: '404' };
+  const coat = { ...common, legacyNo: '8799', category: '나노코팅', customerName: '번호고객을', customerPhone: '010-4848-2222', aptName: '번호아파트', dong: '211', ho: '502' };
+  const none = [{ date: '', time: '', engineerName: '' }];
+  await admin.ok('imports', 'contracts', [{ ...clean, status: '미정', schedules: none }, { ...coat, status: '미정', schedules: none }]);
+  // 예전 프로그램에서 계약 2건이 지워져 번호가 당겨짐: 청소 8801 → 8799, 코팅 8799 → 8797
+  const file = [
+    { ...clean, legacyNo: '8799', status: '미정', schedules: [{ date: '2026-08-18', time: '', engineerName: '청)번호기사' }] },
+    { ...coat, legacyNo: '8797', status: '미정', schedules: [{ date: '2026-08-10', time: '14:00', engineerName: '코)번호코팅' }] },
+  ];
+  const r = await admin.ok('imports', 'contracts', file, { sync: true });
+  assert.deepEqual([r.created, r.updated], [0, 2], '번호가 달라도 새로 만들지 않고 각자 맞춤');
+  const list = await admin.ok('contracts', 'list', {});
+  const get = async (name) => admin.ok('contracts', 'get', list.find((x) => x.customerName === name).id);
+  const engs = await admin.ok('engineers', 'list');
+  const idOf = (n) => engs.find((e) => e.name === n).id;
+  let a = await get('번호고객갑');
+  assert.deepEqual([a.category, a.schedules[0].date, a.schedules[0].engineerId], ['청소', '2026-08-18', idOf('청)번호기사')], '청소 계약에는 청소 일정');
+  const b = await get('번호고객을');
+  assert.deepEqual([b.category, b.schedules[0].date, b.schedules[0].engineerId], ['나노코팅', '2026-08-10', idOf('코)번호코팅')], '코팅 계약에는 코팅 일정');
+  // 예전(번호로 찾던 때)에 잘못 들어간 일정·상태 흉내 → 같은 파일을 다시 올리면 파일대로 바로잡음
+  await admin.ok('contracts', 'update', a.id, { ...a, status: '취소', cancelReason: '잘못 맞춤', canceledDate: '2026-08-02', schedules: [{ ...a.schedules[0], engineerId: idOf('코)번호코팅'), date: '2026-08-10', time: '14:00' }, { date: '2026-08-10', time: '14:00', assignType: 'engineer', engineerId: idOf('코)번호코팅') }] });
+  // 예전 코드가 남긴 '파일로 일정 맞춤' 기록 (번호로 찾던 때) → 바로잡기 대상
+  const { getPool } = await import('../server/pg.js');
+  await getPool().query(`UPDATE contracts SET data = jsonb_set(data, '{history}', COALESCE(data->'history', '[]'::jsonb) || $2::jsonb) WHERE id = $1`, [a.id, JSON.stringify([{ at: new Date().toISOString(), action: '기존 프로그램 파일로 일정 맞춤 (예전 번호 8801)', changes: [] }])]);
+  const again = await admin.ok('imports', 'contracts', file, { sync: true });
+  assert.equal(again.created, 0);
+  a = await get('번호고객갑');
+  assert.deepEqual([a.status, a.schedules[0].date, a.schedules[0].time, a.schedules[0].engineerId], ['미정', '2026-08-18', '', idOf('청)번호기사')], '①회차·상태를 파일대로 바로잡음');
+  assert.deepEqual([a.schedules[1]?.date || '', a.schedules[1]?.engineerId || null], ['', null], '파일에 없는 ②회차의 잘못 들어간 일정은 비움');
+  assert.ok(a.history.some((h) => /일정 바로잡음/.test(h.action)), '변경이력');
+  // 바로잡은 뒤에는 다시 일반 맞추기 (바뀐 것 없으면 건너뜀)
+  const third = await admin.ok('imports', 'contracts', file, { sync: true });
+  assert.deepEqual([third.created, third.updated], [0, 0]);
+});
+
+test('계약 가져오기 중복 정리: 같은 계약이 파일보다 많으면 가져오기로만 생긴 나중 계약을 휴지통으로', async () => {
+  const { legacyKeys } = await import('../frontend/src/utils/legacyImport.js');
+  const { getPool } = await import('../server/pg.js');
+  const row = { legacyNo: '8901', brand: '더좋은집', category: '줄눈', receptionType: '박람회', workType: '시공', status: '미정', contractDate: '2026-08-05', customerName: '중복고객', customerPhone: '010-5959-1212', aptName: '중복아파트', dong: '1', ho: '1', totalAmount: 100000, discount: 0, voucher: 0, payments: [], schedules: [{ date: '', time: '', engineerName: '' }] };
+  await admin.ok('imports', 'contracts', [row]);
+  const orig = (await admin.ok('contracts', 'list', {})).find((x) => x.customerName === '중복고객');
+  // 예전에 번호로 찾다가 같은 계약이 한 번 더 들어간 상황 흉내 (DB 에 복사본)
+  await getPool().query(`INSERT INTO contracts (id, company_id, data) SELECT 990001, company_id, jsonb_set(data, '{id}', '990001') FROM contracts WHERE id = $1`, [orig.id]);
+  assert.equal((await admin.ok('contracts', 'list', {})).filter((x) => x.customerName === '중복고객').length, 2);
+  const r = await admin.ok('imports', 'contractDuplicates', { [legacyKeys(row)[0]]: 1 });
+  assert.equal(r.trashed, 1);
+  const left = (await admin.ok('contracts', 'list', {})).filter((x) => x.customerName === '중복고객');
+  assert.deepEqual(left.map((x) => x.id), [orig.id], '먼저 있던 계약은 남고 나중 복사본만 휴지통');
+  assert.equal((await admin.ok('imports', 'contractDuplicates', { [legacyKeys(row)[0]]: 1 })).trashed, 0, '다시 해도 그대로');
 });
