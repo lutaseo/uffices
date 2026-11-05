@@ -991,6 +991,7 @@ function ScheduleStep({ i, s, name, category, onPatch, settings, timeOpts, engin
           <button type="button" className="btn-dark-sm" onClick={() => onPatch({ date: '', time: '', ampm: '' })}>초기화</button>
           <select className="input-text" value={timeValueOf(s)} onChange={(e) => onPatch(timeFieldsOf(e.target.value))}>
             <option value="">시간</option>
+            <option value="ANY">무관</option>
             <option value="AM">오전(시간미정)</option>
             <option value="PM">오후(시간미정)</option>
             {timeOpts.map((t) => (

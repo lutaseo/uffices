@@ -88,16 +88,16 @@ export function timeOptions(settings) {
   return out;
 }
 
-// select 값 <-> 일정 필드 변환 ('' | 'AM' | 'PM' | 'HH:mm')
+// select 값 <-> 일정 필드 변환 ('' | 'AM' | 'PM' | 'ANY'(무관) | 'HH:mm')
 export const timeValueOf = (s) => s.time || s.ampm || '';
 export const timeFieldsOf = (value) =>
-  value === 'AM' || value === 'PM' ? { time: '', ampm: value } : { time: value || '', ampm: '' };
+  value === 'AM' || value === 'PM' || value === 'ANY' ? { time: '', ampm: value } : { time: value || '', ampm: '' };
 
+// 시간 표시 ('' 이면 시간 미정) — 무관 = 아무 시간이나 괜찮음
+export const AMPM_LABEL = { AM: '오전', PM: '오후', ANY: '무관' };
 export function timeLabel(s) {
   if (s.time) return s.time;
-  if (s.ampm === 'AM') return '오전';
-  if (s.ampm === 'PM') return '오후';
-  return '';
+  return AMPM_LABEL[s.ampm] || '';
 }
 
 // 일정의 시간대 ('AM' | 'PM' | null) — 서버 규칙(api/schedule.js)과 동일

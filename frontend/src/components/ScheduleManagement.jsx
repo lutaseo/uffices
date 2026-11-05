@@ -463,6 +463,7 @@ export default function ScheduleManagement() {
                       <input type="date" value={editItem.date} onChange={(e) => setEditItem({ ...editItem, date: e.target.value })} className="input-text" required />
                       <select className="input-text" value={timeValueOf(editItem)} onChange={(e) => setEditItem({ ...editItem, ...timeFieldsOf(e.target.value) })}>
                         <option value="">시간미정</option>
+                        <option value="ANY">무관</option>
                         <option value="AM">오전(시간미정)</option>
                         <option value="PM">오후(시간미정)</option>
                         {timeOptions(settings).map((t) => <option key={t} value={t}>{t}</option>)}
