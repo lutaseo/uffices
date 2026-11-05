@@ -5336,3 +5336,31 @@ a.btn-quick.blue:hover {
     font-size: 11px;
   }
 }
+
+/* 일정관리 달력: 오늘 날짜 표시 (연한 노란 바탕 + 날짜 동그라미 + '오늘') */
+.calendar-cell.today-cell {
+  background-color: #fffbe6;
+  box-shadow: inset 0 0 0 2px #f5c518;
+}
+.calendar-cell.today-cell .day-number > :first-child,
+.calendar-cell.today-cell .day-number {
+  color: inherit;
+}
+.calendar-cell.today-cell .today-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 4px;
+  border-radius: 11px;
+  background: #1a6fe0;
+  color: #fff;
+  font-weight: 800;
+}
+.calendar-cell .today-label {
+  margin-left: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #b45309;
+}
