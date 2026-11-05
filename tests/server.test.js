@@ -1404,7 +1404,15 @@ test('시공 시간 [무관]: 계약에 저장·표시, 예전 파일의 (무관
   assert.equal(timeLabel({ time: '', ampm: 'ANY' }), '무관');
   const c = await admin.ok('contracts', 'create', { ...base, customerName: '무관고객', customerPhone: '010-6363-7474', category: '줄눈', schedules: [{ date: '2026-12-20', time: '', ampm: 'ANY', assignType: 'engineer' }] });
   assert.equal((await admin.ok('contracts', 'get', c.id)).schedules[0].ampm, 'ANY');
+  // 예전 파일의 (무관)은 예전처럼 시간 없음, 직접 고른 무관은 파일대로 맞추기에도 그대로
   const html = `<table><tbody><tr><td>9501</td><td>더좋은집</td><td>줄눈</td><td>박람</td><td>시공</td><td>미정</td><td>2026-05-01</td><td>무관파일(승인)</td><td>010-6363-8585</td><td>무관아파트101-101</td><td>84</td><td>0</td><td>할인금액 : 0</td><td>상품권 : 0</td><td>0</td><td>0</td><td>0</td><td>① : 2026-11-18(무관)</td><td>② : </td><td>미정</td><td>① : </td><td>② : </td><td></td><td></td><td></td><td></td></tr></tbody></table>`;
   const [row] = parseLegacyHtml(html).map(mapLegacyRow);
-  assert.deepEqual([row.schedules[0].date, row.schedules[0].ampm], ['2026-11-18', 'ANY']);
+  assert.deepEqual([row.schedules[0].date, row.schedules[0].ampm || ''], ['2026-11-18', '']);
+  await admin.ok('imports', 'contracts', [row]);
+  const id = (await admin.ok('contracts', 'list', {})).find((x) => x.customerName === '무관파일').id;
+  const got = await admin.ok('contracts', 'get', id);
+  await admin.ok('contracts', 'update', id, { ...got, schedules: [{ ...got.schedules[0], ampm: 'ANY', time: '' }] });
+  await admin.ok('imports', 'contracts', [{ ...row, schedules: [{ ...row.schedules[0], date: '2026-11-19' }] }], { sync: true });
+  const after = await admin.ok('contracts', 'get', id);
+  assert.deepEqual([after.schedules[0].date, after.schedules[0].ampm], ['2026-11-19', 'ANY'], '날짜만 바뀌고 직접 고른 무관은 그대로');
 });

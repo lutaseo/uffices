@@ -1401,7 +1401,9 @@ function syncFromLegacy(db, user, c, r, engineerFor) {
     if (exact && !steps[i] && !f.date && !f.engineerName) continue;
     const cur = steps[i] || { assignType: ASSIGN_TYPES.ENGINEER, engineerId: null, teamId: null, memo: '' };
     const next = { ...cur };
-    if (f.date || exact) Object.assign(next, { date: f.date || '', time: f.time || '', ampm: f.time ? '' : f.ampm || '' });
+    // 파일에 시간이 없으면 우리 쪽 시간(직접 고른 '무관' 등)은 그대로 — 바로잡기일 때만 파일대로
+    if (exact) Object.assign(next, { date: f.date || '', time: f.time || '', ampm: f.time ? '' : f.ampm || '' });
+    else if (f.date) Object.assign(next, { date: f.date, ...(f.time || f.ampm ? { time: f.time || '', ampm: f.time ? '' : f.ampm } : {}) });
     if (f.engineerName) Object.assign(next, { assignType: ASSIGN_TYPES.ENGINEER, engineerId: engineerFor(f.engineerName), teamId: null });
     else if (exact) Object.assign(next, { assignType: ASSIGN_TYPES.ENGINEER, engineerId: null, teamId: null });
     const label = `${i + 1}차`;
