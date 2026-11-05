@@ -1396,3 +1396,15 @@ test('계약 가져오기 중복 정리: 같은 계약이 파일보다 많으면
   assert.deepEqual(left.map((x) => x.id), [orig.id], '먼저 있던 계약은 남고 나중 복사본만 휴지통');
   assert.equal((await admin.ok('imports', 'contractDuplicates', { [legacyKeys(row)[0]]: 1 })).trashed, 0, '다시 해도 그대로');
 });
+
+test('시공 시간 [무관]: 계약에 저장·표시, 예전 파일의 (무관)도 무관으로', async () => {
+  const { timeLabel, timeFieldsOf } = await import('../frontend/src/utils/contract.js');
+  const { parseLegacyHtml, mapLegacyRow } = await import('../frontend/src/utils/legacyImport.js');
+  assert.deepEqual(timeFieldsOf('ANY'), { time: '', ampm: 'ANY' });
+  assert.equal(timeLabel({ time: '', ampm: 'ANY' }), '무관');
+  const c = await admin.ok('contracts', 'create', { ...base, customerName: '무관고객', customerPhone: '010-6363-7474', category: '줄눈', schedules: [{ date: '2026-12-20', time: '', ampm: 'ANY', assignType: 'engineer' }] });
+  assert.equal((await admin.ok('contracts', 'get', c.id)).schedules[0].ampm, 'ANY');
+  const html = `<table><tbody><tr><td>9501</td><td>더좋은집</td><td>줄눈</td><td>박람</td><td>시공</td><td>미정</td><td>2026-05-01</td><td>무관파일(승인)</td><td>010-6363-8585</td><td>무관아파트101-101</td><td>84</td><td>0</td><td>할인금액 : 0</td><td>상품권 : 0</td><td>0</td><td>0</td><td>0</td><td>① : 2026-11-18(무관)</td><td>② : </td><td>미정</td><td>① : </td><td>② : </td><td></td><td></td><td></td><td></td></tr></tbody></table>`;
+  const [row] = parseLegacyHtml(html).map(mapLegacyRow);
+  assert.deepEqual([row.schedules[0].date, row.schedules[0].ampm], ['2026-11-18', 'ANY']);
+});

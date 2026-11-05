@@ -30,7 +30,7 @@ import {
 } from '../constants.js';
 import { inRange, isDateKey, isoToDateKey, today } from '../utils/date.js';
 import { digitsOnly, formatAddress, formatPhone, won } from '../utils/format.js';
-import { calcAmounts, firstScheduleDate } from '../utils/contract.js';
+import { calcAmounts, firstScheduleDate, timeLabel } from '../utils/contract.js';
 import { ALIMTALK_TEMPLATES } from '../utils/alimtalk.js';
 import { categoriesFromName, legacyKeys } from '../utils/legacyImport.js';
 
@@ -116,7 +116,7 @@ function normalizeSchedules(db, user, input = [], prev = []) {
     return {
       date: isDateKey(s.date) ? s.date : '',
       time: /^\d{2}:\d{2}$/.test(s.time || '') ? s.time : '',
-      ampm: s.time ? '' : oneOf(s.ampm, ['AM', 'PM'], ''),
+      ampm: s.time ? '' : oneOf(s.ampm, ['AM', 'PM', 'ANY'], ''), // ANY = 시간 무관
       assignType,
       engineerId: assignType === ASSIGN_TYPES.ENGINEER && engineerIds.has(Number(s.engineerId)) ? Number(s.engineerId) : null,
       teamId: assignType === ASSIGN_TYPES.TEAM && teamIds.has(Number(s.teamId)) ? Number(s.teamId) : null,
@@ -401,7 +401,7 @@ function diffContract(db, before, after) {
   push('입주예정일', before.moveInDate, after.moveInDate);
   const sched = (s) => {
     if (!s || (!s.date && !s.engineerId && !s.teamId)) return '';
-    const when = s.time || (s.ampm === 'AM' ? '오전' : s.ampm === 'PM' ? '오후' : '');
+    const when = timeLabel(s);
     return `${s.date || '날짜미정'} ${when} ${assigneeOf(db, s).assigneeName || '미배정'}`.replace(/\s+/g, ' ').trim();
   };
   for (let i = 0; i < MAX_SCHEDULE_STEPS; i++) push(`시공일정${i + 1}`, sched(before.schedules?.[i]), sched(after.schedules?.[i]));
@@ -1406,7 +1406,7 @@ function syncFromLegacy(db, user, c, r, engineerFor) {
     else if (exact) Object.assign(next, { assignType: ASSIGN_TYPES.ENGINEER, engineerId: null, teamId: null });
     const label = `${i + 1}차`;
     if ((cur.date || '') !== (next.date || '') || (cur.time || '') !== (next.time || '') || (cur.ampm || '') !== (next.ampm || '')) {
-      changes.push({ label: `시공일 ${label}`, from: [cur.date, cur.time].filter(Boolean).join(' ') || '-', to: [next.date, next.time || (next.ampm === 'AM' ? '오전' : next.ampm === 'PM' ? '오후' : '')].filter(Boolean).join(' ') });
+      changes.push({ label: `시공일 ${label}`, from: [cur.date, cur.time].filter(Boolean).join(' ') || '-', to: [next.date, timeLabel(next)].filter(Boolean).join(' ') });
     }
     if ((cur.engineerId || null) !== (next.engineerId || null) || cur.assignType !== next.assignType) {
       const nameOf = (id) => db.engineers.find((e) => e.id === id)?.name || '-';

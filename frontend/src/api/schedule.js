@@ -30,7 +30,7 @@ import { addHistory, assigneeOf, contractView } from './views.js';
 import { numberOf } from './numbering.js';
 import { DEFAULT_SCHEDULE_SETTINGS, MOBILE_STATUS, OFF_LABEL } from '../constants.js';
 import { inRange, isDateKey, today } from '../utils/date.js';
-import { calcAmounts, materialText, scopeOf } from '../utils/contract.js';
+import { calcAmounts, materialText, scopeOf, timeLabel } from '../utils/contract.js';
 import { formatAddress } from '../utils/format.js';
 
 export const settingsOf = (company) => ({ ...DEFAULT_SCHEDULE_SETTINGS, ...(company?.scheduleSettings || {}) });
@@ -132,7 +132,7 @@ function setOff(db, companyId, engineerId, { date, period, reason }, actor) {
   );
   if (conflicts.length) {
     const list = conflicts
-      .map(({ c, s }) => `· No.${numberOf(db, c)} ${c.customerName} ${s.time || (s.ampm === 'AM' ? '오전' : s.ampm === 'PM' ? '오후' : '시간미정')}`)
+      .map(({ c, s }) => `· No.${numberOf(db, c)} ${c.customerName} ${timeLabel(s) || '시간미정'}`)
       .join('\n');
     throw new ApiError(
       `${engineer.name} 기사는 ${date} ${OFF_LABEL[period]} 시간대에 배정된 일정이 있어 휴무를 등록할 수 없습니다.\n${list}\n일정을 다른 기사/날짜로 옮긴 후 다시 등록해 주세요.`,
@@ -153,7 +153,7 @@ function setOff(db, companyId, engineerId, { date, period, reason }, actor) {
     );
     if (teamConflicts.length) {
       const team = db.teams.find((t) => t.id === engineer.teamId);
-      const list = teamConflicts.map(({ c, s }) => `· No.${numberOf(db, c)} ${c.customerName} ${s.time || (s.ampm === 'AM' ? '오전' : s.ampm === 'PM' ? '오후' : '시간미정')}`).join('\n');
+      const list = teamConflicts.map(({ c, s }) => `· No.${numberOf(db, c)} ${c.customerName} ${timeLabel(s) || '시간미정'}`).join('\n');
       throw new ApiError(
         `${engineer.name} 기사까지 휴무하면 ${team?.name || '소속 팀'} 팀원 전원이 쉬게 되어, 배정된 팀 일정을 진행할 수 없습니다.\n${list}\n일정을 옮기거나 다른 팀원과 조정해 주세요.`,
       );

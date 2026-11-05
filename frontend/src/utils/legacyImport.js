@@ -58,7 +58,7 @@ function parseWhen(text) {
   const date = (t.match(/\d{4}-\d{2}-\d{2}/) || [''])[0];
   const tm = (t.match(/\((\d{1,2}):(\d{2})\)/) || []).slice(1);
   if (tm.length) return { date, time: `${tm[0].padStart(2, '0')}:${tm[1]}` };
-  const ampm = /\(\s*오전/.test(t) ? 'AM' : /\(\s*오후/.test(t) ? 'PM' : '';
+  const ampm = /\(\s*오전/.test(t) ? 'AM' : /\(\s*오후/.test(t) ? 'PM' : /\(\s*무관/.test(t) ? 'ANY' : '';
   return { date, time: '', ...(ampm ? { ampm } : {}) };
 }
 const who = (text) => String(text || '').replace(/^[①②③]\s*:\s*/, '').trim();
