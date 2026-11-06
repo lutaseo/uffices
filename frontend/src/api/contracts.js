@@ -344,7 +344,7 @@ function syncReceiptCounts(db, c) {
 function cleanReceipts(db, c) {
   if (!db.paymentReceipts) return;
   const ids = new Set((c.payments || []).map((p) => p.id));
-  db.paymentReceipts = db.paymentReceipts.filter((r) => r.contractId !== c.id || r.kind === PAPER_KIND || ids.has(r.paymentId));
+  db.paymentReceipts = db.paymentReceipts.filter((r) => r.contractId !== c.id || r.kind || ids.has(r.paymentId)); // kind 있는 사진(실물 계약서·AS)은 입금과 무관
 }
 
 // ---------------- 실물(종이) 계약서 사진 ----------------
@@ -354,6 +354,13 @@ function cleanReceipts(db, c) {
 const PAPER_KIND = 'contractPaper';
 export const PAPER_PHOTOS_MAX = 10;
 const paperPhotosOf = (db, c) => (db.paymentReceipts || []).filter((r) => r.contractId === c.id && r.kind === PAPER_KIND);
+
+// ---------------- AS 사진 ----------------
+//   AS 접수 때 함께 올린 사진 (하자 부위 등). 같은 표(paymentReceipts)에 kind 'asPhoto', asIndex(몇 번째 AS 회차, 0부터)로 저장
+//   회차에는 사진 장수만(photoCount) 남기고, 사진은 볼 때만 읽음
+const AS_KIND = 'asPhoto';
+export const AS_PHOTOS_MAX = 5;
+const asPhotosOf = (db, c) => (db.paymentReceipts || []).filter((r) => r.contractId === c.id && r.kind === AS_KIND);
 
 // 같은 계약 묶음: 같은 계약자 + 같은 현장(아파트/동/호)의 시공들
 const groupKey = (c) => [c.customerId, c.aptName, c.dong, c.ho].join('|');
@@ -719,17 +726,24 @@ export const contracts = {
     const { db, user } = await authorize('contract.edit');
     const request = String(info.request || '').trim().slice(0, 500);
     if (on && !request) throw new ApiError('AS 요청 내용을 적어 주세요.');
+    const photos = on && Array.isArray(info.photos) ? info.photos.filter(Boolean) : [];
+    if (photos.length > AS_PHOTOS_MAX) throw new ApiError(`AS 사진은 한 번에 ${AS_PHOTOS_MAX}장까지 올릴 수 있습니다.`);
+    photos.forEach(checkReceiptImage);
+    if (photos.length) db.paymentReceipts = db.paymentReceipts || [];
     ids.forEach((id) => {
       const c = findContract(db, user, id);
       if (c.deletedAt) throw new ApiError('휴지통에 있는 계약입니다.');
       const logs = c.asLogs || (c.asInfo ? [{ ...c.asInfo, doneAt: null }] : []);
       if (on) {
-        const entry = { date: isDateKey(info.date) ? info.date : today(), request, byName: user.name, doneAt: null };
+        const entry = { date: isDateKey(info.date) ? info.date : today(), request, byName: user.name, doneAt: null, ...(photos.length ? { photoCount: photos.length } : {}) };
+        photos.forEach((img) => {
+          db.paymentReceipts.push({ id: nextId(db, 'paymentReceipts'), companyId: user.companyId, contractId: c.id, paymentId: null, kind: AS_KIND, asIndex: logs.length, image: img, createdAt: nowIso() });
+        });
         const again = !!c.asAt; // 이미 AS관리에 있음 → 재발·추가 접수
         c.asLogs = [...logs, entry];
         c.asInfo = entry;
         c.asAt = c.asAt || nowIso();
-        addHistory(c, user, again ? 'AS 추가 접수' : 'AS관리로 이동', [{ label: `AS ${c.asLogs.length}회 접수`, from: '', to: `${entry.date} ${request}` }]);
+        addHistory(c, user, again ? 'AS 추가 접수' : 'AS관리로 이동', [{ label: `AS ${c.asLogs.length}회 접수`, from: '', to: `${entry.date} ${request}${photos.length ? ` (사진 ${photos.length}장)` : ''}` }]);
       } else {
         if (!c.asAt || !logs.some((l) => !l.doneAt)) return;
         c.asLogs = logs.map((l) => (l.doneAt ? l : { ...l, doneAt: today(), doneBy: user.name }));
@@ -818,6 +832,17 @@ export const contracts = {
     c.updatedAt = nowIso();
     saveDb(db);
     return contractView(c, user, db);
+  },
+
+  // AS 사진 보기 (asIndex: 몇 번째 AS 회차 — 없으면 전부)
+  async asPhotos(id, asIndex) {
+    const { db, user } = await authorize('contract.view');
+    const c = findContract(db, user, id);
+    const want = asIndex === undefined || asIndex === null ? null : Number(asIndex);
+    return asPhotosOf(db, c)
+      .filter((r) => want === null || r.asIndex === want)
+      .sort((a, b) => a.id - b.id)
+      .map((r) => ({ id: r.id, image: r.image, asIndex: r.asIndex, createdAt: r.createdAt }));
   },
 
   // 실물 계약서 사진 보기

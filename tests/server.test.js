@@ -888,6 +888,26 @@ test('AS관리: 보낸 계약은 AS관리에만, AS 완료해도 AS관리에 남
   assert.deepEqual(again.asLogs.map((l) => !!l.doneAt), [true, false, false]);
 });
 
+test('AS 사진: 접수하면서 사진 첨부(한 건·여러 건), 회차별로 보기, 입금을 바꿔도 사진은 그대로', async () => {
+  const img = (n) => 'data:image/jpeg;base64,' + Buffer.from(`as-photo-${n}`).toString('base64');
+  const one = await admin.ok('contracts', 'create', { ...base, customerName: 'AS사진고객', customerPhone: '010-7171-2323', payments: [{ date: '2026-10-01', kind: '계약금', method: '계좌이체', amount: 10000 }] });
+  const two = await admin.ok('contracts', 'create', { ...base, customerName: 'AS사진고객2', customerPhone: '010-7171-2424' });
+  assert.equal((await admin('contracts', 'setAs', [one.id], true, { request: '들뜸', photos: [1, 2, 3, 4, 5, 6].map(img) })).status, 400, '최대 5장');
+  assert.equal((await admin('contracts', 'setAs', [one.id], true, { request: '들뜸', photos: ['not-an-image'] })).status, 400, '사진만');
+  await admin.ok('contracts', 'setAs', [one.id], true, { request: '욕실 들뜸', photos: [img(1), img(2)] });
+  await admin.ok('contracts', 'setAs', [one.id], true, { request: '현관 추가' }); // 2회차는 사진 없이
+  await admin.ok('contracts', 'setAs', [one.id, two.id], true, { request: '함께 접수', photos: [img(3)] }); // 여러 건 한꺼번에
+  const got = await admin.ok('contracts', 'get', one.id);
+  assert.deepEqual(got.asLogs.map((l) => l.photoCount || 0), [2, 0, 1], '회차마다 사진 장수');
+  assert.deepEqual((await admin.ok('contracts', 'asPhotos', one.id, 0)).map((r) => r.image), [img(1), img(2)], '1회차 사진');
+  assert.equal((await admin.ok('contracts', 'asPhotos', one.id, 1)).length, 0);
+  assert.deepEqual((await admin.ok('contracts', 'asPhotos', two.id, 0)).map((r) => r.image), [img(3)], '여러 건 접수 → 각 계약에 사진');
+  assert.ok(!JSON.stringify(await admin.ok('contracts', 'list', { as: true })).includes(img(1)), '목록에는 사진을 싣지 않음');
+  // 입금을 지워도(영수증 정리) AS 사진은 남음
+  await admin.ok('contracts', 'removePayment', one.id, got.payments[0].id);
+  assert.equal((await admin.ok('contracts', 'asPhotos', one.id)).length, 3, '입금 정리와 무관');
+});
+
 test('상품 줄: 상품명 없이 금액만 있는 줄은 저장을 막고(금액이 사라지지 않게), 완전히 빈 줄은 무시', async () => {
   const bad = await admin('contracts', 'create', { ...base, customerName: '빈줄고객', customerPhone: '010-9191-8282', lineItems: [{ name: '', qty: 1, unitPrice: 300000 }] });
   assert.equal(bad.status, 400);

@@ -78,9 +78,10 @@ export async function loadSnapshot(client, scope) {
   for (const key of COMPANY_SCOPED) {
     if (key === 'paymentReceipts' && scope.companyId && scope.receiptsFor) {
       db[key] = (
-        await rows(client, `SELECT data FROM payment_receipts WHERE company_id = $1 AND data->>'contractId' = $2 ORDER BY id`, [
+        // receiptsFor: 계약 번호 하나, 또는 여러 건(AS 접수 등 목록에서 고른 계약들)
+        await rows(client, `SELECT data FROM payment_receipts WHERE company_id = $1 AND data->>'contractId' = ANY($2::text[]) ORDER BY id`, [
           scope.companyId,
-          String(Number(scope.receiptsFor)),
+          [].concat(scope.receiptsFor).map((x) => String(Number(x))),
         ])
       ).map(toObj);
     } else if (scope.companyId && wanted.includes(key)) {

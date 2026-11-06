@@ -53,6 +53,16 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
   const [receiptView, setReceiptView] = useState(null); // { images: [{id, image}], title }
   const [kakao, setKakao] = useState(null); // { contract, template, brand }
   const [viewId, setViewId] = useState(null);
+  const [asPhotos, setAsPhotos] = useState(null); // AS 사진 크게 보기 { images, title }
+  const openAsPhotos = async (id, index) => {
+    try {
+      const list = await contractApi.asPhotos(id, index);
+      if (!list.length) return alert('저장된 AS 사진이 없습니다.');
+      setAsPhotos({ images: list.map((r) => r.image), title: `AS ${index + 1}회 사진` });
+    } catch (e) {
+      handleError(e);
+    }
+  };
   const [noteText, setNoteText] = useState('');
   const [noteTarget, setNoteTarget] = useState(contractId);
   // 시공 기록 [자세히 보기]로 들어오면 불러온 뒤 진행상황 위치로 이동 (한 번만)
@@ -333,6 +343,18 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
                     <div key={i} className={`sub-text as-request ${l.doneAt ? 'done' : ''}`}>
                       AS {i + 1}회 {l.date} · {l.request}
                       {l.doneAt && ` (완료 ${l.doneAt})`}
+                      {l.photoCount > 0 && (
+                        <button
+                          type="button"
+                          className="btn-receipt as-photo-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openAsPhotos(c.id, i);
+                          }}
+                        >
+                          📷 사진 {l.photoCount}장
+                        </button>
+                      )}
                     </div>
                   ))}
                 </td>
@@ -842,6 +864,7 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
           onClose={() => setKakao(null)}
         />
       )}
+      {asPhotos && <PhotoViewer images={asPhotos.images} title={asPhotos.title} onClose={() => setAsPhotos(null)} />}
       {viewId && <ContractViewModal contractId={viewId} onClose={() => setViewId(null)} onChanged={load} />}
     </div>
   );

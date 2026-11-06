@@ -81,7 +81,7 @@ const TABLES = {
   apartments: (r) => `아파트 ${r.name || ''}`,
   companies: (r) => `업체 설정 ${r.name || ''}`,
   notifications: (r) => `알림톡 ${r.template || ''} → ${r.receiverName || ''}`,
-  paymentReceipts: (r) => (r.kind === 'contractPaper' ? '실물 계약서 사진' : '입금 영수증 사진'),
+  paymentReceipts: (r) => (r.kind === 'contractPaper' ? '실물 계약서 사진' : r.kind === 'asPhoto' ? 'AS 사진' : '입금 영수증 사진'),
 };
 
 // 항목 이름 (없는 항목은 영문 이름 그대로)
