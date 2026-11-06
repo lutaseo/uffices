@@ -37,8 +37,8 @@ export default function PaperPhotos({ contractId, savedCount = 0, value, onChang
     if (files.length > room) alert(`실물 계약서 사진은 계약 1건당 ${PAPER_MAX}장까지 올릴 수 있습니다. 앞의 ${Math.max(room, 0)}장만 추가합니다.`);
     try {
       const list = [];
-      // 손글씨가 읽히도록 영수증보다 크게 (긴 변 2000px)
-      for (const f of files.slice(0, Math.max(room, 0))) list.push(await compressImage(f, { maxSize: 2000, quality: 0.85 }));
+      // 손글씨가 읽히도록 다른 사진보다 조금 크게 (긴 변 1800px, 약 500KB)
+      for (const f of files.slice(0, Math.max(room, 0))) list.push(await compressImage(f, { maxSize: 1800, quality: 0.75, maxBytes: 500 * 1024 }));
       onChange({ ...v, add: [...v.add, ...list] });
     } catch (err) {
       alert(err.message);

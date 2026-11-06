@@ -4,7 +4,7 @@
 // ============================================================
 
 import { loadDb, saveDb, nextId, publicBaseUrl, clientInfo, getSession, setSession, alimtalkGateway, hashPassword } from './runtime.js';
-import { ApiError, authorize, authorizeAny, clone, findContract, isLoginIdTaken, nowIso, validatePassword, visibleContracts } from './core.js';
+import { ApiError, authorize, authorizeAny, clone, companyOf, findContract, isLoginIdTaken, nowIso, validatePassword, visibleContracts } from './core.js';
 import { addHistory, assigneeOf, contractListView, contractView, hideAmounts } from './views.js';
 import { assertAssignable } from './schedule.js';
 import { invalidateNumbers, numberOf } from './numbering.js';
@@ -344,8 +344,10 @@ function syncReceiptCounts(db, c) {
 function cleanReceipts(db, c) {
   if (!db.paymentReceipts) return;
   const ids = new Set((c.payments || []).map((p) => p.id));
-  db.paymentReceipts = db.paymentReceipts.filter((r) => r.contractId !== c.id || r.kind === PAPER_KIND || ids.has(r.paymentId));
+  db.paymentReceipts = db.paymentReceipts.filter((r) => r.contractId !== c.id || r.kind || ids.has(r.paymentId)); // kind 있는 사진(실물 계약서·AS)은 입금과 무관
 }
+
+const CUSTOMER_LINKS_VERSION = 1;
 
 // ---------------- 실물(종이) 계약서 사진 ----------------
 //   영수증 사진과 같은 표(paymentReceipts)에 kind 'contractPaper' 로 저장 — 계약 목록에는 싣지 않고 열 때만 읽음
@@ -355,14 +357,26 @@ const PAPER_KIND = 'contractPaper';
 export const PAPER_PHOTOS_MAX = 10;
 const paperPhotosOf = (db, c) => (db.paymentReceipts || []).filter((r) => r.contractId === c.id && r.kind === PAPER_KIND);
 
+// ---------------- AS 사진 ----------------
+//   AS 접수 때 함께 올린 사진 (하자 부위 등). 같은 표(paymentReceipts)에 kind 'asPhoto', asIndex(몇 번째 AS 회차, 0부터)로 저장
+//   회차에는 사진 장수만(photoCount) 남기고, 사진은 볼 때만 읽음
+const AS_KIND = 'asPhoto';
+export const AS_PHOTOS_MAX = 5;
+const asPhotosOf = (db, c) => (db.paymentReceipts || []).filter((r) => r.contractId === c.id && r.kind === AS_KIND);
+
 // 같은 계약 묶음: 같은 계약자 + 같은 현장(아파트/동/호)의 시공들
 const groupKey = (c) => [c.customerId, c.aptName, c.dong, c.ho].join('|');
 
 // 고객에게 한 장으로 보내는 계약서 묶음
-//   - 같은 고객(이름+전화번호) · 같은 회사(브랜드)의 줄눈·청소(SIGN_TOGETHER) 계약끼리
+//   - 같은 고객(이름+전화번호) · 같은 회사(브랜드) · 같은 계약일의 줄눈·청소(SIGN_TOGETHER) 계약끼리
 //   - 나노코팅 등 다른 구분, 다른 브랜드는 따로 한 장
 //   - 서명 전: 그중 아직 서명 안 된 계약 전부 / 서명 후: 그때 함께 서명한 계약들 (같은 서명 링크)
-const signKey = (c) => [String(c.customerName || '').replace(/\s+/g, ''), digitsOnly(c.customerPhone), c.brand].join('|');
+//   전화번호가 없으면 이름만으로 묶지 않고 현장까지 같아야 함 (동명이인이 한 장으로 섞이지 않게)
+//   같은 사람이 여러 번 계약하는 경우: 계약일이 같은 것끼리만 한 장 (예전 계약·다른 날 재계약은 따로 서명)
+const signKey = (c) => {
+  const d = digitsOnly(c.customerPhone);
+  return [String(c.customerName || '').replace(/\s+/g, ''), d, c.brand, d ? '' : formatAddress(c), c.contractDate || ''].join('|');
+};
 
 function signBundle(db, user, base) {
   if (base.deletedAt || !SIGN_TOGETHER.includes(base.category)) return [base];
@@ -429,9 +443,16 @@ const siteAddress = (site) => {
   if (!apt) return '';
   return [apt, site.dong && `${site.dong}동`, site.ho && `${site.ho}호`].filter(Boolean).join(' ');
 };
+// 계약 ↔ 계약자 연결: 이름 + 전화번호가 모두 같아야 같은 계약자 (동명이인·가족이 같은 번호를 써도 섞이지 않게)
+//   전화번호가 없으면(예전 자료 가져오기 등) 이름 + 현장까지 같아야 같은 계약자
+const sameCustomer = (cust, name, phone, site) => {
+  const d = digitsOnly(phone);
+  return String(cust.name || '').replace(/\s+/g, '') === String(name || '').replace(/\s+/g, '') && digitsOnly(cust.phone1) === d && (d !== '' || (cust.address1 || '') === siteAddress(site));
+};
+
 function upsertCustomerForContract(db, user, name, phone, phone2, site) {
   const d = digitsOnly(phone);
-  let cust = db.customers.find((c) => c.companyId === user.companyId && digitsOnly(c.phone1) === d);
+  let cust = db.customers.find((c) => c.companyId === user.companyId && sameCustomer(c, name, phone, site));
   if (cust) {
     if (!cust.phone2 && phone2 && digitsOnly(phone2) !== d) cust.phone2 = phone2;
     if (!cust.address1 && siteAddress(site)) cust.address1 = siteAddress(site);
@@ -662,7 +683,8 @@ export const contracts = {
             JSON.stringify(fields.lineItems) !== JSON.stringify(c.lineItems || [])));
       if (changed) c.esign = { ...c.esign, status: ESIGN_STATUS.NONE, token: null, previousSignedAt: c.esign.signedAt };
     }
-    if (fields.customerPhone !== c.customerPhone) {
+    const linked = db.customers.find((x) => x.id === c.customerId);
+    if (fields.customerPhone !== c.customerPhone || !linked || !sameCustomer(linked, c.customerName, fields.customerPhone, { ...c, ...fields })) {
       c.customerId = upsertCustomerForContract(db, user, c.customerName, fields.customerPhone, fields.customerPhone2, { ...c, ...fields }).id;
     }
     Object.assign(c, fields, { updatedAt: nowIso() });
@@ -719,17 +741,24 @@ export const contracts = {
     const { db, user } = await authorize('contract.edit');
     const request = String(info.request || '').trim().slice(0, 500);
     if (on && !request) throw new ApiError('AS 요청 내용을 적어 주세요.');
+    const photos = on && Array.isArray(info.photos) ? info.photos.filter(Boolean) : [];
+    if (photos.length > AS_PHOTOS_MAX) throw new ApiError(`AS 사진은 한 번에 ${AS_PHOTOS_MAX}장까지 올릴 수 있습니다.`);
+    photos.forEach(checkReceiptImage);
+    if (photos.length) db.paymentReceipts = db.paymentReceipts || [];
     ids.forEach((id) => {
       const c = findContract(db, user, id);
       if (c.deletedAt) throw new ApiError('휴지통에 있는 계약입니다.');
       const logs = c.asLogs || (c.asInfo ? [{ ...c.asInfo, doneAt: null }] : []);
       if (on) {
-        const entry = { date: isDateKey(info.date) ? info.date : today(), request, byName: user.name, doneAt: null };
+        const entry = { date: isDateKey(info.date) ? info.date : today(), request, byName: user.name, doneAt: null, ...(photos.length ? { photoCount: photos.length } : {}) };
+        photos.forEach((img) => {
+          db.paymentReceipts.push({ id: nextId(db, 'paymentReceipts'), companyId: user.companyId, contractId: c.id, paymentId: null, kind: AS_KIND, asIndex: logs.length, image: img, createdAt: nowIso() });
+        });
         const again = !!c.asAt; // 이미 AS관리에 있음 → 재발·추가 접수
         c.asLogs = [...logs, entry];
         c.asInfo = entry;
         c.asAt = c.asAt || nowIso();
-        addHistory(c, user, again ? 'AS 추가 접수' : 'AS관리로 이동', [{ label: `AS ${c.asLogs.length}회 접수`, from: '', to: `${entry.date} ${request}` }]);
+        addHistory(c, user, again ? 'AS 추가 접수' : 'AS관리로 이동', [{ label: `AS ${c.asLogs.length}회 접수`, from: '', to: `${entry.date} ${request}${photos.length ? ` (사진 ${photos.length}장)` : ''}` }]);
       } else {
         if (!c.asAt || !logs.some((l) => !l.doneAt)) return;
         c.asLogs = logs.map((l) => (l.doneAt ? l : { ...l, doneAt: today(), doneBy: user.name }));
@@ -818,6 +847,17 @@ export const contracts = {
     c.updatedAt = nowIso();
     saveDb(db);
     return contractView(c, user, db);
+  },
+
+  // AS 사진 보기 (asIndex: 몇 번째 AS 회차 — 없으면 전부)
+  async asPhotos(id, asIndex) {
+    const { db, user } = await authorize('contract.view');
+    const c = findContract(db, user, id);
+    const want = asIndex === undefined || asIndex === null ? null : Number(asIndex);
+    return asPhotosOf(db, c)
+      .filter((r) => want === null || r.asIndex === want)
+      .sort((a, b) => a.id - b.id)
+      .map((r) => ({ id: r.id, image: r.image, asIndex: r.asIndex, createdAt: r.createdAt }));
   },
 
   // 실물 계약서 사진 보기
@@ -944,6 +984,28 @@ export const contracts = {
     }
     const company = db.companies.find((x) => x.id === c.companyId);
     return { token: c.customerToken, url: `${publicBaseUrl().replace(/\/+$/, '')}/${company?.code || ''}/c/${c.customerToken}` };
+  },
+
+  // 계약자 연결 바로잡기 (한 번만): 예전에는 전화번호만으로 계약자를 찾아서
+  //   동명이인·전화번호 없는 계약(예전 자료)·가족이 같은 번호를 쓴 계약이 엉뚱한 계약자에 묶였음
+  //   → 이름 + 전화번호(없으면 현장)로 다시 연결. 화면이 로그인 뒤 자동으로 부름 (이미 했으면 바로 끝)
+  async repairCustomerLinks() {
+    const { db, user } = await authorize('contract.edit');
+    const company = companyOf(db, user);
+    if (!company || company.customerLinksFixed >= CUSTOMER_LINKS_VERSION) return { fixed: 0 };
+    let fixed = 0;
+    for (const c of db.contracts.filter((x) => x.companyId === user.companyId)) {
+      const linked = db.customers.find((x) => x.id === c.customerId);
+      if (linked && sameCustomer(linked, c.customerName, c.customerPhone, c)) continue;
+      const cust = upsertCustomerForContract(db, user, c.customerName, c.customerPhone, c.customerPhone2, c);
+      if (cust.id !== c.customerId) {
+        c.customerId = cust.id;
+        fixed++;
+      }
+    }
+    company.customerLinksFixed = CUSTOMER_LINKS_VERSION;
+    saveDb(db);
+    return { fixed };
   },
 
   // 계약서 보기: 고객에게 한 장으로 가는 계약 묶음 (첫 번째 = 요청한 계약 기준 서명 이미지 포함)
