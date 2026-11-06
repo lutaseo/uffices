@@ -205,7 +205,7 @@ export default function ScheduleManagement() {
           연락처: it.contract.customerPhone,
           현장: formatAddress(it.contract),
           모바일웹: it.mobileStatus || '입력 전',
-          ...(showAmount ? { 잔액: calcAmounts(it.contract).balance } : {}),
+          ...(showAmount ? { 잔액: it.contract.amountHidden ? '' : calcAmounts(it.contract).balance } : {}),
           메모: it.memo,
         })),
         ...dayOffs.map((o) => ({ 날짜: o.date, 시간: OFF_LABEL[o.period], 구분: '휴무', 담당: o.engineerName, 메모: o.reason })),
@@ -406,7 +406,7 @@ export default function ScheduleManagement() {
                           <WorkRecord record={row.workRecord} onMore={() => navigateForward(`/contracts/${row.contract.id}?tab=${encodeURIComponent('시공관리')}&focus=progress`)} />
                         </td>
                         <td>{row.contract.status}</td>
-                        {showAmount && <td className="text-right">{won(calcAmounts(row.contract).balance)}</td>}
+                        {showAmount && <td className="text-right">{row.contract.amountHidden ? '-' : won(calcAmounts(row.contract).balance)}</td>}
                         <td>
                           <div className="row-actions">
                             {(
@@ -414,7 +414,7 @@ export default function ScheduleManagement() {
                                 💬
                               </button>
                             )}
-                            {(canEditContract || canEdit) && (
+                            {(canEditContract || canEdit) && !row.contract.readOnly && (
                               <button
                                 type="button"
                                 className="btn-dark-action"

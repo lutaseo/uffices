@@ -245,7 +245,7 @@ function ContractList({ mode = 'main', engineers }) {
           취소사유: c.cancelReason,
           작성자: c.ownerName,
         };
-        if (showTotals) {
+        if (showTotals && !c.amountHidden) {
           Object.assign(row, {
             시공총액: a.total,
             할인: a.discount,
@@ -272,7 +272,7 @@ function ContractList({ mode = 'main', engineers }) {
         <button type="button" className="btn-dark-action" onClick={() => setViewId(item.id)}>
           계약서
         </button>
-        {can('contract.edit') && (
+        {can('contract.edit') && !item.readOnly && (
           <button type="button" className="btn-outline-action" onClick={() => navigateForward(`/contracts/${item.id}/edit`)}>
             수정
           </button>

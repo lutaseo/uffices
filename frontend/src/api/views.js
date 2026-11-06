@@ -1,7 +1,7 @@
 // 계약 데이터를 화면용으로 가공 + 변경이력 기록 (서비스 계층 내부용)
 
 import { can } from '../auth/permissions.js';
-import { clone, nowIso } from './core.js';
+import { clone, nowIso, ownsContract } from './core.js';
 import { numberOf } from './numbering.js';
 
 export function assigneeOf(db, s) {
@@ -23,6 +23,11 @@ export function contractView(c, user, db) {
   out.ownerName = db.users.find((u) => u.id === c.ownerId)?.name || '';
   out.schedules = out.schedules.map((s) => ({ ...s, ...assigneeOf(db, s) }));
   if (out.esign) delete out.esign.signature; // 서명 이미지는 상세조회에서만
+  // '본인 계약만' 실장이 보는 다른 사람 계약: 금액 가림 + 보기만 (readOnly)
+  if (!ownsContract(user, c)) {
+    out.readOnly = true;
+    return hideAmounts(out);
+  }
   return can(user, 'contract.amount') ? out : hideAmounts(out);
 }
 

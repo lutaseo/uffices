@@ -66,7 +66,7 @@ export default function ContractViewModal({ contractId, onClose, onChanged }) {
           <ContractDocument contract={contract} contracts={list} company={company} />
         </ErrorBoundary>
 
-        {can('esign.send') && status !== ESIGN_STATUS.SIGNED && (
+        {can('esign.send') && !contract.readOnly && status !== ESIGN_STATUS.SIGNED && (
           <div className="esign-box no-print">
             {signUrl ? (
               <>

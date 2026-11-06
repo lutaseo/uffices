@@ -66,7 +66,7 @@ export default function ContractTable(props) {
           <button key={item.id} type="button" className="cc-row" onClick={onOpen ? () => onOpen(item) : undefined}>
             <span className="cc-name">{item.customerName}</span>
             <span className="cc-site">{formatAddress(item)}</span>
-            {showAmount && <span className="cc-amount">{won(calcAmounts(item).actual)}원</span>}
+            {showAmount && !item.amountHidden && <span className="cc-amount">{won(calcAmounts(item).actual)}원</span>}
           </button>
         ))}
       </div>
@@ -171,7 +171,14 @@ function FullTable({ contracts, selectedIds, onToggle, onToggleAll, showAmount, 
                     계약일 {item.contractDate} · 작성 {item.ownerName}
                   </div>
                 </td>
-                {showAmount && (
+                {showAmount && item.amountHidden && (
+                  // 다른 사람 계약('본인 계약만' 실장): 금액 비공개
+                  <>
+                    <td data-label="계약금액" className="text-right amount-cell sub-text">비공개</td>
+                    <td data-label="입금 / 잔액" className="text-right amount-cell sub-text">-</td>
+                  </>
+                )}
+                {showAmount && !item.amountHidden && (
                   <>
                     <td data-label="계약금액" className="text-right amount-cell">
                       <div className="amount-main nowrap">{won(a.actual)}원</div>

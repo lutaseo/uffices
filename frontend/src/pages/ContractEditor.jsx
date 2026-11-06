@@ -166,6 +166,10 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
       contractApi
         .get(contractId)
         .then((c) => {
+          if (c.readOnly) {
+            alert('다른 사람이 담당한 계약은 보기만 가능합니다. (수정은 담당자나 관리자가 합니다)');
+            return onClose();
+          }
           setContract(c);
           setForm(initialForm(c, company, user));
         })
