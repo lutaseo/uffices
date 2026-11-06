@@ -908,6 +908,47 @@ test('AS 사진: 접수하면서 사진 첨부(한 건·여러 건), 회차별�
   assert.equal((await admin.ok('contracts', 'asPhotos', one.id)).length, 3, '입금 정리와 무관');
 });
 
+test('동명이인: 이름이 같아도 전화번호가 다르면 다른 계약자·다른 계약서, 전화번호 없으면 현장까지 같아야 같은 계약자', async () => {
+  const p = { ...base, brand: '더좋은집', category: '줄눈' };
+  const a = await admin.ok('contracts', 'create', { ...p, customerName: '동명이', customerPhone: '010-8181-0001', aptName: '가아파트', dong: '1', ho: '1' });
+  const b = await admin.ok('contracts', 'create', { ...p, customerName: '동명이', customerPhone: '010-8181-0002', aptName: '나아파트', dong: '2', ho: '2' });
+  assert.notEqual(a.customerId, b.customerId, '번호 다른 동명이인 = 다른 계약자');
+  // 가족이 같은 번호를 써도 이름이 다르면 다른 계약자
+  const fam = await admin.ok('contracts', 'create', { ...p, customerName: '가족이', customerPhone: '010-8181-0001', aptName: '가아파트', dong: '1', ho: '1' });
+  assert.notEqual(fam.customerId, a.customerId, '같은 번호·다른 이름 = 다른 계약자');
+  // 같은 사람(이름+번호)은 같은 계약자
+  const a2 = await admin.ok('contracts', 'create', { ...p, category: '청소', customerName: '동 명이', customerPhone: '01081810001', aptName: '가아파트', dong: '1', ho: '1' });
+  assert.equal(a2.customerId, a.customerId, '띄어쓰기·하이픈 차이는 같은 사람');
+  assert.deepEqual((await admin.ok('contracts', 'signBundle', a.id)).contracts.map((c) => c.id), [a.id, a2.id], '본인 줄눈·청소는 한 장');
+  assert.deepEqual((await admin.ok('contracts', 'signBundle', b.id)).contracts.map((c) => c.id), [b.id], '동명이인 계약은 섞이지 않음');
+  const g = await admin.ok('contracts', 'group', a.id);
+  assert.equal(g.customer.name, '동명이');
+  assert.ok(!g.otherContracts.some((c) => c.id === b.id || c.id === fam.id), '다른 사람 계약이 계약자 탭에 안 나옴');
+  // 같은 사람이 나중에 또 계약: 같은 계약자로 쌓이고, 계약서는 그날 계약한 것끼리만 한 장
+  const later = await admin.ok('contracts', 'create', { ...p, contractDate: '2026-12-20', customerName: '동명이', customerPhone: '010-8181-0001', aptName: '마아파트', dong: '5', ho: '5' });
+  assert.equal(later.customerId, a.customerId, '재계약 = 같은 계약자');
+  assert.deepEqual((await admin.ok('contracts', 'signBundle', later.id)).contracts.map((c) => c.id), [later.id], '다른 날 계약은 따로 서명');
+  assert.ok((await admin.ok('contracts', 'group', a.id)).otherContracts.some((c) => c.id === later.id), '계약자 탭에 같은 사람의 다른 계약');
+});
+
+test('계약자 연결 바로잡기: 예전에 번호만으로 잘못 묶인 계약을 이름+번호로 다시 연결 (한 번만)', async () => {
+  const x = await admin.ok('contracts', 'create', { ...base, customerName: '연결갑', customerPhone: '010-9292-0001' });
+  const y = await admin.ok('contracts', 'create', { ...base, customerName: '연결을', customerPhone: '010-9292-0001' });
+  // 예전 방식으로 잘못 묶인 상태를 만듦 (을의 계약이 갑의 계약자에 연결)
+  const c = new pg.Client({ connectionString: url });
+  await c.connect();
+  await c.query(`UPDATE contracts SET data = jsonb_set(data, '{customerId}', to_jsonb($1::bigint)) WHERE id = $2`, [x.customerId, y.id]);
+  await c.query(`UPDATE companies SET data = data - 'customerLinksFixed'`);
+  await c.end();
+  assert.equal((await admin.ok('contracts', 'get', y.id)).customerId, x.customerId);
+  const r = await admin.ok('contracts', 'repairCustomerLinks');
+  assert.ok(r.fixed >= 1);
+  const fixed = await admin.ok('contracts', 'get', y.id);
+  assert.notEqual(fixed.customerId, x.customerId, '을의 계약은 을의 계약자로');
+  assert.equal((await admin.ok('contracts', 'group', y.id)).customer.name, '연결을');
+  assert.equal((await admin.ok('contracts', 'repairCustomerLinks')).fixed, 0, '두 번째는 할 일 없음');
+});
+
 test('상품 줄: 상품명 없이 금액만 있는 줄은 저장을 막고(금액이 사라지지 않게), 완전히 빈 줄은 무시', async () => {
   const bad = await admin('contracts', 'create', { ...base, customerName: '빈줄고객', customerPhone: '010-9191-8282', lineItems: [{ name: '', qty: 1, unitPrice: 300000 }] });
   assert.equal(bad.status, 400);

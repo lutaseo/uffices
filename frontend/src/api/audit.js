@@ -15,6 +15,7 @@ const NO_AUDIT = new Set([
   'imports.products',
   'apartments.importMany',
   'apartments.fromContracts',
+  'contracts.repairCustomerLinks', // 계약자 연결 자동 정리 (사람이 한 수정이 아님)
 ]);
 const NO_AUDIT_SERVICES = new Set(['products']);
 export const skipAudit = (name) => NO_AUDIT.has(name) || NO_AUDIT_SERVICES.has(String(name || '').split('.')[0]);

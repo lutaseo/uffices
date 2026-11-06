@@ -3,7 +3,7 @@ import { linkProps, match, navigate, useRoute } from './router.js';
 import './App.css';
 
 import { useAuth } from './auth/AuthContext.jsx';
-import { API_MODE } from './api/index.js';
+import { API_MODE, contracts as contractsApi } from './api/index.js';
 import { ROLES, ROLE_LABELS } from './auth/permissions.js';
 import { formatKoreanDate, today } from './utils/date.js';
 import { usePageTitle } from './utils/title.js';
@@ -193,6 +193,12 @@ function MainLayout({ route }) {
     .map((m) => ({ ...m, subs: (m.subs || []).filter(allowed) }))
     .map((m) => (consult && m.key === 'setting' ? { ...m, label: '내 정보', icon: '🙂', subs: m.subs.filter((s) => s.key === 'me') } : m))
     .map((m) => ({ ...m, path: m.path || m.subs[0]?.path }));
+
+  // 계약자 연결 바로잡기 (동명이인 등) — 업체마다 한 번만 실제로 일함, 이미 했으면 서버가 바로 끝냄
+  useEffect(() => {
+    if (user.role === ROLES.SUPER || !can('contract.edit')) return;
+    contractsApi.repairCustomerLinks().catch(() => {}); // 실패해도 화면 사용에는 지장 없음 (다음 로그인 때 다시)
+  }, [user.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [openDropdown, setOpenDropdown] = useState(null);
   const current = menus.find((m) => belongsTo(m, path));
