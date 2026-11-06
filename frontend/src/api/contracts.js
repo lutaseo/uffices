@@ -368,24 +368,22 @@ const asPhotosOf = (db, c) => (db.paymentReceipts || []).filter((r) => r.contrac
 const groupKey = (c) => [c.customerId, c.aptName, c.dong, c.ho].join('|');
 
 // 고객에게 한 장으로 보내는 계약서 묶음
-//   - 같은 고객(이름+전화번호) · 같은 회사(브랜드) · 같은 계약일의 줄눈·청소(SIGN_TOGETHER) 계약끼리
+//   - 같은 고객(이름+전화번호) · 같은 회사(브랜드) · 같은 현장 · 같은 계약일의 줄눈·청소(SIGN_TOGETHER) 계약끼리
 //   - 나노코팅 등 다른 구분, 다른 브랜드는 따로 한 장
 //   - 서명 전: 그중 아직 서명 안 된 계약 전부 / 서명 후: 그때 함께 서명한 계약들 (같은 서명 링크)
-//   전화번호가 없으면 이름만으로 묶지 않고 현장까지 같아야 함 (동명이인이 한 장으로 섞이지 않게)
+//   현장(아파트·동·호)이 다르면 같은 날 계약이라도 따로 한 장 (현장마다 계약서를 따로 받음)
 //   같은 사람이 여러 번 계약하는 경우: 계약일이 같은 것끼리만 한 장 (예전 계약·다른 날 재계약은 따로 서명)
-const signKey = (c) => {
-  const d = digitsOnly(c.customerPhone);
-  return [String(c.customerName || '').replace(/\s+/g, ''), d, c.brand, d ? '' : formatAddress(c), c.contractDate || ''].join('|');
-};
+const signKey = (c) =>
+  [String(c.customerName || '').replace(/\s+/g, ''), digitsOnly(c.customerPhone), c.brand, formatAddress(c), c.contractDate || ''].join('|');
 
 function signBundle(db, user, base) {
   if (base.deletedAt || !SIGN_TOGETHER.includes(base.category)) return [base];
   const key = signKey(base);
-  const same = visibleContracts(db, user).filter((c) => !c.deletedAt && SIGN_TOGETHER.includes(c.category) && signKey(c) === key);
   const signed = base.esign?.status === ESIGN_STATUS.SIGNED;
+  // 서명 후: 그때 함께 서명한 계약들 그대로 (예전 규칙으로 여러 현장을 한 장에 서명한 것도 그대로 보이게 — 링크로 찾음)
   const list = signed
-    ? same.filter((c) => c === base || (base.esign.token && c.esign?.token === base.esign.token))
-    : same.filter((c) => c.esign?.status !== ESIGN_STATUS.SIGNED);
+    ? visibleContracts(db, user).filter((c) => !c.deletedAt && (c === base || (base.esign.token && c.esign?.token === base.esign.token)))
+    : visibleContracts(db, user).filter((c) => !c.deletedAt && SIGN_TOGETHER.includes(c.category) && signKey(c) === key && c.esign?.status !== ESIGN_STATUS.SIGNED);
   if (!list.includes(base)) list.push(base);
   return list.sort((a, b) => a.id - b.id);
 }
