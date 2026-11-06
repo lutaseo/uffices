@@ -17,7 +17,6 @@ import AptSearchInput from '../components/AptSearchInput.jsx';
 import { ROLES } from '../auth/permissions.js';
 import {
   ISSUE_STATUS,
-  APPROVAL_STATUS,
   ASSIGN_TYPES,
   BRANDS,
   CATEGORIES,
@@ -118,7 +117,6 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
   const { user, company, can, handleError } = useAuth();
   const isEdit = !!contractId;
   const showAmount = can('contract.amount');
-  const canApprove = can('contract.approve');
   const settings = { ...DEFAULT_SCHEDULE_SETTINGS, ...(company?.scheduleSettings || {}) };
   const brands = company?.brands?.length ? company.brands : BRANDS;
 
@@ -489,19 +487,6 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
               <td className="label-col">입주예정일</td>
               <td className="input-col">
                 <input type="date" className="input-text" name="moveInDate" value={form.moveInDate} onChange={onField} />
-              </td>
-            </tr>
-            <tr>
-              <td className="label-col">계약승인</td>
-              <td className="input-col">
-                {canApprove ? (
-                  radios('approval', APPROVAL_STATUS)
-                ) : (
-                  <span>
-                    {isEdit ? form.approval : '승인대기'}{' '}
-                    <span className="sub-text">(승인 권한이 있는 관리자가 승인합니다)</span>
-                  </span>
-                )}
               </td>
             </tr>
             <tr>

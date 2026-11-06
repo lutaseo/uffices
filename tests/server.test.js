@@ -90,7 +90,7 @@ test('비로그인·허용 외 호출 차단', async () => {
   assert.equal((await admin('nope', 'list')).status, 400);
 });
 
-test('실장 권한: 본인 작성 건만, 금액·입금은 기본으로 보임(매출 합계는 따로), 삭제 불가, 승인대기로 등록', async () => {
+test('실장 권한: 본인 작성 건만, 금액·입금은 기본으로 보임(매출 합계는 따로), 삭제 불가, 등록하면 바로 승인', async () => {
   const all = await admin.ok('contracts', 'list', {});
   const mine = await manager.ok('contracts', 'list', {});
   assert.ok(mine.length > 0 && mine.length < all.length);
@@ -100,7 +100,7 @@ test('실장 권한: 본인 작성 건만, 금액·입금은 기본으로 보임
   assert.equal((await manager('contracts', 'get', other.id)).status, 404);
   assert.equal((await manager('contracts', 'moveToTrash', [mine[0].id])).status, 403);
   const created = await manager.ok('contracts', 'create', { ...base, customerName: '실장고객' });
-  assert.equal(created.approval, '승인대기');
+  assert.equal(created.approval, '승인', '계약승인은 고르지 않고 모두 승인');
 });
 
 test('동시 계약 등록 10건: 번호 중복 없음', async () => {

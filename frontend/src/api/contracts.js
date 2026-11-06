@@ -163,9 +163,10 @@ function normalizeContractInput(db, user, data, existing) {
     ownerId = staff.id;
   }
 
+  // 계약승인: 등록 화면에서는 고르지 않음 — 새 계약은 모두 '승인' (필요하면 계약 목록의 승인 처리로 바꿈)
   const approval = can(user, 'contract.approve')
-    ? oneOf(data.approval, APPROVAL_STATUS, '승인')
-    : existing?.approval || '승인대기';
+    ? oneOf(data.approval, APPROVAL_STATUS, existing?.approval || '승인')
+    : existing?.approval || '승인';
 
   const status = oneOf(data.status, WORK_STATUS, '미정');
   const out = {
