@@ -699,6 +699,11 @@ test('줄눈·청소 한 장 계약서: 같은 고객(이름+전화)·같은 브
   const signedView = await admin.ok('contracts', 'signBundle', a.id);
   assert.deepEqual(signedView.contracts.map((c) => c.id), [a.id, b.id, otherSite.id], '서명한 계약서는 함께 서명한 묶음으로 보임');
   assert.ok(signedView.contracts.every((c) => c.esign.signature === img));
+  // 계약 번호가 잘못 오면 서버 오류(500)가 아니라 '찾을 수 없음' 안내
+  for (const bad of ['abc', null, '']) {
+    const r = await admin('contracts', 'signBundle', bad);
+    assert.equal(r.status, 404, `번호 ${JSON.stringify(bad)}`);
+  }
 });
 
 test('계약 조건: 서명할 때 조건을 계약에 함께 보관 (나중에 조건을 바꿔도 서명한 계약서는 그대로)', async () => {

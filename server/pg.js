@@ -110,8 +110,9 @@ export async function loadSnapshot(client, scope) {
       )
     ).map((r) => ({ ownerId: r.owner, count: Number(r.n), maxUpd: r.upd || '', idSum: Number(r.ids) }));
   }
-  if (scope.signatureFor && db.contracts.length) {
-    const id = Number(scope.signatureFor);
+  const sigId = Number(scope.signatureFor);
+  if (Number.isSafeInteger(sigId) && sigId > 0 && db.contracts.length) {
+    const id = sigId; // 숫자가 아닌 번호가 오면 DB 오류(500) 대신 서명 없이 진행 → 업무 코드가 '계약을 찾을 수 없습니다'로 안내
     const sig = await rows(client, `SELECT image FROM contract_signatures WHERE contract_id = $1 AND company_id = $2`, [id, scope.companyId]);
     const c = db.contracts.find((x) => x.id === id);
     if (sig[0] && c?.esign) c.esign.signature = sig[0].image;
