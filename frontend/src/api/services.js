@@ -36,7 +36,7 @@ import {
   publicUser,
   session,
   validatePassword,
-  visibleContracts,
+  readableContracts,
 } from './core.js';
 
 export { ApiError } from './core.js';
@@ -576,7 +576,7 @@ export const customers = {
     const { db, user } = await authorize('customer.view');
     const q = query.trim();
     const qDigits = digitsOnly(q);
-    const visibleIds = new Set(visibleContracts(db, user).map((c) => c.customerId));
+    const visibleIds = new Set(readableContracts(db, user).map((c) => c.customerId));
     // 계약자별 계약 수 + 가장 최근 계약 (주소·연락처②가 비어 있는 예전 계약자는 최근 계약의 현장·연락처로 채워 보여 줌)
     const byCustomer = new Map();
     db.contracts.forEach((x) => {

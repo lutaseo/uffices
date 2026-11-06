@@ -39,7 +39,8 @@ const scheduleLine = (s) => (s?.date ? `${s.date}(${timeLabel(s) || '무관'})` 
 //   focus                     'progress' 면 진행상황(기사 시공 기록)으로 바로 스크롤 (시공 기록 [자세히 보기])
 export default function ContractDetail({ contractId, initialTab, focus, onBack, onEdit, onNewWork, onOpenGroup }) {
   const { company, can, handleError } = useAuth();
-  const showAmount = can('contract.amount');
+  // 다른 사람 계약('본인 계약만' 실장): 보기만 — 서버가 readOnly 로 알려 줌
+  const canDo = (perm, c = selected) => can(perm) && !c?.readOnly;
   const brands = company?.brands?.length ? company.brands : BRANDS;
   // 알림톡 버튼: 왼쪽 계약완료 / 오른쪽 기사배정, 위 더스타트 / 아래 더좋은집 (신화홈케어 등 다른 브랜드는 제외)
   const talkBrands = TALK_BRAND_ORDER.filter((b) => brands.includes(b)).length ? TALK_BRAND_ORDER.filter((b) => brands.includes(b)) : brands;
@@ -93,6 +94,7 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
 
   const list = data.contracts;
   const selected = list.find((c) => c.id === selectedId) || list[0];
+  const showAmount = can('contract.amount') && !selected?.readOnly; // 다른 사람 계약은 금액 가림
   const head = selected;
   const a = calcAmounts(selected);
 
@@ -210,7 +212,7 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
           <tr>
             <th>실물 계약서</th>
             <td colSpan={5}>
-              <PaperPanel key={`${selected.id}:${selected.paperPhotoCount || 0}`} contract={selected} canEdit={can('contract.edit') && !selected.deletedAt} onChanged={load} />
+              <PaperPanel key={`${selected.id}:${selected.paperPhotoCount || 0}`} contract={selected} canEdit={canDo('contract.edit') && !selected.deletedAt} onChanged={load} />
             </td>
           </tr>
         </tbody>
@@ -391,20 +393,20 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
                 )}
                 <td onClick={(e) => e.stopPropagation()}>
                   <div className="row-actions">
-                    {can('contract.edit') && (
+                    {canDo('contract.edit', c) && (
                       <button type="button" className="btn-dark-action" onClick={() => onEdit(c)}>수정</button>
                     )}
-                    {can('contract.edit') && (
+                    {canDo('contract.edit', c) && (
                       <button type="button" className="btn-outline-action" onClick={() => setAsTarget(c)}>
                         {c.asAt ? 'AS 추가 접수' : 'AS 접수'}
                       </button>
                     )}
-                    {can('contract.edit') && c.asAt && asLogsOf(c).some((l) => !l.doneAt) && (
+                    {canDo('contract.edit', c) && c.asAt && asLogsOf(c).some((l) => !l.doneAt) && (
                       <button type="button" className="btn-outline-action" onClick={() => finishAs(c)}>
                         AS 완료
                       </button>
                     )}
-                    {can('contract.delete') && (
+                    {canDo('contract.delete', c) && (
                       <button type="button" className="btn-dark-action" onClick={() => removeWork(c)}>삭제</button>
                     )}
                     <button type="button" className="btn-outline-action" onClick={() => setViewId(c.id)}>계약서</button>
@@ -514,7 +516,7 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
           </tbody>
         </table>
       </div>
-      {can('contract.edit') && (
+      {canDo('contract.edit') && (
         <div className="section-actions">
           <button
             type="button"
@@ -546,7 +548,7 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
               <th>카드번호</th>
               <th>영수증</th>
               <th>비고</th>
-              {can('contract.edit') && <th>관리</th>}
+              {canDo('contract.edit') && <th>관리</th>}
             </tr>
           </thead>
           <tbody>
@@ -581,7 +583,7 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
                   {p.memo}
                   {p.createdAt && <div>{new Date(p.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>}
                 </td>
-                {can('contract.edit') && (
+                {canDo('contract.edit') && (
                   <td>
                     <div className="table-action-btns">
                       <button type="button" className="btn-edit-icon" title="수정" onClick={() => setPaymentModal({ contract: p.contract, payment: p })}>✏️</button>
@@ -682,7 +684,7 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
       {tab === '계약정보' && (
         <>
           {basicInfo}
-          {can('contract.edit') && (
+          {canDo('contract.edit') && (
             <div className="section-actions">
               <button type="button" className="btn-dark-lg sm" onClick={() => onEdit(selected)}>계약정보 수정</button>
             </div>

@@ -4,7 +4,7 @@
 // ============================================================
 
 import { loadDb, saveDb, nextId, publicBaseUrl, clientInfo, getSession, setSession, alimtalkGateway, hashPassword } from './runtime.js';
-import { ApiError, authorize, authorizeAny, clone, companyOf, findContract, isLoginIdTaken, nowIso, validatePassword, visibleContracts } from './core.js';
+import { ApiError, authorize, authorizeAny, clone, companyOf, findContract, findReadableContract, ownsContract, readableContracts, isLoginIdTaken, nowIso, validatePassword, visibleContracts } from './core.js';
 import { addHistory, assigneeOf, contractListView, contractView, hideAmounts } from './views.js';
 import { assertAssignable } from './schedule.js';
 import { invalidateNumbers, numberOf } from './numbering.js';
@@ -373,14 +373,14 @@ const groupKey = (c) => [c.customerId, c.aptName, c.dong, c.ho].join('|');
 const signKey = (c) =>
   [String(c.customerName || '').replace(/\s+/g, ''), digitsOnly(c.customerPhone), c.brand, formatAddress(c), c.contractDate || ''].join('|');
 
-function signBundle(db, user, base) {
+function signBundle(db, user, base, pool = visibleContracts(db, user)) {
   if (base.deletedAt || !SIGN_TOGETHER.includes(base.category)) return [base];
   const key = signKey(base);
   const signed = base.esign?.status === ESIGN_STATUS.SIGNED;
   // 서명 후: 그때 함께 서명한 계약들 그대로 (예전 규칙으로 여러 현장을 한 장에 서명한 것도 그대로 보이게 — 링크로 찾음)
   const list = signed
-    ? visibleContracts(db, user).filter((c) => !c.deletedAt && (c === base || (base.esign.token && c.esign?.token === base.esign.token)))
-    : visibleContracts(db, user).filter((c) => !c.deletedAt && SIGN_TOGETHER.includes(c.category) && signKey(c) === key && c.esign?.status !== ESIGN_STATUS.SIGNED);
+    ? pool.filter((c) => !c.deletedAt && (c === base || (base.esign.token && c.esign?.token === base.esign.token)))
+    : pool.filter((c) => !c.deletedAt && SIGN_TOGETHER.includes(c.category) && signKey(c) === key && c.esign?.status !== ESIGN_STATUS.SIGNED);
   if (!list.includes(base)) list.push(base);
   return list.sort((a, b) => a.id - b.id);
 }
@@ -496,7 +496,7 @@ export const contracts = {
   //            workType, receptionType, status, esignStatus, ownerId, engineerId, sort }
   async list(filters = {}) {
     const { db, user } = await authorize('contract.view');
-    return visibleContracts(db, user)
+    return readableContracts(db, user)
       .filter((c) => (filters.trash ? !!c.deletedAt : !c.deletedAt))
       .filter((c) => filters.trash || (filters.as ? !!c.asAt : !c.asAt)) // AS관리로 넘긴 계약은 AS관리 목록에만
       .filter((c) => matchesFilter(c, filters))
@@ -513,15 +513,13 @@ export const contracts = {
     let maxUpd = '';
     let idSum = 0;
     if (db.contractSummary) {
-      db.contractSummary
-        .filter((s) => !isOwnScopeOnly(user) || s.ownerId === String(user.id))
-        .forEach((s) => {
-          count += s.count;
-          if (s.maxUpd > maxUpd) maxUpd = s.maxUpd;
-          idSum += s.idSum;
-        });
+      db.contractSummary.forEach((s) => {
+        count += s.count;
+        if (s.maxUpd > maxUpd) maxUpd = s.maxUpd;
+        idSum += s.idSum;
+      });
     } else {
-      visibleContracts(db, user).forEach((c) => {
+      readableContracts(db, user).forEach((c) => {
         count += 1;
         if ((c.updatedAt || '') > maxUpd) maxUpd = c.updatedAt || '';
         idSum += c.id;
@@ -545,7 +543,7 @@ export const contracts = {
 
   async get(id) {
     const { db, user } = await authorize('contract.view');
-    const c = findContract(db, user, id);
+    const c = findReadableContract(db, user, id);
     const view = contractView(c, user, db);
     if (c.esign?.signature) view.esign.signature = c.esign.signature;
     return view;
@@ -784,16 +782,16 @@ export const contracts = {
   // GET /api/contracts/:id/group
   async group(id) {
     const { db, user } = await authorize('contract.view');
-    const base = findContract(db, user, id);
+    const base = findReadableContract(db, user, id);
     const key = groupKey(base);
-    const items = visibleContracts(db, user)
+    const items = readableContracts(db, user)
       .filter((c) => !c.deletedAt && groupKey(c) === key)
       .map((c) => contractView(c, user, db))
       .sort(SORTERS.no_desc);
     if (base.deletedAt) items.unshift(contractView(base, user, db));
     const customer = db.customers.find((c) => c.id === base.customerId);
     // 같은 계약자의 다른 현장 계약 (계약자 탭)
-    const others = visibleContracts(db, user)
+    const others = readableContracts(db, user)
       .filter((c) => !c.deletedAt && c.customerId === base.customerId && groupKey(c) !== key)
       .map((c) => contractView(c, user, db))
       .sort(SORTERS.no_desc);
@@ -832,7 +830,7 @@ export const contracts = {
   // AS 사진 보기 (asIndex: 몇 번째 AS 회차 — 없으면 전부)
   async asPhotos(id, asIndex) {
     const { db, user } = await authorize('contract.view');
-    const c = findContract(db, user, id);
+    const c = findReadableContract(db, user, id);
     const want = asIndex === undefined || asIndex === null ? null : Number(asIndex);
     return asPhotosOf(db, c)
       .filter((r) => want === null || r.asIndex === want)
@@ -843,7 +841,7 @@ export const contracts = {
   // 실물 계약서 사진 보기
   async paperPhotos(id) {
     const { db, user } = await authorize('contract.view');
-    const c = findContract(db, user, id);
+    const c = findReadableContract(db, user, id);
     return paperPhotosOf(db, c)
       .sort((a, b) => a.id - b.id)
       .map((r) => ({ id: r.id, image: r.image, createdAt: r.createdAt }));
@@ -874,7 +872,8 @@ export const contracts = {
   async receipt(id, paymentId) {
     const { db, user } = await authorize('contract.view');
     if (!can(user, 'contract.amount')) throw new ApiError('금액·입금 정보 권한이 없습니다.', 'FORBIDDEN');
-    const c = findContract(db, user, id);
+    const c = findReadableContract(db, user, id);
+    if (!ownsContract(user, c)) throw new ApiError('금액·입금 정보 권한이 없습니다.', 'FORBIDDEN');
     const list = (db.paymentReceipts || []).filter((x) => x.contractId === c.id && x.paymentId === Number(paymentId)).sort((a, b) => a.id - b.id);
     if (!list.length) throw new ApiError('첨부된 영수증 사진이 없습니다.', 'NOT_FOUND');
     const images = list.map((r) => ({ id: r.id, image: r.image, createdAt: r.createdAt }));
@@ -946,7 +945,7 @@ export const contracts = {
     const { db, user } = await authorize('contract.view');
     const body = String(text || '').trim();
     if (!body) throw new ApiError('상담 내용을 입력해 주세요.');
-    const c = findContract(db, user, id);
+    const c = findReadableContract(db, user, id);
     c.notes = c.notes || [];
     c.notes.push({ id: Math.max(0, ...c.notes.map((n) => n.id)) + 1, at: nowIso(), byId: user.id, byName: user.name, text: body.slice(0, 2000) });
     c.updatedAt = nowIso();
@@ -957,7 +956,7 @@ export const contracts = {
   //   계약마다 추측할 수 없는 고유 값 하나 (처음 요청할 때 만들어 저장)
   async customerLink(id) {
     const { db, user } = await authorize('contract.view');
-    const c = findContract(db, user, id);
+    const c = findReadableContract(db, user, id);
     if (!c.customerToken) {
       c.customerToken = newToken();
       saveDb(db);
@@ -991,8 +990,8 @@ export const contracts = {
   // 계약서 보기: 고객에게 한 장으로 가는 계약 묶음 (첫 번째 = 요청한 계약 기준 서명 이미지 포함)
   async signBundle(id) {
     const { db, user } = await authorize('contract.view');
-    const base = findContract(db, user, id);
-    const list = signBundle(db, user, base);
+    const base = findReadableContract(db, user, id);
+    const list = signBundle(db, user, base, readableContracts(db, user));
     const signature = base.esign?.signature;
     const views = list.map((c) => {
       const v = contractView(c, user, db);
@@ -1100,7 +1099,7 @@ export const notifications = {
   //   알림톡은 따로 권한 없이 계약을 볼 수 있는 직원이면 누구나 보냄 (볼 수 없는 계약은 findContract 가 막음)
   async send({ contractId, template, templateKey, variables, buttons, target, brand, receiverName, receiverPhone, message }) {
     const { db, user } = await authorize('contract.view');
-    findContract(db, user, contractId);
+    findReadableContract(db, user, contractId); // 볼 수 있는 계약이면 알림톡 발송 가능 (다른 사람 계약 포함)
     if (digitsOnly(receiverPhone).length < 10) throw new ApiError('수신자 연락처가 없습니다.');
     const tpl = ALIMTALK_TEMPLATES[templateKey];
     if (!tpl) throw new ApiError('알림톡 종류가 올바르지 않습니다.');

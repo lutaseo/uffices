@@ -90,17 +90,33 @@ test('비로그인·허용 외 호출 차단', async () => {
   assert.equal((await admin('nope', 'list')).status, 400);
 });
 
-test('실장 권한: 본인 작성 건만, 금액·입금은 기본으로 보임(매출 합계는 따로), 삭제 불가, 등록하면 바로 승인', async () => {
+test('실장 권한(본인 계약만): 전체 계약을 보되 다른 사람 계약은 금액 가림·보기만, 통계는 본인 것만, 삭제 불가, 등록하면 바로 승인', async () => {
+  assert.equal((await manager.ok('auth', 'me')).user.dataScope, 'own', '샘플 실장은 본인 계약만 설정');
   const all = await admin.ok('contracts', 'list', {});
-  const mine = await manager.ok('contracts', 'list', {});
-  assert.ok(mine.length > 0 && mine.length < all.length);
-  assert.ok(mine.every((c) => typeof c.totalAmount === 'number'), '실장도 계약 금액은 보임');
+  const seen = await manager.ok('contracts', 'list', {});
+  assert.equal(seen.length, all.length, '실장도 전체 계약이 보임');
+  const me = (await manager.ok('auth', 'me')).user;
+  const mine = seen.filter((c) => !c.readOnly);
+  const others = seen.filter((c) => c.readOnly);
+  assert.ok(mine.length > 0 && others.length > 0);
+  assert.ok(mine.every((c) => typeof c.totalAmount === 'number' && !c.amountHidden), '본인 계약은 금액 보임');
+  assert.ok(others.every((c) => c.amountHidden && c.totalAmount === null && c.payments.length === 0), '다른 사람 계약은 금액·입금 가림');
   assert.ok((await manager.ok('auth', 'me')).user.permissions.every((p) => p !== 'sales.total'), '회사 매출 합계는 체크한 실장만');
-  const other = all.find((c) => !mine.some((m) => m.id === c.id));
-  assert.equal((await manager('contracts', 'get', other.id)).status, 404);
+  // 다른 사람 계약: 상세·계약서는 보이고(금액 없이), 수정·입금·영수증은 막힘
+  const other = others[0];
+  const got = await manager.ok('contracts', 'get', other.id);
+  assert.ok(got.readOnly && got.amountHidden && got.totalAmount === null);
+  const group = await manager.ok('contracts', 'group', other.id);
+  assert.ok(group.contracts.every((c) => c.amountHidden || c.ownerId === me.id));
+  assert.ok((await manager.ok('contracts', 'signBundle', other.id)).contracts.every((c) => c.amountHidden || c.ownerId === me.id), '계약서도 금액 가림');
+  const upd = await manager('contracts', 'update', other.id, { memo: '남의 계약 수정' });
+  assert.equal(upd.status, 403, '다른 사람 계약 수정 불가');
+  assert.match(upd.error.message, /보기만/);
+  assert.equal((await manager('contracts', 'addPayment', other.id, { date: '2026-10-01', kind: '잔금', method: '현금', amount: 1000 })).status, 403);
   assert.equal((await manager('contracts', 'moveToTrash', [mine[0].id])).status, 403);
   const created = await manager.ok('contracts', 'create', { ...base, customerName: '실장고객' });
   assert.equal(created.approval, '승인', '계약승인은 고르지 않고 모두 승인');
+  assert.ok(!created.readOnly, '본인이 등록한 계약은 수정 가능');
 });
 
 test('동시 계약 등록 10건: 번호 중복 없음', async () => {
@@ -645,13 +661,11 @@ test('목록 변경 확인(listCached): 그대로면 목록 없이 응답, 수�
   const afterPay = await admin.ok('contracts', 'listCached', {}, base1.version);
   assert.ok(afterPay.rows, '입금 후 새 목록');
   assert.equal((await admin.ok('contracts', 'listCached', {}, afterPay.version)).unchanged, true);
-  // 다른 사람이 등록한 계약은 본인 건만 보는 실장의 목록을 바꾸지 않음
+  // 실장도 전체 계약을 보므로 다른 사람이 등록한 계약도 목록에 새로 나타남
   const mineNow = await manager.ok('contracts', 'listCached', {}, '');
   await admin.ok('contracts', 'create', { ...base, customerName: '남의계약', customerPhone: '010-8282-9393' });
   const mineAfter = await manager.ok('contracts', 'listCached', {}, mineNow.version);
-  const isOwn = (await manager.ok('auth', 'me')).user.dataScope === 'own';
-  if (isOwn) assert.equal(mineAfter.unchanged, true, '본인 건만 보는 실장은 그대로');
-  else assert.ok(mineAfter.rows);
+  assert.ok(mineAfter.rows && mineAfter.rows.some((r) => r.customerName === '남의계약' && r.readOnly), '다른 사람 계약도 (보기만) 나타남');
 });
 
 test('줄눈·청소 한 장 계약서: 같은 고객(이름+전화)·같은 브랜드끼리 한 링크로 서명, 코팅·다른 브랜드·이미 서명한 건은 따로', async () => {

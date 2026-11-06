@@ -103,11 +103,30 @@ export function visibleContracts(db, user) {
   );
 }
 
+// 수정·삭제·입금 등 바꾸는 작업용: '본인 계약만' 실장은 본인 계약만
 export function findContract(db, user, id) {
   const c = visibleContracts(db, user).find((x) => x.id === Number(id));
+  if (!c) {
+    if (readableContracts(db, user).some((x) => x.id === Number(id))) throw new ApiError('본인이 담당한 계약만 수정할 수 있습니다. (다른 사람 계약은 보기만 가능)', 'FORBIDDEN');
+    throw new ApiError('계약을 찾을 수 없습니다.', 'NOT_FOUND');
+  }
+  return c;
+}
+
+// 보기용: 직원은 회사의 모든 계약을 볼 수 있음 ('본인 계약만' 실장은 다른 사람 계약의 금액이 가려지고 보기만 — views.js)
+//   통계·매출 합계는 그대로 visibleContracts(본인 계약만)
+export function readableContracts(db, user) {
+  return db.contracts.filter((c) => c.companyId === user.companyId);
+}
+
+export function findReadableContract(db, user, id) {
+  const c = readableContracts(db, user).find((x) => x.id === Number(id));
   if (!c) throw new ApiError('계약을 찾을 수 없습니다.', 'NOT_FOUND');
   return c;
 }
+
+// 이 계약을 바꿀 수 있는지 (금액 보기도 같은 기준)
+export const ownsContract = (user, c) => !isOwnScopeOnly(user) || c.ownerId === user.id;
 
 export function companyOf(db, user) {
   return db.companies.find((c) => c.id === user.companyId);

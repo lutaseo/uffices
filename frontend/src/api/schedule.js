@@ -24,7 +24,7 @@ import {
   companyOf,
   nowIso,
   session,
-  visibleContracts,
+  readableContracts,
 } from './core.js';
 import { addHistory, assigneeOf, contractView } from './views.js';
 import { numberOf } from './numbering.js';
@@ -230,7 +230,7 @@ export const schedules = {
     const { db, user } = await authorize('schedule.view');
     const engineer = engineerId && engineerId !== 'none' ? db.engineers.find((e) => e.id === Number(engineerId)) : null;
     const out = [];
-    visibleContracts(db, user)
+    readableContracts(db, user) // 일정관리는 회사 전체 일정 (다른 사람 계약은 금액 가림·보기만)
       .filter((c) => !c.deletedAt)
       .filter((c) => (!category || c.category === category) && (!status || c.status === status))
       .forEach((c) => {
