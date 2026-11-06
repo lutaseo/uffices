@@ -230,7 +230,6 @@ function ContractList({ mode = 'main', engineers }) {
           전자계약: c.esign?.status,
           계약일: c.contractDate,
           시공종류: c.workType,
-          계약승인: c.approval,
           '시공 등록': c.schedules.map((s) => s.date && `${s.date} ${timeLabel(s)}`.trim()).filter(Boolean).join(', ') || '미정',
           시공담당: c.schedules.map((s) => s.assigneeName).filter(Boolean).join(', ') || '미배정',
           모바일웹: c.schedules.map((s) => s.mobileStatus || '입력 전').join(', '),
@@ -361,19 +360,9 @@ function ContractList({ mode = 'main', engineers }) {
         )}
       </div>
 
-      {(can('contract.delete') || can('contract.approve') || can('contract.edit')) && (
+      {(can('contract.delete') || can('contract.edit')) && (
         <div className="bulk-bar">
           <span className="sub-text">선택 {selectedIds.size}건</span>
-          {!trash && can('contract.approve') && (
-            <>
-              <button type="button" className="btn-outline-action" onClick={() => bulk('setApproval', '승인 처리하시겠습니까?', '승인')}>
-                선택 승인
-              </button>
-              <button type="button" className="btn-outline-action" onClick={() => bulk('setApproval', '미승인 처리하시겠습니까?', '미승인')}>
-                선택 미승인
-              </button>
-            </>
-          )}
           {!trash && can('contract.edit') && (
             <button
               type="button"

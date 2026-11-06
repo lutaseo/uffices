@@ -75,7 +75,6 @@ export function matchesFilter(c, f) {
   if (f.workType && c.workType !== f.workType) return false;
   if (f.receptionType && c.receptionType !== f.receptionType) return false;
   if (f.status && c.status !== f.status) return false;
-  if (f.approval && c.approval !== f.approval) return false;
   if (f.esignStatus && c.esign?.status !== f.esignStatus) return false;
   if (f.ownerId && c.ownerId !== Number(f.ownerId)) return false;
   if (f.engineerId && !(c.schedules || []).some((s) => s.engineerId === Number(f.engineerId))) return false;

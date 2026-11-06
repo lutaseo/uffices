@@ -197,10 +197,8 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
             <td>{head.cashReceipt}</td>
           </tr>
           <tr>
-            <th>계약승인</th>
-            <td>{head.approval}</td>
             <th>기타사항</th>
-            <td colSpan={3} className="pre-wrap">{head.memo}</td>
+            <td colSpan={5} className="pre-wrap">{head.memo}</td>
           </tr>
           <tr>
             <th>고객 참고사항</th>
