@@ -3,6 +3,7 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { API_MODE, companies } from '../api/index.js';
 import { usePageTitle } from '../utils/title.js';
 import { today } from '../utils/date.js';
+import { setTabApp, tabApp } from '../api/sessionSlots.js';
 
 // companyCode: 업체 주소(veritybase.vercel.app/업체주소)로 들어오면 그 업체 로그인 화면
 // kind: 로그인 주소별 화면
@@ -21,23 +22,10 @@ try {
 } catch {
   // 저장소를 못 쓰는 브라우저면 지울 것도 없음
 }
-const ENTRY_KEY = 'loginEntry';
-// 로그인한 채로 /t 를 열었을 때 상담실장 화면으로 바꾸기용
-export function setLoginEntry(kind) {
-  try {
-    localStorage.setItem(ENTRY_KEY, kind);
-  } catch {
-    // 저장 안 되는 브라우저면 그대로
-  }
-}
-// 마지막으로 로그인한 주소 종류 (로그아웃 뒤 같은 로그인 화면으로 돌아가기용)
-export function loginEntry() {
-  try {
-    return localStorage.getItem(ENTRY_KEY) || 'staff';
-  } catch {
-    return 'staff';
-  }
-}
+// 이 탭이 어느 로그인 주소로 들어왔는지 (일반 / 상담실장 /t / 기사모바일 /m) — 탭마다 따로 (sessionSlots.js)
+//   상담실장 화면 메뉴, 로그아웃 뒤 돌아갈 로그인 화면, 서버에 보낼 로그인 칸에 씀
+export const setLoginEntry = (kind) => setTabApp(kind);
+export const loginEntry = () => tabApp();
 
 export default function LoginPage({ companyCode = '', kind = 'staff' }) {
   const { label, sub: subText } = KINDS[kind] || KINDS.staff;
@@ -63,12 +51,8 @@ export default function LoginPage({ companyCode = '', kind = 'staff' }) {
     setSubmitting(true);
     setError('');
     try {
+      setTabApp(kind); // 이 탭의 로그인 칸 = 로그인 화면 종류
       await login(loginId, password, companyCode, kind);
-      try {
-        localStorage.setItem(ENTRY_KEY, kind);
-      } catch {
-        // 저장 안 되는 브라우저면 로그아웃 뒤 일반 로그인 화면으로
-      }
     } catch (err) {
       setError(err.message);
       setSubmitting(false);
