@@ -658,21 +658,22 @@ test('줄눈·청소 한 장 계약서: 같은 고객(이름+전화)·같은 브
   const site = { ...base, customerName: '한장고객', customerPhone: '010-6060-1212', aptName: '한장아파트', dong: '102', ho: '303' };
   const a = await admin.ok('contracts', 'create', { ...site, category: '줄눈', totalAmount: 500000, customerNote: '줄눈 안내' });
   const b = await admin.ok('contracts', 'create', { ...site, category: '청소', totalAmount: 300000, customerNote: '청소 안내' });
-  const otherSite = await admin.ok('contracts', 'create', { ...site, ho: '404', category: '청소' }); // 같은 고객의 다른 호수 → 같이
+  const otherSite = await admin.ok('contracts', 'create', { ...site, ho: '404', category: '청소' }); // 같은 고객이어도 다른 호수 → 따로
   const other = await admin.ok('contracts', 'create', { ...site, customerPhone: '010-6060-9999', category: '청소' }); // 전화번호 다르면 따로
   const coat = await admin.ok('contracts', 'create', { ...site, category: '나노코팅' }); // 코팅은 같은 현장이어도 따로
   const otherBrand = await admin.ok('contracts', 'create', { ...site, brand: '더스타트', category: '청소' }); // 브랜드가 다르면 따로
 
   const before = await admin.ok('contracts', 'signBundle', b.id);
-  assert.deepEqual(before.contracts.map((c) => c.id), [a.id, b.id, otherSite.id], '서명 전: 같은 고객(이름+전화)의 줄눈·청소 함께');
+  assert.deepEqual(before.contracts.map((c) => c.id), [a.id, b.id], '서명 전: 같은 고객(이름+전화)·같은 현장의 줄눈·청소 함께');
+  assert.deepEqual((await admin.ok('contracts', 'signBundle', otherSite.id)).contracts.map((c) => c.id), [otherSite.id], '다른 현장은 계약서 따로');
   assert.equal(before.token, null, '아직 링크 없음');
 
   const { token, count } = await admin.ok('contracts', 'requestSign', a.id);
-  assert.equal(count, 3);
+  assert.equal(count, 2);
   const anon = client();
   const view = await anon.ok('esign', 'getByToken', token);
-  assert.deepEqual(view.contracts.map((c) => c.category), ['줄눈', '청소', '청소']);
-  assert.deepEqual(view.contracts.map((c) => c.customerNote || ''), ['줄눈 안내', '청소 안내', '']);
+  assert.deepEqual(view.contracts.map((c) => c.category), ['줄눈', '청소']);
+  assert.deepEqual(view.contracts.map((c) => c.customerNote || ''), ['줄눈 안내', '청소 안내']);
   assert.ok(view.contracts.every((c) => c.memo === undefined && c.history === undefined));
   assert.equal((await admin.ok('contracts', 'signBundle', b.id)).token, token, '청소 쪽에서 봐도 같은 링크');
 
@@ -697,7 +698,8 @@ test('줄눈·청소 한 장 계약서: 같은 고객(이름+전화)·같은 브
   const later = await admin.ok('contracts', 'signBundle', c3.id);
   assert.deepEqual(later.contracts.map((c) => c.id), [c3.id], '이미 서명한 줄눈·청소는 다시 서명하지 않음');
   const signedView = await admin.ok('contracts', 'signBundle', a.id);
-  assert.deepEqual(signedView.contracts.map((c) => c.id), [a.id, b.id, otherSite.id], '서명한 계약서는 함께 서명한 묶음으로 보임');
+  assert.deepEqual(signedView.contracts.map((c) => c.id), [a.id, b.id], '서명한 계약서는 함께 서명한 묶음으로 보임');
+  assert.equal((await admin.ok('contracts', 'get', otherSite.id)).esign.status, '미발송', '다른 현장은 서명 안 됨 (따로 받음)');
   assert.ok(signedView.contracts.every((c) => c.esign.signature === img));
   // 계약 번호가 잘못 오면 서버 오류(500)가 아니라 '찾을 수 없음' 안내
   for (const bad of ['abc', null, '']) {
