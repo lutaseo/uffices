@@ -331,6 +331,43 @@ test('로그인 주소로 구분: 기사 아이디와 직원 아이디가 같아
   assert.equal((await client()('auth', 'login', 'admin', 'admin1234', '', 'engineer')).status, 400);
 });
 
+test('한 브라우저에서 따로 로그인: 일반 화면 · 상담실장(/t) · 기사모바일(/m) 탭이 서로의 로그인을 바꾸지 않음', async () => {
+  await admin.ok('engineers', 'save', { name: '탭기사', phone: '010-0957-0957', loginId: 'tabeng', password: 'tab0957' });
+  let cookie = '';
+  const tab = (app) => async (service, method, ...args) => {
+    const out = await handleRpc({ body: { service, method, args }, headers: { cookie, host: 'test.local', ...(app ? { 'x-vb-app': app } : {}) } });
+    const set = out.headers['Set-Cookie'];
+    if (set) cookie = set.split(';')[0].replace(/^uffice_session=$/, '');
+    return { status: out.status, ...JSON.parse(out.body) };
+  };
+  const general = tab('');
+  const consult = tab('manager');
+  const mobile = tab('engineer');
+  assert.equal((await general('auth', 'login', 'admin', 'admin1234', '', 'staff')).result.user.role, 'ADMIN');
+  assert.equal((await mobile('auth', 'me')).status, 401, '기사 탭은 따로 로그인해야 함');
+  assert.equal((await consult('auth', 'me')).status, 401, '상담실장 탭도 따로');
+  assert.equal((await mobile('auth', 'login', 'tabeng', 'tab0957', '', 'engineer')).result.user.role, 'ENGINEER');
+  assert.equal((await consult('auth', 'login', 'manager', 'manager1234', '', 'manager')).result.user.role, 'MANAGER');
+  assert.equal((await general('auth', 'me')).result.user.role, 'ADMIN', '일반 탭은 그대로 관리자');
+  assert.equal((await mobile('auth', 'me')).result.user.role, 'ENGINEER');
+  assert.equal((await consult('auth', 'me')).result.user.role, 'MANAGER');
+  // 기사 탭 로그아웃 → 다른 탭은 그대로
+  await mobile('auth', 'logout');
+  assert.equal((await mobile('auth', 'me')).status, 401);
+  assert.equal((await general('auth', 'me')).result.user.role, 'ADMIN');
+  assert.equal((await consult('auth', 'me')).result.user.role, 'MANAGER');
+  // 일반 탭 로그아웃 → 상담실장 탭은 그대로
+  await general('auth', 'logout');
+  assert.equal((await general('auth', 'me')).status, 401);
+  assert.equal((await consult('auth', 'me')).result.user.role, 'MANAGER');
+  // 예전 쿠키(칸 나누기 전 기사 로그인): 기사 탭에서도 그대로 로그인 상태 (다시 로그인 안 해도 됨)
+  cookie = '';
+  await general('auth', 'login', 'tabeng', 'tab0957', '', 'engineer'); // 머리글 없이 = 예전 방식으로 맨 위에 기사 로그인
+  assert.equal((await mobile('auth', 'me')).result.user.role, 'ENGINEER', '예전 기사 로그인은 기사 탭에서 유지');
+  await general('auth', 'login', 'admin', 'admin1234', '', 'staff');
+  assert.equal((await mobile('auth', 'me')).result.user.role, 'ENGINEER', '일반 탭에서 로그인해도 기사 로그인은 그대로');
+});
+
 test('수정로그: 누가 무엇을 바꿨는지 기록, 관리자만 조회, 로그인은 기록 안 함, 2주 지난 기록은 지움', async () => {
   const { getPool } = await import('../server/pg.js');
   const companyId = (await admin.ok('auth', 'me')).user.companyId;

@@ -8,6 +8,7 @@ import { WEEKDAYS, addDays, formatKoreanDate, toDateKey, today } from '../utils/
 import { won } from '../utils/format.js';
 import OffModal from '../components/OffModal.jsx';
 import { goBack, match, navigate, navigateForward } from '../router.js';
+import { loginEntry } from './LoginPage.jsx';
 import { useRefreshOnReturn } from '../utils/useRefreshOnReturn.js';
 import PhotoViewer from '../components/PhotoViewer.jsx';
 import WorkRecord from '../components/WorkRecord.jsx';
@@ -45,8 +46,9 @@ export default function EngineerApp({ route }) {
           type="button"
           className="btn-logout"
           onClick={async () => {
+            const back = loginEntry() === 'engineer' ? '/m' : '/'; // 기사모바일(/m)로 들어왔으면 기사 로그인 화면으로
             await logout();
-            navigate('/', { replace: true });
+            navigate(back, { replace: true });
           }}
         >
           로그아웃

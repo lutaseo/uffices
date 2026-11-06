@@ -106,7 +106,7 @@ export default function App() {
 
   if (loading) return <div className="page-loading">불러오는 중...</div>;
   if (!user) {
-    const kind = route.path === '/m' || route.path.startsWith('/m/') ? 'engineer' : route.path === '/t' ? 'manager' : 'staff';
+    const kind = route.path === '/m' || route.path.startsWith('/m/') ? 'engineer' : route.path === '/t' ? 'manager' : loginEntry(); // 상담실장 탭에서 로그인이 끊기면 상담실장 로그인
     return <LoginPage key={kind} companyCode={route.base} kind={kind} />;
   }
   return <CompanyGate route={route} />;
@@ -223,8 +223,9 @@ function MainLayout({ route }) {
   };
 
   const handleLogout = async () => {
+    const back = loginEntry() === 'manager' ? '/t' : '/'; // 상담실장 탭이면 그 로그인 화면으로
     await logout();
-    navigate(loginEntry() === 'manager' ? '/t' : '/', { replace: true }); // 상담실장 주소로 들어왔으면 그 로그인 화면으로
+    navigate(back, { replace: true });
   };
 
   const periodEnd = company?.periodEnd;

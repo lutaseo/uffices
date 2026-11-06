@@ -1,9 +1,21 @@
 // 브라우저 데모 모드 저장소 (localStorage). 서버 연결 시에는 사용되지 않습니다.
 
 import { buildSeed, migrate } from './seed.js';
+import { mergeSession, tabApp, viewSession } from './sessionSlots.js';
 
 const DB_KEY = 'uffice.db.v1';
 const SESSION_KEY = 'uffice.session';
+function readSession() {
+  try {
+    return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+  } catch {
+    return null;
+  }
+}
+function writeSession(full) {
+  if (full) localStorage.setItem(SESSION_KEY, JSON.stringify(full));
+  else localStorage.removeItem(SESSION_KEY);
+}
 
 async function sha256(password) {
   const text = `uffice:${password}`;
@@ -51,18 +63,15 @@ export const browserAdapter = {
   saveDb: writeDb,
   hashPassword: sha256,
   verifyPassword: async (password, hash) => !!hash && (await sha256(password)) === hash,
+  // 이 탭(일반 / 상담실장 / 기사모바일)의 로그인 칸만 보고 바꿈 (sessionSlots.js)
   getSession() {
-    try {
-      return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
-    } catch {
-      return null;
-    }
+    return viewSession(readSession(), tabApp());
   },
   setSession(data) {
-    localStorage.setItem(SESSION_KEY, JSON.stringify(data));
+    writeSession(mergeSession(readSession(), tabApp(), data));
   },
   clearSession() {
-    localStorage.removeItem(SESSION_KEY);
+    writeSession(mergeSession(readSession(), tabApp(), null));
   },
   publicBaseUrl: () => location.origin,
   clientInfo: () => ({ userAgent: navigator.userAgent }),
