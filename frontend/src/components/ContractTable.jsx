@@ -18,7 +18,6 @@ const STATUS_CLASS = {
   취소: 'st-red',
 };
 
-const APPROVAL_CLASS = { 승인: 'ap-ok', 승인대기: 'ap-wait', 미승인: 'ap-no' };
 
 const ESIGN_CLASS = {
   [ESIGN_STATUS.NONE]: 'es-none',
@@ -153,8 +152,7 @@ function FullTable({ contracts, selectedIds, onToggle, onToggleAll, showAmount, 
                 </td>
                 <td data-label="계약자" className="nowrap">
                   <div className="bold-text">
-                    {item.customerName}{' '}
-                    <span className={`approval ${APPROVAL_CLASS[item.approval] || ''}`}>({item.approval})</span>
+                    {item.customerName}
                   </div>
                   <div className="sub-text">{item.customerPhone}</div>
                   <span className={`esign-chip ${ESIGN_CLASS[item.esign?.status] || ''}`}>{item.esign?.status}</span>
