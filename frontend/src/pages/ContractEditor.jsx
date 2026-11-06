@@ -85,7 +85,6 @@ function initialForm(contract, company, user) {
     area: '',
     contractDate: today(),
     moveInDate: '',
-    approval: '승인',
     taxInvoice: '',
     cashReceipt: '',
     engineerNote: '',
@@ -279,7 +278,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
       const newIds = [saved.id];
       const failed = [];
       if (!isEdit) {
-        const SHARED = ['brand', 'customerName', 'customerPhone', 'customerPhone2', 'ownerId', 'aptName', 'dong', 'ho', 'aptType', 'area', 'contractDate', 'moveInDate', 'approval', 'taxInvoice', 'cashReceipt', 'customerNote'];
+        const SHARED = ['brand', 'customerName', 'customerPhone', 'customerPhone2', 'ownerId', 'aptName', 'dong', 'ho', 'aptType', 'area', 'contractDate', 'moveInDate', 'taxInvoice', 'cashReceipt', 'customerNote'];
         const base = Object.fromEntries(SHARED.map((k) => [k, form[k]]));
         for (const w of extras) {
           try {
