@@ -34,7 +34,6 @@ const ACTIONS = {
   'contracts.paymentPhotos': '영수증 사진',
   'contracts.setPaperPhotos': '실물 계약서 사진',
   'contracts.setDiscount': '할인 적용',
-  'contracts.setApproval': '계약 승인',
   'contracts.requestSign': '서명 요청',
   'contracts.addNote': '상담내역 등록',
   'contracts.updateSchedule': '시공일정·기사 배정',

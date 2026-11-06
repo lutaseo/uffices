@@ -22,7 +22,6 @@ export const WORK_STATUS = ['미정', '해피콜완료', '배정', '시공완료
 export const MOBILE_STATUS = ['현장도착', '시공시작', '시공완료', '시공연기요청', '시공불가'];
 
 // 계약승인
-export const APPROVAL_STATUS = ['승인대기', '승인', '미승인'];
 
 // 시공 담당 지정 방식
 export const ASSIGN_TYPES = { ENGINEER: 'engineer', TEAM: 'team' };

@@ -36,7 +36,6 @@ export const PERMISSIONS = [
   // 금액·입금 정보·패키지 가격은 실장 모두 기본으로 봄 (체크 목록에 안 나옴). 회사 매출 합계(sales.total)만 사람마다 체크
   { key: 'contract.amount', group: '계약관리', label: '금액·입금 정보 보기', short: '금액보기', always: true },
   { key: 'sales.total', group: '계약관리', label: '회사 매출 합계 보기 (목록 상단 합계·통계 금액·엑셀 금액)', short: '매출합계' },
-  { key: 'contract.approve', group: '계약관리', label: '계약 승인/미승인 처리', short: '계약승인' },
   { key: 'esign.send', group: '전자계약', label: '전자계약 서명요청', short: '서명요청' },
   { key: 'customer.view', group: '계약자관리', label: '계약자 조회', short: '계약자조회' },
   { key: 'customer.edit', group: '계약자관리', label: '계약자 등록/수정/삭제', short: '계약자수정' },

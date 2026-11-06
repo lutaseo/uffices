@@ -10,7 +10,6 @@ import { assertAssignable } from './schedule.js';
 import { invalidateNumbers, numberOf } from './numbering.js';
 import { can, ROLES, DATA_SCOPES, DEFAULT_MANAGER_PERMISSIONS, isOwnScopeOnly } from '../auth/permissions.js';
 import {
-  APPROVAL_STATUS,
   ASSIGN_TYPES,
   CATEGORIES,
   ESIGN_STATUS,
@@ -162,10 +161,8 @@ function normalizeContractInput(db, user, data, existing) {
     ownerId = staff.id;
   }
 
-  // 계약승인: 등록 화면에서는 고르지 않음 — 새 계약은 모두 '승인' (필요하면 계약 목록의 승인 처리로 바꿈)
-  const approval = can(user, 'contract.approve')
-    ? oneOf(data.approval, APPROVAL_STATUS, existing?.approval || '승인')
-    : existing?.approval || '승인';
+  // 계약승인: 쓰지 않음 (승인 기능 삭제) — 새 계약은 '승인', 예전 계약은 저장된 값 그대로 둠 (화면에 안 나옴)
+  const approval = existing?.approval || '승인';
 
   const status = oneOf(data.status, WORK_STATUS, '미정');
   const out = {
@@ -401,7 +398,6 @@ function diffContract(db, before, after) {
   push('구분', before.category, after.category);
   push('시공종류', before.workType, after.workType);
   push('접수형태', before.receptionType, after.receptionType);
-  push('계약승인', before.approval, after.approval);
   push('시공상태', before.status, after.status);
   push('취소사유', before.cancelReason, after.cancelReason);
   push('연락처①', before.customerPhone, after.customerPhone);
@@ -497,7 +493,7 @@ async function sampleTarget(companyId) {
 
 export const contracts = {
   // filters: { trash, as(AS관리 목록), dateType, startDate, endDate, aptName, dong, ho, customerName, phone, brand, category,
-  //            workType, receptionType, status, approval, esignStatus, ownerId, engineerId, sort }
+  //            workType, receptionType, status, esignStatus, ownerId, engineerId, sort }
   async list(filters = {}) {
     const { db, user } = await authorize('contract.view');
     return visibleContracts(db, user)
@@ -712,20 +708,6 @@ export const contracts = {
     if (changes.length) addHistory(c, user, '일정 변경', changes);
     saveDb(db);
     return contractView(c, user, db);
-  },
-
-  // 목록에서 선택 승인/미승인
-  async setApproval(ids, approval) {
-    const { db, user } = await authorize('contract.approve');
-    if (!APPROVAL_STATUS.includes(approval)) throw new ApiError('승인 상태를 선택해 주세요.');
-    ids.forEach((id) => {
-      const c = findContract(db, user, id);
-      if (c.approval === approval) return;
-      addHistory(c, user, '계약 승인 변경', [{ label: '계약승인', from: c.approval, to: approval }]);
-      c.approval = approval;
-      c.updatedAt = nowIso();
-    });
-    saveDb(db);
   },
 
   // AS 접수(on=true) / AS 완료(on=false) — 계약 목록에서 여러 건, 계약 상세에서 한 건
