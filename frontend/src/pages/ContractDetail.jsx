@@ -894,7 +894,7 @@ function PaperPanel({ contract, canEdit, onChanged }) {
     setBusy(true);
     try {
       for (const f of files.slice(0, Math.max(room, 0))) {
-        const img = await compressImage(f, { maxSize: 2000, quality: 0.85 });
+        const img = await compressImage(f, { maxSize: 1800, quality: 0.75, maxBytes: 500 * 1024 });
         await contractApi.setPaperPhotos(contract.id, { add: [img] }); // 용량 한도 때문에 한 장씩
       }
       onChanged();

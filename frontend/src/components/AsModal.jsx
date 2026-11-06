@@ -25,7 +25,7 @@ export default function AsModal({ title, onSave, onClose }) {
     if (files.length > room) alert(`AS 사진은 ${AS_PHOTOS_MAX}장까지 올릴 수 있습니다. 앞의 ${Math.max(room, 0)}장만 추가합니다.`);
     try {
       const list = [];
-      for (const f of files.slice(0, Math.max(room, 0))) list.push(await compressImage(f, { maxSize: 1600, quality: 0.8 }));
+      for (const f of files.slice(0, Math.max(room, 0))) list.push(await compressImage(f));
       setPhotos((x) => [...x, ...list]);
     } catch (err) {
       alert(err.message);
