@@ -3,6 +3,7 @@ import { contracts as contractApi } from '../api/index.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { ESIGN_STATUS } from '../constants.js';
 import ContractDocument from './ContractDocument.jsx';
+import ErrorBoundary from './ErrorBoundary.jsx';
 import KakaoModal from './KakaoModal.jsx';
 import { backdrop } from '../utils/backdrop.js';
 
@@ -14,7 +15,7 @@ export default function ContractViewModal({ contractId, onClose, onChanged }) {
   const [kakaoOpen, setKakaoOpen] = useState(false);
 
   const load = () =>
-    contractApi.signBundle(contractId).then((b) => {
+    contractApi.signBundle(Number(contractId)).then((b) => {
       setList(b.contracts);
       setSignUrl(b.token ? `${location.origin}/sign/${b.token}` : '');
     });
@@ -61,7 +62,9 @@ export default function ContractViewModal({ contractId, onClose, onChanged }) {
           </button>
         </div>
 
-        <ContractDocument contract={contract} contracts={list} company={company} />
+        <ErrorBoundary title="계약서를 보여 주는 중 오류가 났습니다." onClose={onClose}>
+          <ContractDocument contract={contract} contracts={list} company={company} />
+        </ErrorBoundary>
 
         {can('esign.send') && status !== ESIGN_STATUS.SIGNED && (
           <div className="esign-box no-print">
