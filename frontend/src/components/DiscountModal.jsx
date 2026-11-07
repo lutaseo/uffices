@@ -68,7 +68,6 @@ export default function DiscountModal({ contract, onSave, onClose }) {
                 <td className="input-col">
                   <b className={actual < 0 ? 'text-red' : ''}>{won(actual)}원</b>
                   <span className="sub-text"> (현재 {won(total - (Number(contract.discount) || 0) - (Number(contract.voucher) || 0))}원)</span>
-                  {contract.esign?.status === '서명완료' && <div className="text-red sub-text">서명완료된 계약입니다. 금액이 바뀌면 재서명이 필요합니다.</div>}
                 </td>
               </tr>
             </tbody>

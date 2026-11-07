@@ -663,18 +663,7 @@ export const contracts = {
     assertSchedulesAssignable(db, user, fields.schedules, c.schedules, c.id);
     const before = clone(c);
 
-    // 서명완료된 계약의 핵심 조건(금액/시공내용)이 바뀌면 재서명 필요
-    if (c.esign?.status === ESIGN_STATUS.SIGNED) {
-      const changed =
-        fields.items !== c.items ||
-        (fields.customerNote || '') !== (c.customerNote || '') || // 고객 참고사항도 계약서 내용
-        ('totalAmount' in fields &&
-          (fields.totalAmount !== c.totalAmount ||
-            fields.discount !== c.discount ||
-            fields.voucher !== c.voucher ||
-            JSON.stringify(fields.lineItems) !== JSON.stringify(c.lineItems || [])));
-      if (changed) c.esign = { ...c.esign, status: ESIGN_STATUS.NONE, token: null, previousSignedAt: c.esign.signedAt };
-    }
+    // 서명한 뒤 수정해도 다시 서명받지 않음 (서명은 한 번이면 됨 — 서명 링크도 그대로 살아 있음)
     const linked = db.customers.find((x) => x.id === c.customerId);
     if (fields.customerPhone !== c.customerPhone || !linked || !sameCustomer(linked, c.customerName, fields.customerPhone, { ...c, ...fields })) {
       c.customerId = upsertCustomerForContract(db, user, c.customerName, fields.customerPhone, fields.customerPhone2, { ...c, ...fields }).id;
@@ -816,10 +805,6 @@ export const contracts = {
     c.discount = d;
     c.voucher = v;
     c.discountReason = String(discountReason || '').trim().slice(0, 100);
-    // 서명완료된 계약의 금액이 바뀌면 재서명 필요
-    if (c.esign?.status === ESIGN_STATUS.SIGNED && (before.discount !== d || before.voucher !== v)) {
-      c.esign = { ...c.esign, status: ESIGN_STATUS.NONE, token: null, previousSignedAt: c.esign.signedAt };
-    }
     const changes = diffContract(db, before, c);
     if (changes.length) addHistory(c, user, '할인 적용', changes);
     c.updatedAt = nowIso();
@@ -971,20 +956,41 @@ export const contracts = {
   async repairCustomerLinks() {
     const { db, user } = await authorize('contract.edit');
     const company = companyOf(db, user);
-    if (!company || company.customerLinksFixed >= CUSTOMER_LINKS_VERSION) return { fixed: 0 };
+    if (!company) return { fixed: 0, restored: 0 };
+    const mine = db.contracts.filter((x) => x.companyId === user.companyId);
     let fixed = 0;
-    for (const c of db.contracts.filter((x) => x.companyId === user.companyId)) {
-      const linked = db.customers.find((x) => x.id === c.customerId);
-      if (linked && sameCustomer(linked, c.customerName, c.customerPhone, c)) continue;
-      const cust = upsertCustomerForContract(db, user, c.customerName, c.customerPhone, c.customerPhone2, c);
-      if (cust.id !== c.customerId) {
-        c.customerId = cust.id;
-        fixed++;
+    let restored = 0;
+    if (!(company.customerLinksFixed >= CUSTOMER_LINKS_VERSION)) {
+      for (const c of mine) {
+        const linked = db.customers.find((x) => x.id === c.customerId);
+        if (linked && sameCustomer(linked, c.customerName, c.customerPhone, c)) continue;
+        const cust = upsertCustomerForContract(db, user, c.customerName, c.customerPhone, c.customerPhone2, c);
+        if (cust.id !== c.customerId) {
+          c.customerId = cust.id;
+          fixed++;
+        }
       }
+      company.customerLinksFixed = CUSTOMER_LINKS_VERSION;
     }
-    company.customerLinksFixed = CUSTOMER_LINKS_VERSION;
+    // 서명 되돌리기 (한 번만): 예전에는 서명 뒤 금액·시공내용을 고치면 서명이 풀리고 서명 링크 값도 지워졌음
+    //   → 이제는 다시 서명받지 않으므로, 그렇게 풀린 계약을 서명완료로 되돌림 (서명 이미지는 그대로 남아 있음)
+    //   링크 값: 같이 서명한 계약에 남은 값 → 다시 요청해서 생긴 지금 값 → 없으면 새로 만듦 (고객확인페이지 링크로도 열림)
+    if (!company.signRestored) {
+      for (const c of mine) {
+        const e = c.esign || {};
+        if (e.status === ESIGN_STATUS.SIGNED || !e.previousSignedAt || !e.signedAt) continue;
+        const peer = mine.find((x) => x !== c && x.esign?.status === ESIGN_STATUS.SIGNED && x.esign.token && x.esign.signedAt === e.signedAt && x.esign.signerName === e.signerName);
+        const token = peer?.esign.token || e.token || newToken();
+        const pastTokens = [...new Set([...(e.pastTokens || []), e.token].filter((v) => v && v !== token))].slice(-10);
+        const { previousSignedAt, ...rest } = e; // eslint-disable-line no-unused-vars
+        c.esign = { ...rest, status: ESIGN_STATUS.SIGNED, token, ...(pastTokens.length ? { pastTokens } : {}) };
+        addHistory(c, user, '서명완료로 되돌림 (수정해도 다시 서명받지 않도록 바뀜)');
+        restored++;
+      }
+      company.signRestored = true;
+    }
     saveDb(db);
-    return { fixed };
+    return { fixed, restored };
   },
 
   // 계약서 보기: 고객에게 한 장으로 가는 계약 묶음 (첫 번째 = 요청한 계약 기준 서명 이미지 포함)
@@ -1016,7 +1022,9 @@ export const contracts = {
     const token = newToken();
     const together = list.length > 1 ? list.map((x) => x.category).join('·') : '';
     for (const x of list) {
-      x.esign = { ...x.esign, status: ESIGN_STATUS.WAITING, token, requestedAt: nowIso(), requestedBy: user.id };
+      // 예전에 보낸 서명 링크도 계속 열리게 이전 값을 보관 (bundleByToken)
+      const pastTokens = [...new Set([...(x.esign?.pastTokens || []), x.esign?.token].filter(Boolean))].slice(-10);
+      x.esign = { ...x.esign, status: ESIGN_STATUS.WAITING, token, pastTokens, requestedAt: nowIso(), requestedBy: user.id };
       x.updatedAt = nowIso();
       addHistory(x, user, together ? `전자서명 요청 (${together} 한 장으로)` : '전자서명 요청');
     }
@@ -1082,8 +1090,19 @@ export const esign = {
   },
 };
 
+// 서명 링크 값 → 한 장으로 묶인 계약들
+//   /e/?q=값 에는 지금 서명 링크 값 말고도 이런 값이 올 수 있어 모두 받아 줌 (알림톡을 받은 고객이 '안 열린다'고 하지 않게)
+//     - 다시 서명 요청하기 전에 보냈던 예전 서명 링크 값 (pastTokens)
+//     - 고객확인페이지 값(customerToken) — 계약완료 알림톡의 #{ecode} 는 이 값이라 /e/?q= 로 보내도 열리게
 function bundleByToken(db, token) {
-  const list = token ? db.contracts.filter((x) => x.esign?.token === token && !x.deletedAt).sort((a, b) => a.id - b.id) : [];
+  const t = String(token || '');
+  const live = (x) => !x.deletedAt;
+  const byToken = (v) => (v ? db.contracts.filter((x) => live(x) && x.esign?.token === v).sort((a, b) => a.id - b.id) : []);
+  let list = byToken(t);
+  if (!list.length && t) {
+    const c = db.contracts.find((x) => live(x) && ((x.esign?.pastTokens || []).includes(t) || x.customerToken === t));
+    if (c) list = c.esign?.token ? byToken(c.esign.token) : [c];
+  }
   if (!list.length) throw new ApiError('유효하지 않거나 만료된 서명 링크입니다.', 'NOT_FOUND');
   return list;
 }
@@ -1298,7 +1317,12 @@ export const customerApp = {
   // 알림톡 링크 (/{업체}/c/{고유값}) — 계약의 고객으로 바로 로그인
   async linkLogin(token) {
     const db = await loadDb();
-    const c = token ? db.contracts.find((x) => x.customerToken === String(token) && !x.deletedAt) : null;
+    // 고객확인페이지 값, 또는 서명 링크 값(지금·예전)으로도 들어올 수 있게 (알림톡 #{ecode} 가 어느 값이든 열림)
+    const t = String(token || '');
+    const c = t
+      ? db.contracts.find((x) => !x.deletedAt && x.customerToken === t) ||
+        db.contracts.find((x) => !x.deletedAt && (x.esign?.token === t || (x.esign?.pastTokens || []).includes(t)))
+      : null;
     if (!c) throw new ApiError('유효하지 않은 링크입니다. 이름과 휴대폰번호로 로그인해 주세요.', 'NOT_FOUND');
     const company = db.companies.find((x) => x.id === c.companyId);
     if (!company || !company.active) throw new ApiError('사용이 정지된 업체입니다.');
