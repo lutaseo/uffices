@@ -682,6 +682,15 @@ test('서명 링크가 계속 열림: 다시 요청 전 예전 링크, 고객확
   const phone = client();
   assert.ok((await phone.ok('customerApp', 'linkLogin', second)).contracts.some((x) => x.id === c.id), '서명 링크 값으로 고객확인페이지 열기');
   assert.equal((await client()('esign', 'getByToken', 'no-such-token')).status, 404);
+  // 알림톡: 화면이 링크 값(#{ecode})을 비운 채 보내도 서버가 채움 → /e/?q= 빈 링크로 나가지 않음
+  await admin.ok('notifications', 'send', { contractId: c.id, template: '계약완료', templateKey: '계약완료', variables: { 고객명: '링크고객', ecode: '' }, buttons: [{ name: '내 계약 확인', url: 'https://veritybase.vercel.app/thegood/c/?q=' }], target: '고객', brand: '더좋은집', receiverName: '링크고객', receiverPhone: '010-7878-1212', message: 'x' });
+  await admin.ok('notifications', 'send', { contractId: c.id, template: '서명요청', templateKey: '서명요청', variables: { 고객명: '링크고객', ecode: 'wrong-value' }, buttons: [], target: '고객', brand: '더좋은집', receiverName: '링크고객', receiverPhone: '010-7878-1212', message: 'x' });
+  const logs = await admin.ok('notifications', 'history', c.id);
+  const [doneLog, signLog] = logs.slice(-2);
+  assert.equal(doneLog.variables.ecode, custToken, '계약완료: 비어 있으면 고객확인페이지 값');
+  assert.ok(doneLog.buttons[0].url.endsWith(`?q=${custToken}`), '기록된 버튼 주소에도 값');
+  assert.equal(signLog.variables.ecode, second, '서명요청: 이 계약 것이 아닌 값이면 지금 서명 링크 값');
+  for (const v of [doneLog.variables.ecode, signLog.variables.ecode]) assert.equal((await client().ok('esign', 'getByToken', v)).contract.id, c.id, '보낸 값으로 /e 열림');
 
   // 예전 규칙으로 서명이 풀린 계약 → 서명완료로 되돌림 (한 번만)
   const d = await admin.ok('contracts', 'create', { ...base, customerName: '풀린고객', customerPhone: '010-7878-3434', category: '나노코팅' });
@@ -1133,7 +1142,9 @@ test('알림톡 발송 기록: 비즈고 연결 전에는 기록만(MOCK), 템�
     variables: { 고객명: '알림고객', ecode: 'abc', 엉뚱한값: 'x' }, buttons: [{ name: '계약서 확인·서명', url: 'https://veritybase.vercel.app/e/?q=abc' }],
     target: '고객', brand: '더좋은집', receiverName: '알림고객', receiverPhone: '010-5656-7878', message: '알림고객님, 계약 내용을 확인하시고 서명해 주세요.',
   });
-  assert.deepEqual(log.variables, { 고객명: '알림고객', ecode: 'abc' }, '템플릿에 있는 빈칸만');
+  assert.deepEqual(Object.keys(log.variables), ['고객명', 'ecode'], '템플릿에 있는 빈칸만');
+  const { token: ct } = await admin.ok('contracts', 'customerLink', c.id);
+  assert.equal(log.variables.ecode, ct, '이 계약 것이 아닌 링크 값(abc)은 서버가 진짜 값으로 바꿈 (서명 요청 전이면 고객확인페이지 값)');
   assert.equal(log.result, 'MOCK', '키 없으면 기록만');
 });
 
@@ -1233,7 +1244,8 @@ test('비즈고 알림톡: 키는 Authorization 헤더로, 템플릿 자동 치�
     assert.equal(sentLog.templateCode, 'contract_good10');
     const last = seen.filter((x) => x.url === '/api/comm/v1/send/omni').at(-1);
     assert.deepEqual(last.body.messageFlow[0].alimtalk, { senderKey: 'SK123', templateCode: 'contract_good10', sendType: 'template' });
-    assert.deepEqual(last.body.destinations[0].replaceWords, { 고객명: '실발송', ecode: 'CT' });
+    const { token: realCt } = await admin.ok('contracts', 'customerLink', c.id);
+    assert.deepEqual(last.body.destinations[0].replaceWords, { 고객명: '실발송', ecode: realCt }, '링크 값은 서버가 이 계약의 진짜 값으로');
     assert.equal((await sup.ok('notifications', 'gatewayStatus')).companies.find((x) => x.id === myCompanyId).brands.더좋은집.codes.계약완료, 'contract_good10');
 
     // 발신프로필 키를 직접 넣으면 목록 조회 없이 그 키로

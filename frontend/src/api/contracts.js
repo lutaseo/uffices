@@ -1118,7 +1118,7 @@ export const notifications = {
   //   알림톡은 따로 권한 없이 계약을 볼 수 있는 직원이면 누구나 보냄 (볼 수 없는 계약은 findContract 가 막음)
   async send({ contractId, template, templateKey, variables, buttons, target, brand, receiverName, receiverPhone, message }) {
     const { db, user } = await authorize('contract.view');
-    findReadableContract(db, user, contractId); // 볼 수 있는 계약이면 알림톡 발송 가능 (다른 사람 계약 포함)
+    const contract = findReadableContract(db, user, contractId); // 볼 수 있는 계약이면 알림톡 발송 가능 (다른 사람 계약 포함)
     if (digitsOnly(receiverPhone).length < 10) throw new ApiError('수신자 연락처가 없습니다.');
     const tpl = ALIMTALK_TEMPLATES[templateKey];
     if (!tpl) throw new ApiError('알림톡 종류가 올바르지 않습니다.');
@@ -1130,7 +1130,20 @@ export const notifications = {
     if (live && !code) throw new ApiError(`${brand} [${tpl.label}] 알림톡은 아직 비즈고 템플릿 코드가 없습니다. 운영자에게 승인된 템플릿 코드 등록을 요청해 주세요.`);
     // 템플릿에 있는 #{빈칸}만 골라 보냄
     const names = [...new Set([tpl.body, ...tpl.buttons.map((x) => x.url)].join(' ').match(/#\{[^}]+\}/g) || [])].map((x) => x.slice(2, -1));
-    const vars = variables && typeof variables === 'object' ? variables : {};
+    const vars = { ...(variables && typeof variables === 'object' ? variables : {}) };
+    // 버튼 링크 값 #{ecode}: 화면이 보낸 값이 비었거나 이 계약 것이 아니면 서버가 채움 (빈 링크 /e/?q= 로 나가지 않게)
+    //   /e/?q= 와 /업체/c/?q= 는 서명 링크 값·고객확인페이지 값 어느 쪽이든 열림 (bundleByToken, customerApp.linkLogin)
+    if (names.includes('ecode')) {
+      const given = String(vars.ecode || '').trim();
+      const mine = [contract.customerToken, contract.esign?.token, ...(contract.esign?.pastTokens || [])].filter(Boolean);
+      if (!given || !mine.includes(given)) {
+        if (templateKey === '서명요청' && contract.esign?.token) vars.ecode = contract.esign.token;
+        else {
+          if (!contract.customerToken) contract.customerToken = newToken();
+          vars.ecode = contract.customerToken;
+        }
+      }
+    }
     const replaceWords = Object.fromEntries(names.map((k) => [k, String(vars[k] ?? '').slice(0, 500)]));
     const log = {
       id: nextId(db, 'notifications'),
@@ -1140,7 +1153,7 @@ export const notifications = {
       templateKey,
       templateCode: code,
       variables: replaceWords,
-      buttons: Array.isArray(buttons) ? buttons.slice(0, 5) : [],
+      buttons: Array.isArray(buttons) ? buttons.slice(0, 5).map((b) => ({ ...b, url: String(b?.url || '').replace(/([?&]q=)(?=$|&)/, `$1${replaceWords.ecode || ''}`) })) : [],
       target,
       brand,
       receiverName,
