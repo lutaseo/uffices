@@ -119,7 +119,7 @@ export default function ScheduleManagement() {
   }, [offs]);
 
   // 박람회: 날짜별 (여러 날 박람회는 그 기간 모든 날짜에)
-  const fairPeople = (f) => [...f.staff.map((s) => s.name), ...(f.engineers || []).map((e) => `기사 ${e.name}`)];
+  const fairPeople = (f) => [...(f.engineers || []).map((e) => e.name), ...f.staff.map((s) => s.name)]; // 기사 (예전 박람회는 실장도)
   const fairsOn = (dateKey) => fairList.filter((f) => f.date <= dateKey && (f.endDate || f.date) >= dateKey);
 
   // 날짜 칸에 "줄)공두환 : 2건" 형태로 담당별 건수 표시

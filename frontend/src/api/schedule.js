@@ -329,7 +329,7 @@ export const fairs = {
     const engineerIds = [...new Set((Array.isArray(data.engineerIds) ? data.engineerIds : []).map(Number))].filter((id) =>
       db.engineers.some((e) => e.id === id && e.companyId === user.companyId),
     );
-    if (!staffIds.length && !engineerIds.length) throw new ApiError('박람회에 가는 실장이나 기사를 한 명 이상 골라 주세요.');
+    if (!staffIds.length && !engineerIds.length) throw new ApiError('박람회에 가는 기사를 한 명 이상 골라 주세요.');
     company.fairs = company.fairs || [];
     const fields = { date, endDate: endDate && endDate !== date ? endDate : '', name, place, staffIds, engineerIds, updatedAt: nowIso() };
     let fair;

@@ -1,25 +1,24 @@
 import React, { useEffect, useState } from 'react';
-import { engineers as engineerApi, fairs as fairApi, users as userApi } from '../api/index.js';
+import { engineers as engineerApi, fairs as fairApi } from '../api/index.js';
+import EngineerPicker from './EngineerPicker.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { backdrop } from '../utils/backdrop.js';
 import { today } from '../utils/date.js';
-import { ROLES } from '../auth/permissions.js';
 
 // 박람회 일정 등록 팝업 (계약관리 위 [박람회 일정 등록], 일정관리 달력의 박람회 [수정])
-//   날짜(여러 날이면 끝나는 날짜도) · 장소 · 가는 실장 → 일정관리 달력에 실장 이름이 초록색으로
+//   날짜(여러 날이면 끝나는 날짜도) · 박람회 이름 · 장소 · 가는 기사(검색해서 추가) → 일정관리 달력에 기사 이름이 초록색으로
 //   fair: 고칠 박람회 (없으면 새로 등록), initialDate: 새로 등록할 때 처음 날짜, onSaved: 저장·삭제 뒤
 //   오류는 창 안에 표시 (카카오톡 등 앱 안 브라우저는 alert 창을 막기도 함)
 export default function FairModal({ fair = null, initialDate, onSaved, onClose }) {
-  const { user, handleError } = useAuth();
+  const { handleError } = useAuth();
   const [form, setForm] = useState({
     date: fair?.date || initialDate || today(),
     endDate: fair?.endDate || '',
     name: fair?.name || '',
     place: fair?.place || '',
-    staffIds: fair?.staffIds || (user.role === ROLES.MANAGER ? [user.id] : []),
+    staffIds: fair?.staffIds || [], // 예전에 고른 실장 (지금은 기사만 고름 — 고쳐 저장해도 그대로 둠)
     engineerIds: fair?.engineerIds || [],
   });
-  const [staff, setStaff] = useState([]);
   const [engineerList, setEngineerList] = useState([]);
   const [upcoming, setUpcoming] = useState([]);
   const [editing, setEditing] = useState(fair);
@@ -32,10 +31,6 @@ export default function FairModal({ fair = null, initialDate, onSaved, onClose }
       .then(setUpcoming)
       .catch(() => {});
   useEffect(() => {
-    userApi
-      .staffOptions()
-      .then((list) => setStaff(list.filter((u) => u.role !== ROLES.ENGINEER)))
-      .catch(() => {});
     engineerApi
       .list()
       .then((list) => setEngineerList(list.filter((e) => e.active !== false)))
@@ -44,8 +39,6 @@ export default function FairModal({ fair = null, initialDate, onSaved, onClose }
   }, []);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-  const toggleIn = (key, id) => set(key, form[key].includes(id) ? form[key].filter((x) => x !== id) : [...form[key], id]);
-  const toggleStaff = (id) => toggleIn('staffIds', id);
   const startEdit = (f) => {
     setEditing(f);
     setError('');
@@ -54,7 +47,7 @@ export default function FairModal({ fair = null, initialDate, onSaved, onClose }
   const startNew = () => {
     setEditing(null);
     setError('');
-    setForm({ date: initialDate || today(), endDate: '', name: '', place: '', staffIds: user.role === ROLES.MANAGER ? [user.id] : [], engineerIds: [] });
+    setForm({ date: initialDate || today(), endDate: '', name: '', place: '', staffIds: [], engineerIds: [] });
   };
 
   const run = async (fn) => {
@@ -128,30 +121,29 @@ export default function FairModal({ fair = null, initialDate, onSaved, onClose }
                 </td>
               </tr>
               <tr>
-                <td className="label-col">가는 실장</td>
+                <td className="label-col">가는 기사<span className="star">*</span></td>
                 <td className="input-col">
-                  <div className="fair-staff">
-                    {staff.map((u) => (
-                      <label key={u.id} className={`fair-staff-chip ${form.staffIds.includes(u.id) ? 'on' : ''}`}>
-                        <input type="checkbox" checked={form.staffIds.includes(u.id)} onChange={() => toggleStaff(u.id)} /> {u.name}
-                      </label>
-                    ))}
-                  </div>
-                </td>
-              </tr>
-              <tr>
-                <td className="label-col">가는 기사</td>
-                <td className="input-col">
-                  <div className="fair-staff">
-                    {engineerList.map((e) => (
-                      <label key={e.id} className={`fair-staff-chip ${form.engineerIds.includes(e.id) ? 'on' : ''}`}>
-                        <input type="checkbox" checked={form.engineerIds.includes(e.id)} onChange={() => toggleIn('engineerIds', e.id)} /> {e.name}
-                      </label>
-                    ))}
-                  </div>
-                  <div className="sub-text">
-                    실장·기사 중 한 명 이상 고르세요. 고른 사람 이름이 초록색으로 표시되고, <b>본인이 포함된 박람회만</b> 그 사람에게 보입니다 (실장: 일정관리, 기사: 기사모바일).
-                  </div>
+                  {/* 이름(또는 전화번호 뒷자리)으로 검색해서 고르면 아래 목록에 쌓임 */}
+                  <EngineerPicker
+                    key={form.engineerIds.join(',')}
+                    value=""
+                    engineers={engineerList.filter((e) => !form.engineerIds.includes(e.id))}
+                    onChange={(id) => id && set('engineerIds', [...form.engineerIds, Number(id)])}
+                    placeholder="기사 이름 검색해서 추가"
+                  />
+                  {form.engineerIds.length > 0 && (
+                    <ul className="fair-picked">
+                      {form.engineerIds.map((id) => (
+                        <li key={id}>
+                          <span className="fair-name">{engineerList.find((e) => e.id === id)?.name || '(사용 안 하는 기사)'}</span>
+                          <button type="button" className="btn-link text-red" onClick={() => set('engineerIds', form.engineerIds.filter((x) => x !== id))}>
+                            빼기
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="sub-text">고른 기사 이름이 일정관리 달력에 초록색으로 표시되고, 그 기사의 기사모바일에는 <b>본인이 포함된 박람회만</b> 보입니다.</div>
                 </td>
               </tr>
             </tbody>
