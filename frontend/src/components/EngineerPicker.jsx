@@ -86,10 +86,13 @@ export default function EngineerPicker({ value, engineers, others = [], info = (
                 aria-disabled={disabled || undefined}
                 className={`${i === active ? 'active' : ''} ${disabled ? 'disabled' : ''} ${String(en.id) === String(value) ? 'selected' : ''}`}
                 onMouseEnter={() => setActive(i)}
+                // 마우스: 누르는 순간 선택(입력칸 포커스 유지) / 손가락: 끌면 목록이 넘어가고, 톡 누르면(click) 선택
                 onPointerDown={(e) => {
-                  e.preventDefault(); // 입력칸 포커스 유지 (폰에서 목록이 먼저 닫히지 않게)
+                  if (e.pointerType !== 'mouse') return;
+                  e.preventDefault();
                   pick(en);
                 }}
+                onClick={() => pick(en)}
               >
                 <span className="name">{en.name}</span>
                 <span className="meta">
