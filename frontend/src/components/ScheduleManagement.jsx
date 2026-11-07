@@ -28,6 +28,8 @@ const short = (category) => (CATEGORY_SHORT[category] ? `${CATEGORY_SHORT[catego
 const HAS_PREFIX = /^[가-힣,]+\)/;
 const withShort = (category, name) => (HAS_PREFIX.test(name || '') ? name : `${short(category)}${name}`);
 
+const FAIR_ONLY = '__fair'; // 첫 칸 '박람회' (박람회 일정만 보기)
+
 export default function ScheduleManagement() {
   const { company, can, handleError } = useAuth();
   const showAmount = can('contract.amount');
@@ -58,6 +60,7 @@ export default function ScheduleManagement() {
   const load = useCallback(async () => {
     try {
       const { view, ...query } = filter;
+      if (query.category === FAIR_ONLY) query.category = ''; // 박람회만 보기: 시공 일정은 거르지 않고 화면에서 숨김
       const [sch, off, fr] = await Promise.all([
         scheduleApi.list({ from: monthStart, to: monthEnd, ...query }),
         offApi.list({ from: monthStart, to: monthEnd, engineerId: filter.engineerId === 'none' ? '' : filter.engineerId }),
@@ -99,8 +102,11 @@ export default function ScheduleManagement() {
     setSelectedDate(today());
   };
 
-  const showWork = filter.view !== 'off';
-  const showOff = filter.view !== 'work';
+  // 첫 칸(전체·줄눈·청소…)에서 '박람회'를 고르면 박람회만 / 셋째 칸(구분)에서 시공·휴무를 고르면 박람회는 숨김
+  const fairOnly = filter.category === FAIR_ONLY;
+  const showWork = !fairOnly && filter.view !== 'off';
+  const showOff = !fairOnly && filter.view !== 'work';
+  const showFair = !filter.view && (fairOnly || !filter.category);
 
   const byDate = useMemo(() => {
     const map = {};
@@ -120,7 +126,7 @@ export default function ScheduleManagement() {
 
   // 박람회: 날짜별 (여러 날 박람회는 그 기간 모든 날짜에)
   const fairPeople = (f) => [...(f.engineers || []).map((e) => e.name), ...f.staff.map((s) => s.name)]; // 기사 (예전 박람회는 실장도)
-  const fairsOn = (dateKey) => fairList.filter((f) => f.date <= dateKey && (f.endDate || f.date) >= dateKey);
+  const fairsOn = (dateKey) => (showFair ? fairList : []).filter((f) => f.date <= dateKey && (f.endDate || f.date) >= dateKey);
 
   // 날짜 칸에 "줄)공두환 : 2건" 형태로 담당별 건수 표시
   const cellSummary = (list) => {
@@ -251,6 +257,7 @@ export default function ScheduleManagement() {
         <select className="schedule-select" value={filter.category} onChange={(e) => setFilter({ ...filter, category: e.target.value })}>
           <option value="">전체</option>
           {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          <option value={FAIR_ONLY}>박람회</option>
         </select>
         <select className="schedule-select" value={filter.engineerId} onChange={(e) => setFilter({ ...filter, engineerId: e.target.value })}>
           <option value="">기사선택</option>
