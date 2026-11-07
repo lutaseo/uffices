@@ -1,22 +1,52 @@
-import React from 'react';
+import React, { useState } from 'react';
 
-// [📷 사진 찍기] — 카메라를 바로 엶 (capture="environment": 뒤쪽 카메라)
-//   네이버 웨일(휴대폰·태블릿)은 사진 칸을 누르면 카메라 선택 없이 앨범만 열어서, 웨일에서만 찍기 버튼을 따로 둠
-//   다른 브라우저(크롬·사파리·삼성인터넷 등)는 원래대로 한 버튼에서 '사진 찍기/앨범'을 고를 수 있어 그대로
-//   웨일이 아니거나 PC(마우스)면 이 버튼은 안 보이고, 옆의 원래 버튼 글자도 그대로
+// 사진 고르기 버튼 (입금 영수증·AS 사진·실물 계약서 공통)
+//   네이버 웨일(휴대폰·태블릿)은 사진 칸을 누르면 카메라 선택 없이 앨범만 열려서,
+//   웨일에서는 버튼을 누르면 [📷 사진 찍기 / 🖼 앨범에서 선택] 팝업을 띄움 (사진 찍기 = capture: 카메라 바로 열기)
+//   다른 브라우저(크롬·사파리·삼성인터넷 등)·PC는 원래대로 바로 고르는 창이 열림 (거기서 찍기/앨범 선택 가능)
 const UA = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
 const TOUCH = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
-export const NEED_CAMERA_BUTTON = /Whale/i.test(UA) && TOUCH;
+export const NEED_CAMERA_CHOICE = /Whale/i.test(UA) && TOUCH;
 
-// 앨범 버튼 글자: 웨일(휴대폰·태블릿)이면 '앨범', 그 외는 원래 글자
-export const albumLabel = (pcText, touchText = '🖼 앨범에서 선택') => (NEED_CAMERA_BUTTON ? touchText : pcText);
+// className·title: 버튼 모양, children: 버튼 글자, multiple: 앨범에서 여러 장, onChange(e): input 의 onChange 그대로
+export default function PhotoPickButton({ className = 'btn-pay-photo', title, children, onChange, multiple = true, disabled = false }) {
+  const [open, setOpen] = useState(false);
 
-export default function CameraButton({ className = 'btn-pay-photo', label = '📷 사진 찍기', onChange, disabled = false }) {
-  if (!NEED_CAMERA_BUTTON) return null;
+  if (!NEED_CAMERA_CHOICE) {
+    return (
+      <label className={className} title={title}>
+        {children}
+        <input type="file" accept="image/*" multiple={multiple} onChange={onChange} hidden disabled={disabled} />
+      </label>
+    );
+  }
+
+  const picked = (e) => {
+    setOpen(false);
+    onChange?.(e);
+  };
   return (
-    <label className={className} title="카메라로 바로 찍어서 올립니다">
-      {label}
-      <input type="file" accept="image/*" capture="environment" onChange={onChange} hidden disabled={disabled} />
-    </label>
+    <>
+      <button type="button" className={className} title={title} disabled={disabled} onClick={() => setOpen(true)}>
+        {children}
+      </button>
+      {open && (
+        <div className="photo-choice-overlay" onClick={() => setOpen(false)}>
+          <div className="photo-choice" onClick={(e) => e.stopPropagation()}>
+            <label className="photo-choice-btn">
+              📷 사진 찍기
+              <input type="file" accept="image/*" capture="environment" onChange={picked} hidden />
+            </label>
+            <label className="photo-choice-btn">
+              🖼 앨범에서 선택
+              <input type="file" accept="image/*" multiple={multiple} onChange={picked} hidden />
+            </label>
+            <button type="button" className="photo-choice-cancel" onClick={() => setOpen(false)}>
+              취소
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

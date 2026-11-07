@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import CameraButton, { albumLabel } from './CameraButton.jsx';
+import PhotoPickButton from './CameraButton.jsx';
 import { contracts as contractApi } from '../api/index.js';
 import { compressImage } from '../utils/image.js';
 import PhotoViewer from './PhotoViewer.jsx';
@@ -72,13 +72,9 @@ export default function PaperPhotos({ contractId, savedCount = 0, value, onChang
         </span>
       ))}
       {!readOnly && total < PAPER_MAX && (
-        <>
-          <CameraButton label="📷 실물 계약서 찍기" onChange={pick} />
-          <label className="btn-pay-photo" title="종이에 쓴 계약서를 찍어서 올립니다 (여러 장 선택 가능)">
-            {albumLabel('📷 실물 계약서 사진', '🖼 실물 계약서 (앨범)')}
-            <input type="file" accept="image/*" multiple onChange={pick} hidden />
-          </label>
-        </>
+        <PhotoPickButton title="종이에 쓴 계약서를 찍어서 올립니다 (여러 장 선택 가능)" onChange={pick}>
+          📷 실물 계약서 사진
+        </PhotoPickButton>
       )}
       {view != null && <PhotoViewer images={[...saved.map((r) => r.image), ...v.add]} start={view} title="실물 계약서" onClose={() => setView(null)} />}
     </span>

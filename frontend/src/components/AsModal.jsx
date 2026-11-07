@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import CameraButton, { albumLabel } from './CameraButton.jsx';
+import PhotoPickButton from './CameraButton.jsx';
 import { backdrop } from '../utils/backdrop.js';
 import { today } from '../utils/date.js';
 import { compressImage } from '../utils/image.js';
@@ -89,13 +89,9 @@ export default function AsModal({ title, onSave, onClose }) {
                       </span>
                     ))}
                     {photos.length < AS_PHOTOS_MAX && (
-                      <>
-                        <CameraButton onChange={pick} />
-                        <label className="btn-pay-photo" title="하자 부위 등을 찍어서 올립니다 (여러 장 선택 가능)">
-                          {albumLabel('📷 사진 첨부')}
-                          <input type="file" accept="image/*" multiple onChange={pick} hidden />
-                        </label>
-                      </>
+                      <PhotoPickButton title="하자 부위 등을 찍어서 올립니다 (여러 장 선택 가능)" onChange={pick}>
+                        📷 사진 첨부
+                      </PhotoPickButton>
                     )}
                   </span>
                   <div className="sub-text">하자 부위 사진 등 최대 {AS_PHOTOS_MAX}장</div>
