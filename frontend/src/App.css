@@ -5548,3 +5548,11 @@ a.btn-quick.blue:hover {
 button.receipt-add,
 button.btn-pay-photo,
 button.paper-add { font: inherit; }
+
+/* 검색 목록(아파트·기사): 휴대폰·태블릿에서 손가락으로 위아래로 넘기기 */
+.apt-suggest,
+.eng-picker-list {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}

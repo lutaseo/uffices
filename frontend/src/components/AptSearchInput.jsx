@@ -118,10 +118,15 @@ export default function AptSearchInput({ value, onChange, onPick, className = 'i
           setOpen(true);
           setActive(0);
         }}
-        onFocus={() => {
+        onFocus={(e) => {
           setOpen(true);
           setActive(0);
           refresh(false);
+          // 휴대폰·태블릿: 키보드가 올라와 목록이 가려지지 않게 검색 칸을 화면 위쪽으로
+          if (window.matchMedia?.('(pointer: coarse)').matches) {
+            const el = e.currentTarget;
+            setTimeout(() => el.scrollIntoView({ block: 'start', behavior: 'smooth' }), 250);
+          }
         }}
         onKeyDown={onKeyDown}
         placeholder={placeholder}
@@ -138,10 +143,13 @@ export default function AptSearchInput({ value, onChange, onPick, className = 'i
               role="option"
               aria-selected={i === active}
               className={i === active ? 'active' : ''}
+              // 마우스: 누르는 순간 선택 / 손가락(휴대폰·태블릿): 끌면 목록이 넘어가고, 톡 누르면(click) 선택
               onPointerDown={(e) => {
+                if (e.pointerType !== 'mouse') return;
                 e.preventDefault();
                 pick(a);
               }}
+              onClick={() => pick(a)}
             >
               <b>
                 <Highlight text={a.name} value={value} />
