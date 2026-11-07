@@ -5477,3 +5477,28 @@ a.btn-quick.blue:hover {
 .fair-chip.mini { font-size: 10px; padding: 0 4px; display: inline-block; margin-top: 2px; }
 .fair-picked { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .fair-picked li { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 4px 10px; max-width: 360px; }
+
+/* 새 버전 안내 띠 (utils/updateCheck.js) */
+.update-banner {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 9999;
+  background: #1a6fe0;
+  color: #fff;
+  text-align: center;
+  padding: 10px 12px;
+  font-size: 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+.update-banner button {
+  background: #fff;
+  color: #1a6fe0;
+  border: 0;
+  border-radius: 4px;
+  padding: 3px 10px;
+  margin: 0 4px;
+  font-weight: bold;
+  cursor: pointer;
+}
