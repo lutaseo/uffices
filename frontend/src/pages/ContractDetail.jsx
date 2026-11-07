@@ -3,7 +3,7 @@ import { contracts as contractApi } from '../api/index.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { BRANDS, CATEGORIES } from '../constants.js';
 
-const TALK_BRAND_ORDER = ['더스타트', '더좋은집'];
+const TALK_BRAND_ORDER = ['더좋은집', '더스타트']; // 상세시공 알림톡 버튼: 더좋은집이 위 (PC·태블릿·모바일 공통)
 import { calcAmounts, isRefund, kindBreakdown, sumAmounts, timeLabel } from '../utils/contract.js';
 import { formatAddress, won } from '../utils/format.js';
 import AsModal from '../components/AsModal.jsx';

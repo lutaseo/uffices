@@ -20,6 +20,28 @@ export function AuthProvider({ children }) {
     refresh();
   }, [refresh]);
 
+  // 화면으로 돌아오면 내 계정 정보(권한)를 다시 읽음 — 관리자가 권한을 바꾸면 다시 로그인하지 않아도 반영
+  //   (10초에 한 번까지, 로그인 상태일 때만 · 실패하면 그대로 둠 — 로그아웃시키지 않음)
+  useEffect(() => {
+    let last = Date.now();
+    const onShow = async () => {
+      if (document.visibilityState !== 'visible' || Date.now() - last < 10000) return;
+      last = Date.now();
+      try {
+        const { user, company } = await auth.me();
+        setState((prev) => (prev.user ? { user, company, loading: false } : prev));
+      } catch {
+        // 연결이 잠깐 끊긴 경우 등 — 다음 요청에서 처리
+      }
+    };
+    document.addEventListener('visibilitychange', onShow);
+    window.addEventListener('focus', onShow);
+    return () => {
+      document.removeEventListener('visibilitychange', onShow);
+      window.removeEventListener('focus', onShow);
+    };
+  }, []);
+
   // kind 'engineer': 기사모바일(/업체주소/m) 로그인 — 기사 계정만, 'manager': 상담실장(/업체주소/t) — 직원 계정만
   const login = useCallback(async (loginId, password, companyCode, kind) => {
     const { user, company } = await auth.login(loginId, password, companyCode, kind);
