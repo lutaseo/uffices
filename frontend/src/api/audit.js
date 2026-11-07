@@ -23,6 +23,8 @@ export const skipAudit = (name) => NO_AUDIT.has(name) || NO_AUDIT_SERVICES.has(S
 // 요청 이름 → 작업 이름 (없으면 '저장')
 const ACTIONS = {
   'contracts.create': '계약 등록',
+  'fairs.save': '박람회 일정 저장',
+  'fairs.remove': '박람회 일정 삭제',
   'contracts.update': '계약 수정',
   'contracts.moveToTrash': '휴지통으로 이동',
   'contracts.setAs': 'AS관리 이동',

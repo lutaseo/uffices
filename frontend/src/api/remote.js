@@ -61,6 +61,7 @@ export const SERVICE_NAMES = [
   'engineerOffs',
   'engineerApp',
   'scheduleSettings',
+  'fairs',
   'imports',
   'customerApp',
 ];

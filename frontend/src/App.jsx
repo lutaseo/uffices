@@ -16,6 +16,7 @@ import ContractPage, { resetContractListView } from './pages/ContractPage.jsx';
 import ConsultHome from './pages/ConsultHome.jsx';
 import CustomerManagement from './components/CustomerManagement.jsx';
 import ScheduleManagement from './components/ScheduleManagement.jsx';
+import FairModal from './components/FairModal.jsx';
 import ProgressStatus from './components/ProgressStatus.jsx';
 import StatsPage from './pages/StatsPage.jsx';
 import AccountManagement from './pages/AccountManagement.jsx';
@@ -201,6 +202,7 @@ function MainLayout({ route }) {
   }, [user.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [openDropdown, setOpenDropdown] = useState(null);
+  const [fairOpen, setFairOpen] = useState(false); // 박람회 일정 등록 팝업
   const current = menus.find((m) => belongsTo(m, path));
   const home = menus[0]?.path || '/me';
 
@@ -276,12 +278,18 @@ function MainLayout({ route }) {
         </nav>
       </header>
 
+      {fairOpen && <FairModal onSaved={() => window.dispatchEvent(new Event('vb:fairs-changed'))} onClose={() => setFairOpen(false)} />}
       <div className="sub-header">
         <div className="quick-btn-group">
           {can('contract.create') && (
             <a className="btn-quick blue" {...linkProps('/contracts/new', go)}>
               + 계약 등록
             </a>
+          )}
+          {can('fair.manage') && (
+            <button type="button" className="btn-quick green" onClick={() => setFairOpen(true)}>
+              🎪 박람회 일정 등록
+            </button>
           )}
         </div>
         <div className="welcome">
