@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import CameraButton, { albumLabel } from './CameraButton.jsx';
 import { contracts as contractApi } from '../api/index.js';
 import { compressImage } from '../utils/image.js';
 import { backdrop } from '../utils/backdrop.js';
@@ -64,10 +65,13 @@ export default function PaymentPhotos({ contractId, payment, onChange }) {
         </span>
       ))}
       {total < MAX_PHOTOS && (
-        <label className="btn-pay-photo" title="영수증 사진 추가 (여러 장 선택 가능)">
-          + 사진
-          <input type="file" accept="image/*" multiple onChange={pick} hidden />
-        </label>
+        <>
+          <CameraButton label="📷 찍기" onChange={pick} />
+          <label className="btn-pay-photo" title="영수증 사진 추가 (여러 장 선택 가능)">
+            {albumLabel('+ 사진', '🖼 앨범')}
+            <input type="file" accept="image/*" multiple onChange={pick} hidden />
+          </label>
+        </>
       )}
       {view && (
         <div className="modal-overlay" {...backdrop(() => setView(null))}>
