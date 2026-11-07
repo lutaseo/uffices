@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
+import PhotoPickButton from '../components/CameraButton.jsx';
 import { contracts as contractApi } from '../api/index.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { BRANDS, CATEGORIES } from '../constants.js';
@@ -932,10 +933,9 @@ function PaperPanel({ contract, canEdit, onChanged }) {
         </span>
       ))}
       {canEdit && count < PAPER_MAX && (
-        <label className={`paper-add ${busy ? 'busy' : ''}`}>
+        <PhotoPickButton className={`paper-add ${busy ? 'busy' : ''}`} onChange={add} disabled={busy}>
           {busy ? '올리는 중...' : '📷 사진 추가'}
-          <input type="file" accept="image/*" multiple onChange={add} hidden disabled={busy} />
-        </label>
+        </PhotoPickButton>
       )}
       {view != null && photos && <PhotoViewer images={photos.map((r) => r.image)} start={view} title={`${contract.customerName} 실물 계약서`} onClose={() => setView(null)} />}
     </div>

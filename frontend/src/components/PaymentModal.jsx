@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import PhotoPickButton from './CameraButton.jsx';
 import { PAYMENT_KINDS, PAYMENT_METHODS, RECEIPT_TYPES } from '../constants.js';
 import { today } from '../utils/date.js';
 import { backdrop } from '../utils/backdrop.js';
@@ -156,11 +157,10 @@ export default function PaymentModal({ contract, payment, onSave, onClose }) {
                       </div>
                     ))}
                     {photoCount < MAX_PHOTOS && (
-                      <label className="receipt-add" title="사진 추가">
+                      <PhotoPickButton className="receipt-add" title="사진 추가" onChange={pickReceipt}>
                         <span className="plus">+</span>
                         <span>사진 추가</span>
-                        <input type="file" accept="image/*" multiple onChange={pickReceipt} hidden />
-                      </label>
+                      </PhotoPickButton>
                     )}
                   </div>
                   {loadingPhotos && <div className="sub-text">저장된 사진 불러오는 중...</div>}

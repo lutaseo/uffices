@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import PhotoPickButton from './CameraButton.jsx';
 import { contracts as contractApi } from '../api/index.js';
 import { compressImage } from '../utils/image.js';
 import { backdrop } from '../utils/backdrop.js';
@@ -64,10 +65,9 @@ export default function PaymentPhotos({ contractId, payment, onChange }) {
         </span>
       ))}
       {total < MAX_PHOTOS && (
-        <label className="btn-pay-photo" title="영수증 사진 추가 (여러 장 선택 가능)">
+        <PhotoPickButton title="영수증 사진 추가 (여러 장 선택 가능)" onChange={pick}>
           + 사진
-          <input type="file" accept="image/*" multiple onChange={pick} hidden />
-        </label>
+        </PhotoPickButton>
       )}
       {view && (
         <div className="modal-overlay" {...backdrop(() => setView(null))}>
