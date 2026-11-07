@@ -1045,6 +1045,33 @@ test('계약자 연결 바로잡기: 예전에 번호만으로 잘못 묶인 계
   assert.equal((await admin.ok('contracts', 'repairCustomerLinks')).fixed, 0, '두 번째는 할 일 없음');
 });
 
+test('박람회 일정: 관리자는 바로, 실장은 권한을 받아야 등록 · 일정 조회 권한이면 달력에서 보임 · 여러 날 · 수정·삭제', async () => {
+  const me = (await manager.ok('auth', 'me')).user;
+  const adminMe = (await admin.ok('auth', 'me')).user;
+  assert.equal((await admin('fairs', 'save', { date: '2026-12-05', place: '', staffIds: [me.id] })).status, 400, '장소 필수');
+  assert.equal((await admin('fairs', 'save', { date: '2026-12-05', place: '지제역 필해링턴 - 장소 수원', staffIds: [] })).status, 400, '가는 실장 필수');
+  assert.equal((await admin('fairs', 'save', { date: '2026-12-05', endDate: '2026-12-01', place: 'x', staffIds: [me.id] })).status, 400, '끝나는 날짜가 앞이면 안 됨');
+  const f = await admin.ok('fairs', 'save', { date: '2026-12-05', endDate: '2026-12-07', place: '지제역 필해링턴 - 장소 수원', staffIds: [me.id, adminMe.id, 999999] });
+  assert.deepEqual(f.staff.map((x) => x.name).sort(), [me.name, adminMe.name].sort(), '없는 사람은 빠지고 이름이 붙음');
+  // 실장: 일정 조회 권한이 있으면 달력에서 봄 (여러 날 박람회는 기간이 겹치면)
+  const seen = await manager.ok('fairs', 'list', { from: '2026-12-06', to: '2026-12-06' });
+  assert.ok(seen.some((x) => x.id === f.id && x.place.includes('필해링턴')));
+  assert.equal((await manager.ok('fairs', 'list', { from: '2026-12-08', to: '2026-12-31' })).some((x) => x.id === f.id), false);
+  // 실장은 권한이 없으면 등록·수정·삭제 불가 → 관리자가 사용자관리에서 권한 주면 가능
+  assert.ok(!(await manager.ok('auth', 'me')).user.permissions.includes('fair.manage'), '실장 기본 권한에는 없음');
+  assert.equal((await manager('fairs', 'save', { date: '2026-12-10', place: '실장 등록', staffIds: [me.id] })).status, 403);
+  assert.equal((await manager('fairs', 'remove', f.id)).status, 403);
+  const u = (await admin.ok('users', 'list')).find((x) => x.id === me.id);
+  await admin.ok('users', 'update', u.id, { permissions: [...u.permissions, 'fair.manage'] });
+  const mine = await manager.ok('fairs', 'save', { date: '2026-12-10', place: '실장 등록', staffIds: [me.id] });
+  await manager.ok('fairs', 'save', { id: mine.id, date: '2026-12-11', place: '실장 등록 (바뀜)', staffIds: [me.id] });
+  assert.equal((await manager.ok('fairs', 'list', { from: '2026-12-11', to: '2026-12-11' })).find((x) => x.id === mine.id).place, '실장 등록 (바뀜)');
+  await manager.ok('fairs', 'remove', mine.id);
+  await admin.ok('fairs', 'remove', f.id);
+  assert.equal((await admin.ok('fairs', 'list', { from: '2026-12-01', to: '2026-12-31' })).length, 0, '삭제됨');
+  await admin.ok('users', 'update', u.id, { permissions: u.permissions }); // 다른 시험에 영향 없게 되돌림
+});
+
 test('상품 줄: 상품명 없이 금액만 있는 줄은 저장을 막고(금액이 사라지지 않게), 완전히 빈 줄은 무시', async () => {
   const bad = await admin('contracts', 'create', { ...base, customerName: '빈줄고객', customerPhone: '010-9191-8282', lineItems: [{ name: '', qty: 1, unitPrice: 300000 }] });
   assert.equal(bad.status, 400);

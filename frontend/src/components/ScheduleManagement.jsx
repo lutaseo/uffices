@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   contracts as contractApi,
   engineerOffs as offApi,
+  fairs as fairApi,
   engineers as engineerApi,
   schedules as scheduleApi,
   teams as teamApi,
@@ -16,6 +17,7 @@ import KakaoModal from './KakaoModal.jsx';
 import WorkRecord from './WorkRecord.jsx';
 import ContractViewModal from './ContractViewModal.jsx';
 import OffModal from './OffModal.jsx';
+import FairModal from './FairModal.jsx';
 import { backdrop } from '../utils/backdrop.js';
 import { navigateForward } from '../router.js';
 import { useRefreshOnReturn } from '../utils/useRefreshOnReturn.js';
@@ -39,6 +41,8 @@ export default function ScheduleManagement() {
   const [selectedDate, setSelectedDate] = useState(saved?.selectedDate || null);
   const [items, setItems] = useState([]);
   const [offs, setOffs] = useState([]);
+  const [fairList, setFairList] = useState([]); // 박람회 일정 (달력에 초록색)
+  const [fairEdit, setFairEdit] = useState(null); // { fair } 또는 { date } — 박람회 팝업
   const [engineers, setEngineers] = useState([]);
   const [crewTeams, setCrewTeams] = useState([]);
   const [filter, setFilter] = useState({ category: '', engineerId: '', status: '', view: '' });
@@ -54,12 +58,14 @@ export default function ScheduleManagement() {
   const load = useCallback(async () => {
     try {
       const { view, ...query } = filter;
-      const [sch, off] = await Promise.all([
+      const [sch, off, fr] = await Promise.all([
         scheduleApi.list({ from: monthStart, to: monthEnd, ...query }),
         offApi.list({ from: monthStart, to: monthEnd, engineerId: filter.engineerId === 'none' ? '' : filter.engineerId }),
+        fairApi.list({ from: monthStart, to: monthEnd }).catch(() => []),
       ]);
       setItems(sch);
       setOffs(off);
+      setFairList(fr);
     } catch (e) {
       handleError(e);
     }
@@ -69,6 +75,11 @@ export default function ScheduleManagement() {
     load();
   }, [load]);
   useRefreshOnReturn(load); // 기사가 휴대폰에서 등록한 휴무도 다시 보면 반영
+  // 위쪽 [박람회 일정 등록]으로 저장하면 달력도 바로 다시 불러옴
+  useEffect(() => {
+    window.addEventListener('vb:fairs-changed', load);
+    return () => window.removeEventListener('vb:fairs-changed', load);
+  }, [load]);
 
   useEffect(() => {
     engineerApi.list().then(setEngineers).catch(() => {});
@@ -106,6 +117,9 @@ export default function ScheduleManagement() {
     });
     return map;
   }, [offs]);
+
+  // 박람회: 날짜별 (여러 날 박람회는 그 기간 모든 날짜에)
+  const fairsOn = (dateKey) => fairList.filter((f) => f.date <= dateKey && (f.endDate || f.date) >= dateKey);
 
   // 날짜 칸에 "줄)공두환 : 2건" 형태로 담당별 건수 표시
   const cellSummary = (list) => {
@@ -252,7 +266,7 @@ export default function ScheduleManagement() {
           {WORK_STATUS.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
         <span className="sub-text" style={{ alignSelf: 'center' }}>
-          이번 달 일정 {items.length}건 · 휴무 {offs.length}건
+          이번 달 일정 {items.length}건 · 휴무 {offs.length}건{fairList.length > 0 && ` · 박람회 ${fairList.length}건`}
         </span>
       </div>
 
@@ -297,6 +311,14 @@ export default function ScheduleManagement() {
                       )}
                       {list.length > 0 && <span className="day-total">{list.length}건</span>}
                     </div>
+                    {fairsOn(dateKey).map((f) => (
+                      <div key={`fair${f.id}`} className="fair-box" title={`박람회: ${f.place}\n${f.staff.map((s) => s.name).join(', ')}`}>
+                        <span className="fair-box-title">박람회</span>
+                        {f.staff.map((s) => (
+                          <span key={s.id} className="fair-name">{s.name}</span>
+                        ))}
+                      </div>
+                    ))}
                     {offList.length > 0 && (
                       <div className="off-box" title={offList.map((o) => `${o.engineerName} ${OFF_LABEL[o.period]}휴무: ${o.reason}`).join('\n')}>
                         <div className="off-box-title">휴무</div>
@@ -338,6 +360,11 @@ export default function ScheduleManagement() {
                     + 휴무 등록
                   </button>
                 )}
+                {can('fair.manage') && (
+                  <button type="button" className="btn-excel-download fair-add" onClick={() => setFairEdit({ date: selectedDate })}>
+                    + 박람회
+                  </button>
+                )}
                 {can('excel.export') && (
                   <button type="button" className="btn-excel-download" onClick={exportDay}>엑셀 다운로드</button>
                 )}
@@ -345,6 +372,23 @@ export default function ScheduleManagement() {
               </div>
             </div>
 
+            {selectedDate && fairsOn(selectedDate).length > 0 && (
+              <div className="day-fair-list">
+                {fairsOn(selectedDate).map((f) => (
+                  <div key={f.id} className="day-fair-row">
+                    <span className="fair-chip">박람회</span>
+                    <strong className="fair-names">{f.staff.map((s) => s.name).join(', ')}</strong>
+                    <span>{f.place}</span>
+                    {f.endDate && <span className="sub-text">({f.date} ~ {f.endDate})</span>}
+                    {can('fair.manage') && (
+                      <button type="button" className="btn-link" onClick={() => setFairEdit({ fair: f })}>
+                        수정/삭제
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
             {dayOffs.length > 0 && (
               <div className="day-off-list">
                 {dayOffs.map((o) => (
@@ -549,6 +593,7 @@ export default function ScheduleManagement() {
         <KakaoModal contract={notifyItem.contract} initialTarget="기사" initialStep={notifyItem.stepIndex} onClose={() => setNotifyItem(null)} />
       )}
       {viewId && <ContractViewModal contractId={viewId} onClose={() => setViewId(null)} onChanged={load} />}
+      {fairEdit && <FairModal fair={fairEdit.fair || null} initialDate={fairEdit.date} onSaved={load} onClose={() => setFairEdit(null)} />}
     </div>
   );
 }

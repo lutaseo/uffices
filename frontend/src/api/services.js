@@ -41,7 +41,7 @@ import {
 
 export { ApiError } from './core.js';
 export { contracts, esign, notifications, reports, imports, customerApp } from './contracts.js';
-export { schedules, engineerOffs, engineerApp, scheduleSettings } from './schedule.js';
+export { schedules, engineerOffs, engineerApp, scheduleSettings, fairs } from './schedule.js';
 
 // ============================================================
 // 수정 로그 (설정 > 수정로그, 업체 관리자) — 최근 2주, 서버가 저장할 때 자동 기록

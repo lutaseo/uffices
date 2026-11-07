@@ -5377,3 +5377,100 @@ a.btn-quick.blue:hover {
   margin-left: 6px;
   vertical-align: middle;
 }
+
+/* ---------- 박람회 일정 (초록색) ---------- */
+.btn-quick.green {
+  background: #15803d;
+  border-color: #15803d;
+  color: #fff;
+  font-weight: bold;
+  margin-left: 6px;
+}
+.btn-quick.green:hover { background: #166534; }
+.fair-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 4px;
+  align-items: center;
+  background: #dcfce7;
+  border: 1px solid #86efac;
+  border-radius: 4px;
+  padding: 1px 4px;
+  margin: 2px 0;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.fair-box-title {
+  background: #15803d;
+  color: #fff;
+  border-radius: 3px;
+  padding: 0 4px;
+  font-weight: bold;
+}
+.fair-name,
+.fair-names {
+  color: #15803d;
+  font-weight: bold;
+}
+.day-fair-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.day-fair-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+.fair-chip {
+  background: #15803d;
+  color: #fff;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 12px;
+  font-weight: bold;
+}
+.btn-excel-download.fair-add { background: #15803d; border-color: #15803d; color: #fff; }
+.fair-staff {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.fair-staff-chip {
+  border: 1px solid #d1d5db;
+  border-radius: 16px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.fair-staff-chip.on {
+  border-color: #15803d;
+  background: #dcfce7;
+  color: #15803d;
+  font-weight: bold;
+}
+.fair-upcoming {
+  margin-top: 14px;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 10px;
+}
+.fair-upcoming h4 { margin: 0 0 6px; font-size: 14px; }
+.fair-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 4px;
+  border-bottom: 1px dashed #e5e7eb;
+  font-size: 13px;
+}
+.fair-row.editing { background: #f0fdf4; }
+.fair-row .fair-date { white-space: nowrap; font-weight: bold; }
+.fair-row .fair-place { flex: 1; min-width: 140px; }
+.fair-row .fair-actions { margin-left: auto; white-space: nowrap; }

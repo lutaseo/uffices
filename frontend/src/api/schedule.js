@@ -27,6 +27,7 @@ import {
   readableContracts,
 } from './core.js';
 import { addHistory, assigneeOf, contractView } from './views.js';
+import { ROLES } from '../auth/permissions.js';
 import { numberOf } from './numbering.js';
 import { DEFAULT_SCHEDULE_SETTINGS, MOBILE_STATUS, OFF_LABEL } from '../constants.js';
 import { inRange, isDateKey, today } from '../utils/date.js';
@@ -276,6 +277,66 @@ export const scheduleSettings = {
     company.scheduleSettings = { amEnd: data.amEnd, startTime: data.startTime, endTime: data.endTime, interval, maxPerDay, materials };
     saveDb(db);
     return clone(company.scheduleSettings);
+  },
+};
+
+// ============================================================
+// 박람회 일정   (계약관리 위 [박람회 일정 등록] → 일정관리 달력에 초록색으로)
+//   업체 설정(company.fairs)에 보관: { id, date, endDate, place, staffIds, createdBy, createdAt }
+//   등록·수정·삭제: 관리자 또는 '박람회 일정 등록' 권한 / 보기: 일정 조회 권한 또는 등록 권한
+// ============================================================
+
+const fairView = (db, f) => ({
+  ...clone(f),
+  staff: (f.staffIds || []).map((id) => db.users.find((u) => u.id === id)).filter(Boolean).map((u) => ({ id: u.id, name: u.name })),
+});
+
+export const fairs = {
+  // from~to 와 겹치는 박람회 (여러 날 박람회는 기간이 겹치면 포함)
+  async list({ from, to } = {}) {
+    const { db, user } = await authorizeAny(['schedule.view', 'fair.manage']);
+    return (companyOf(db, user)?.fairs || [])
+      .filter((f) => (!to || f.date <= to) && (!from || (f.endDate || f.date) >= from))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)
+      .map((f) => fairView(db, f));
+  },
+
+  // 등록(id 없음) / 수정(id 있음)
+  async save(data = {}) {
+    const { db, user } = await authorize('fair.manage');
+    const company = companyOf(db, user);
+    const date = String(data.date || '');
+    const endDate = data.endDate ? String(data.endDate) : '';
+    if (!isDateKey(date)) throw new ApiError('박람회 날짜를 골라 주세요.');
+    if (endDate && (!isDateKey(endDate) || endDate < date)) throw new ApiError('끝나는 날짜는 시작 날짜와 같거나 뒤여야 합니다.');
+    const place = String(data.place || '').trim().slice(0, 100);
+    if (!place) throw new ApiError('박람회 장소를 적어 주세요. (예: 지제역 필해링턴 - 장소 수원)');
+    const staffIds = [...new Set((Array.isArray(data.staffIds) ? data.staffIds : []).map(Number))].filter((id) =>
+      db.users.some((u) => u.id === id && u.companyId === user.companyId && u.role !== ROLES.SUPER),
+    );
+    if (!staffIds.length) throw new ApiError('박람회에 가는 실장을 한 명 이상 골라 주세요.');
+    company.fairs = company.fairs || [];
+    const fields = { date, endDate: endDate && endDate !== date ? endDate : '', place, staffIds, updatedAt: nowIso() };
+    let fair;
+    if (data.id) {
+      fair = company.fairs.find((f) => f.id === Number(data.id));
+      if (!fair) throw new ApiError('박람회 일정을 찾을 수 없습니다.', 'NOT_FOUND');
+      Object.assign(fair, fields);
+    } else {
+      fair = { id: Math.max(0, ...company.fairs.map((f) => f.id)) + 1, ...fields, createdBy: user.id, createdAt: nowIso() };
+      company.fairs.push(fair);
+    }
+    saveDb(db);
+    return fairView(db, fair);
+  },
+
+  async remove(id) {
+    const { db, user } = await authorize('fair.manage');
+    const company = companyOf(db, user);
+    const before = (company.fairs || []).length;
+    company.fairs = (company.fairs || []).filter((f) => f.id !== Number(id));
+    if (company.fairs.length === before) throw new ApiError('박람회 일정을 찾을 수 없습니다.', 'NOT_FOUND');
+    saveDb(db);
   },
 };
 
