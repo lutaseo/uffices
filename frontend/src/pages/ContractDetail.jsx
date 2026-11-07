@@ -385,7 +385,7 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
                     <div className="talk-btn-grid">
                       {talkBrands.map((b) =>
                         ['계약완료', '기사배정'].map((t) => (
-                          <button key={t + b} type="button" className="btn-talk-sm" onClick={() => setKakao({ contract: c, template: t, brand: b })}>
+                          <button key={t + b} type="button" className={`btn-talk-sm ${b === '더스타트' ? 'brand-start' : ''}`} onClick={() => setKakao({ contract: c, template: t, brand: b })}>
                             💬 {t}({b})
                           </button>
                         )),

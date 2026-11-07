@@ -5502,3 +5502,11 @@ a.btn-quick.blue:hover {
   font-weight: bold;
   cursor: pointer;
 }
+
+/* 상세시공 알림톡: 더스타트 버튼은 [박람회 일정 등록]과 같은 초록색 */
+.btn-talk-sm.brand-start {
+  background: #15803d;
+  border-color: #15803d;
+  color: #fff;
+}
+.btn-talk-sm.brand-start:hover { background: #166534; border-color: #166534; }
