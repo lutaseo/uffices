@@ -119,6 +119,7 @@ export default function ScheduleManagement() {
   }, [offs]);
 
   // 박람회: 날짜별 (여러 날 박람회는 그 기간 모든 날짜에)
+  const fairPeople = (f) => [...(f.engineers || []).map((e) => e.name), ...f.staff.map((s) => s.name)]; // 기사 (예전 박람회는 실장도)
   const fairsOn = (dateKey) => fairList.filter((f) => f.date <= dateKey && (f.endDate || f.date) >= dateKey);
 
   // 날짜 칸에 "줄)공두환 : 2건" 형태로 담당별 건수 표시
@@ -312,10 +313,10 @@ export default function ScheduleManagement() {
                       {list.length > 0 && <span className="day-total">{list.length}건</span>}
                     </div>
                     {fairsOn(dateKey).map((f) => (
-                      <div key={`fair${f.id}`} className="fair-box" title={`박람회: ${f.place}\n${f.staff.map((s) => s.name).join(', ')}`}>
+                      <div key={`fair${f.id}`} className="fair-box" title={`박람회: ${f.label}\n${fairPeople(f).join(', ')}`}>
                         <span className="fair-box-title">박람회</span>
-                        {f.staff.map((s) => (
-                          <span key={s.id} className="fair-name">{s.name}</span>
+                        {fairPeople(f).map((n, i) => (
+                          <span key={i} className="fair-name">{n}</span>
                         ))}
                       </div>
                     ))}
@@ -377,8 +378,8 @@ export default function ScheduleManagement() {
                 {fairsOn(selectedDate).map((f) => (
                   <div key={f.id} className="day-fair-row">
                     <span className="fair-chip">박람회</span>
-                    <strong className="fair-names">{f.staff.map((s) => s.name).join(', ')}</strong>
-                    <span>{f.place}</span>
+                    <strong className="fair-names">{fairPeople(f).join(', ')}</strong>
+                    <span>{f.label}</span>
                     {f.endDate && <span className="sub-text">({f.date} ~ {f.endDate})</span>}
                     {can('fair.manage') && (
                       <button type="button" className="btn-link" onClick={() => setFairEdit({ fair: f })}>

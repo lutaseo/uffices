@@ -123,6 +123,7 @@ const READ_ONLY = new Set([
   'companies.publicInfo',
   'scheduleSettings.get',
   'fairs.list',
+  'engineerApp.myFairs',
 ]);
 
 // 트래픽 절약: 자주 불리는 가벼운 요청은 필요한 업체 표만 읽음 (나머지는 계약 등 전체)
@@ -148,6 +149,7 @@ const LIGHT_TABLES = {
   'fairs.list': [], // 박람회 일정: 업체 표만 (계약은 읽지 않음)
   'fairs.save': [],
   'fairs.remove': [],
+  'engineerApp.myFairs': [],
   'notifications.gatewayStatus': [],
   'notifications.testSend': [],
   'notifications.testResult': [],

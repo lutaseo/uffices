@@ -1045,29 +1045,43 @@ test('계약자 연결 바로잡기: 예전에 번호만으로 잘못 묶인 계
   assert.equal((await admin.ok('contracts', 'repairCustomerLinks')).fixed, 0, '두 번째는 할 일 없음');
 });
 
-test('박람회 일정: 관리자는 바로, 실장은 권한을 받아야 등록 · 일정 조회 권한이면 달력에서 보임 · 여러 날 · 수정·삭제', async () => {
+test('박람회 일정: 이름·장소, 관리자는 바로·실장은 권한 받아야 등록, 본인이 포함된 것만 보임(실장·기사), 여러 날, 수정·삭제', async () => {
   const me = (await manager.ok('auth', 'me')).user;
   const adminMe = (await admin.ok('auth', 'me')).user;
-  assert.equal((await admin('fairs', 'save', { date: '2026-12-05', place: '', staffIds: [me.id] })).status, 400, '장소 필수');
-  assert.equal((await admin('fairs', 'save', { date: '2026-12-05', place: '지제역 필해링턴 - 장소 수원', staffIds: [] })).status, 400, '가는 실장 필수');
-  assert.equal((await admin('fairs', 'save', { date: '2026-12-05', endDate: '2026-12-01', place: 'x', staffIds: [me.id] })).status, 400, '끝나는 날짜가 앞이면 안 됨');
-  const f = await admin.ok('fairs', 'save', { date: '2026-12-05', endDate: '2026-12-07', place: '지제역 필해링턴 - 장소 수원', staffIds: [me.id, adminMe.id, 999999] });
-  assert.deepEqual(f.staff.map((x) => x.name).sort(), [me.name, adminMe.name].sort(), '없는 사람은 빠지고 이름이 붙음');
-  // 실장: 일정 조회 권한이 있으면 달력에서 봄 (여러 날 박람회는 기간이 겹치면)
+  const eng = (await admin.ok('engineers', 'list')).find((e) => e.loginId === 'gong');
+  const gong = client(); await gong.ok('auth', 'login', 'gong', 'gong1234', '', 'engineer');
+  assert.equal((await admin('fairs', 'save', { date: '2026-12-05', name: '', place: '', staffIds: [me.id] })).status, 400, '이름 필수');
+  assert.equal((await admin('fairs', 'save', { date: '2026-12-05', name: '지제역 필해링턴', staffIds: [], engineerIds: [] })).status, 400, '가는 사람 필수');
+  assert.equal((await admin('fairs', 'save', { date: '2026-12-05', endDate: '2026-12-01', name: 'x', staffIds: [me.id] })).status, 400, '끝나는 날짜가 앞이면 안 됨');
+  // 관리자만 가는 박람회 / 실장+기사가 가는 박람회
+  const onlyAdmin = await admin.ok('fairs', 'save', { date: '2026-12-05', name: '관리자 박람회', place: '서울', staffIds: [adminMe.id] });
+  const f = await admin.ok('fairs', 'save', { date: '2026-12-05', endDate: '2026-12-07', name: '지제역 필해링턴', place: '수원', staffIds: [me.id, 999999], engineerIds: [eng.id, 999999] });
+  assert.equal(f.label, '지제역 필해링턴 (수원)');
+  assert.deepEqual(f.staff.map((x) => x.name), [me.name], '없는 사람은 빠짐');
+  assert.deepEqual(f.engineers.map((x) => x.name), [eng.name]);
+  // 실장: 본인이 포함된 것만 (관리자 박람회는 안 보임), 여러 날 박람회는 기간이 겹치면
   const seen = await manager.ok('fairs', 'list', { from: '2026-12-06', to: '2026-12-06' });
-  assert.ok(seen.some((x) => x.id === f.id && x.place.includes('필해링턴')));
+  assert.deepEqual(seen.map((x) => x.id), [f.id], '본인 것만');
+  assert.equal((await manager.ok('fairs', 'list', { from: '2026-12-05', to: '2026-12-05' })).some((x) => x.id === onlyAdmin.id), false, '남의 박람회는 안 보임');
   assert.equal((await manager.ok('fairs', 'list', { from: '2026-12-08', to: '2026-12-31' })).some((x) => x.id === f.id), false);
+  assert.equal((await admin.ok('fairs', 'list', { from: '2026-12-05', to: '2026-12-05' })).length, 2, '관리자는 전부');
+  // 기사: 기사모바일에서 본인이 포함된 것만
+  const mineEng = await gong.ok('engineerApp', 'myFairs', { from: '2026-12-01', to: '2026-12-31' });
+  assert.deepEqual(mineEng.map((x) => x.label), ['지제역 필해링턴 (수원)']);
   // 실장은 권한이 없으면 등록·수정·삭제 불가 → 관리자가 사용자관리에서 권한 주면 가능
   assert.ok(!(await manager.ok('auth', 'me')).user.permissions.includes('fair.manage'), '실장 기본 권한에는 없음');
-  assert.equal((await manager('fairs', 'save', { date: '2026-12-10', place: '실장 등록', staffIds: [me.id] })).status, 403);
+  assert.equal((await manager('fairs', 'save', { date: '2026-12-10', name: '실장 등록', staffIds: [me.id] })).status, 403);
   assert.equal((await manager('fairs', 'remove', f.id)).status, 403);
   const u = (await admin.ok('users', 'list')).find((x) => x.id === me.id);
   await admin.ok('users', 'update', u.id, { permissions: [...u.permissions, 'fair.manage'] });
-  const mine = await manager.ok('fairs', 'save', { date: '2026-12-10', place: '실장 등록', staffIds: [me.id] });
-  await manager.ok('fairs', 'save', { id: mine.id, date: '2026-12-11', place: '실장 등록 (바뀜)', staffIds: [me.id] });
-  assert.equal((await manager.ok('fairs', 'list', { from: '2026-12-11', to: '2026-12-11' })).find((x) => x.id === mine.id).place, '실장 등록 (바뀜)');
-  await manager.ok('fairs', 'remove', mine.id);
-  await admin.ok('fairs', 'remove', f.id);
+  const mine = await manager.ok('fairs', 'save', { date: '2026-12-10', name: '실장 등록', staffIds: [me.id] });
+  await manager.ok('fairs', 'save', { id: mine.id, date: '2026-12-11', name: '실장 등록 (바뀜)', place: '평택', staffIds: [me.id] });
+  assert.equal((await manager.ok('fairs', 'list', { from: '2026-12-11', to: '2026-12-11' })).find((x) => x.id === mine.id).label, '실장 등록 (바뀜) (평택)');
+  // 예전 화면(장소 한 칸)으로 보내도 이름으로 저장
+  const old = await admin.ok('fairs', 'save', { date: '2026-12-20', place: '예전 방식', staffIds: [adminMe.id] });
+  assert.equal(old.name, '예전 방식');
+  for (const x of [mine.id]) await manager.ok('fairs', 'remove', x);
+  for (const x of [f.id, onlyAdmin.id, old.id]) await admin.ok('fairs', 'remove', x);
   assert.equal((await admin.ok('fairs', 'list', { from: '2026-12-01', to: '2026-12-31' })).length, 0, '삭제됨');
   await admin.ok('users', 'update', u.id, { permissions: u.permissions }); // 다른 시험에 영향 없게 되돌림
 });

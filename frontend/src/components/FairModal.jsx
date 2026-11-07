@@ -1,23 +1,25 @@
 import React, { useEffect, useState } from 'react';
-import { fairs as fairApi, users as userApi } from '../api/index.js';
+import { engineers as engineerApi, fairs as fairApi } from '../api/index.js';
+import EngineerPicker from './EngineerPicker.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { backdrop } from '../utils/backdrop.js';
 import { today } from '../utils/date.js';
-import { ROLES } from '../auth/permissions.js';
 
 // 박람회 일정 등록 팝업 (계약관리 위 [박람회 일정 등록], 일정관리 달력의 박람회 [수정])
-//   날짜(여러 날이면 끝나는 날짜도) · 장소 · 가는 실장 → 일정관리 달력에 실장 이름이 초록색으로
+//   날짜(여러 날이면 끝나는 날짜도) · 박람회 이름 · 장소 · 가는 기사(검색해서 추가) → 일정관리 달력에 기사 이름이 초록색으로
 //   fair: 고칠 박람회 (없으면 새로 등록), initialDate: 새로 등록할 때 처음 날짜, onSaved: 저장·삭제 뒤
 //   오류는 창 안에 표시 (카카오톡 등 앱 안 브라우저는 alert 창을 막기도 함)
 export default function FairModal({ fair = null, initialDate, onSaved, onClose }) {
-  const { user, handleError } = useAuth();
+  const { handleError } = useAuth();
   const [form, setForm] = useState({
     date: fair?.date || initialDate || today(),
     endDate: fair?.endDate || '',
+    name: fair?.name || '',
     place: fair?.place || '',
-    staffIds: fair?.staffIds || (user.role === ROLES.MANAGER ? [user.id] : []),
+    staffIds: fair?.staffIds || [], // 예전에 고른 실장 (지금은 기사만 고름 — 고쳐 저장해도 그대로 둠)
+    engineerIds: fair?.engineerIds || [],
   });
-  const [staff, setStaff] = useState([]);
+  const [engineerList, setEngineerList] = useState([]);
   const [upcoming, setUpcoming] = useState([]);
   const [editing, setEditing] = useState(fair);
   const [error, setError] = useState('');
@@ -29,24 +31,23 @@ export default function FairModal({ fair = null, initialDate, onSaved, onClose }
       .then(setUpcoming)
       .catch(() => {});
   useEffect(() => {
-    userApi
-      .staffOptions()
-      .then((list) => setStaff(list.filter((u) => u.role !== ROLES.ENGINEER)))
+    engineerApi
+      .list()
+      .then((list) => setEngineerList(list.filter((e) => e.active !== false)))
       .catch(() => {});
     loadUpcoming();
   }, []);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-  const toggleStaff = (id) => set('staffIds', form.staffIds.includes(id) ? form.staffIds.filter((x) => x !== id) : [...form.staffIds, id]);
   const startEdit = (f) => {
     setEditing(f);
     setError('');
-    setForm({ date: f.date, endDate: f.endDate || '', place: f.place, staffIds: f.staffIds || [] });
+    setForm({ date: f.date, endDate: f.endDate || '', name: f.name || '', place: f.place || '', staffIds: f.staffIds || [], engineerIds: f.engineerIds || [] });
   };
   const startNew = () => {
     setEditing(null);
     setError('');
-    setForm({ date: initialDate || today(), endDate: '', place: '', staffIds: user.role === ROLES.MANAGER ? [user.id] : [] });
+    setForm({ date: initialDate || today(), endDate: '', name: '', place: '', staffIds: [], engineerIds: [] });
   };
 
   const run = async (fn) => {
@@ -72,7 +73,7 @@ export default function FairModal({ fair = null, initialDate, onSaved, onClose }
   };
 
   const remove = (f) => {
-    if (!window.confirm(`${f.date} ${f.place} 박람회 일정을 삭제하시겠습니까?`)) return;
+    if (!window.confirm(`${f.date} ${f.label} 박람회 일정을 삭제하시겠습니까?`)) return;
     run(async () => {
       await fairApi.remove(f.id);
       if (editing?.id === f.id) startNew();
@@ -101,29 +102,48 @@ export default function FairModal({ fair = null, initialDate, onSaved, onClose }
                 </td>
               </tr>
               <tr>
-                <td className="label-col">장소<span className="star">*</span></td>
+                <td className="label-col">박람회 이름<span className="star">*</span></td>
                 <td className="input-col">
                   <input
                     className="input-text full"
-                    value={form.place}
-                    onChange={(e) => set('place', e.target.value)}
-                    placeholder="예: 지제역 필해링턴 - 장소 수원"
-                    maxLength={100}
+                    value={form.name}
+                    onChange={(e) => set('name', e.target.value)}
+                    placeholder="예: 지제역 필해링턴"
+                    maxLength={60}
                     autoFocus={!editing}
                   />
                 </td>
               </tr>
               <tr>
-                <td className="label-col">가는 실장<span className="star">*</span></td>
+                <td className="label-col">장소</td>
                 <td className="input-col">
-                  <div className="fair-staff">
-                    {staff.map((u) => (
-                      <label key={u.id} className={`fair-staff-chip ${form.staffIds.includes(u.id) ? 'on' : ''}`}>
-                        <input type="checkbox" checked={form.staffIds.includes(u.id)} onChange={() => toggleStaff(u.id)} /> {u.name}
-                      </label>
-                    ))}
-                  </div>
-                  <div className="sub-text">일정관리 달력에 고른 실장 이름이 초록색으로 표시됩니다.</div>
+                  <input className="input-text full" value={form.place} onChange={(e) => set('place', e.target.value)} placeholder="예: 수원" maxLength={60} />
+                </td>
+              </tr>
+              <tr>
+                <td className="label-col">가는 기사<span className="star">*</span></td>
+                <td className="input-col">
+                  {/* 이름(또는 전화번호 뒷자리)으로 검색해서 고르면 아래 목록에 쌓임 */}
+                  <EngineerPicker
+                    key={form.engineerIds.join(',')}
+                    value=""
+                    engineers={engineerList.filter((e) => !form.engineerIds.includes(e.id))}
+                    onChange={(id) => id && set('engineerIds', [...form.engineerIds, Number(id)])}
+                    placeholder="기사 이름 검색해서 추가"
+                  />
+                  {form.engineerIds.length > 0 && (
+                    <ul className="fair-picked">
+                      {form.engineerIds.map((id) => (
+                        <li key={id}>
+                          <span className="fair-name">{engineerList.find((e) => e.id === id)?.name || '(사용 안 하는 기사)'}</span>
+                          <button type="button" className="btn-link text-red" onClick={() => set('engineerIds', form.engineerIds.filter((x) => x !== id))}>
+                            빼기
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="sub-text">고른 기사 이름이 일정관리 달력에 초록색으로 표시되고, 그 기사의 기사모바일에는 <b>본인이 포함된 박람회만</b> 보입니다.</div>
                 </td>
               </tr>
             </tbody>
@@ -144,8 +164,8 @@ export default function FairModal({ fair = null, initialDate, onSaved, onClose }
             {upcoming.map((f) => (
               <div key={f.id} className={`fair-row ${editing?.id === f.id ? 'editing' : ''}`}>
                 <span className="fair-date">{f.endDate ? `${f.date} ~ ${f.endDate}` : f.date}</span>
-                <span className="fair-place">{f.place}</span>
-                <span className="fair-names">{f.staff.map((s) => s.name).join(', ')}</span>
+                <span className="fair-place">{f.label}</span>
+                <span className="fair-names">{[...f.staff, ...(f.engineers || [])].map((s) => s.name).join(', ')}</span>
                 <span className="fair-actions">
                   <button type="button" className="btn-link" onClick={() => startEdit(f)}>수정</button>
                   <button type="button" className="btn-link text-red" onClick={() => remove(f)}>삭제</button>
