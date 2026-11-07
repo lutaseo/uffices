@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { fairs as fairApi, users as userApi } from '../api/index.js';
+import { engineers as engineerApi, fairs as fairApi, users as userApi } from '../api/index.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { backdrop } from '../utils/backdrop.js';
 import { today } from '../utils/date.js';
@@ -14,10 +14,13 @@ export default function FairModal({ fair = null, initialDate, onSaved, onClose }
   const [form, setForm] = useState({
     date: fair?.date || initialDate || today(),
     endDate: fair?.endDate || '',
+    name: fair?.name || '',
     place: fair?.place || '',
     staffIds: fair?.staffIds || (user.role === ROLES.MANAGER ? [user.id] : []),
+    engineerIds: fair?.engineerIds || [],
   });
   const [staff, setStaff] = useState([]);
+  const [engineerList, setEngineerList] = useState([]);
   const [upcoming, setUpcoming] = useState([]);
   const [editing, setEditing] = useState(fair);
   const [error, setError] = useState('');
@@ -33,20 +36,25 @@ export default function FairModal({ fair = null, initialDate, onSaved, onClose }
       .staffOptions()
       .then((list) => setStaff(list.filter((u) => u.role !== ROLES.ENGINEER)))
       .catch(() => {});
+    engineerApi
+      .list()
+      .then((list) => setEngineerList(list.filter((e) => e.active !== false)))
+      .catch(() => {});
     loadUpcoming();
   }, []);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-  const toggleStaff = (id) => set('staffIds', form.staffIds.includes(id) ? form.staffIds.filter((x) => x !== id) : [...form.staffIds, id]);
+  const toggleIn = (key, id) => set(key, form[key].includes(id) ? form[key].filter((x) => x !== id) : [...form[key], id]);
+  const toggleStaff = (id) => toggleIn('staffIds', id);
   const startEdit = (f) => {
     setEditing(f);
     setError('');
-    setForm({ date: f.date, endDate: f.endDate || '', place: f.place, staffIds: f.staffIds || [] });
+    setForm({ date: f.date, endDate: f.endDate || '', name: f.name || '', place: f.place || '', staffIds: f.staffIds || [], engineerIds: f.engineerIds || [] });
   };
   const startNew = () => {
     setEditing(null);
     setError('');
-    setForm({ date: initialDate || today(), endDate: '', place: '', staffIds: user.role === ROLES.MANAGER ? [user.id] : [] });
+    setForm({ date: initialDate || today(), endDate: '', name: '', place: '', staffIds: user.role === ROLES.MANAGER ? [user.id] : [], engineerIds: [] });
   };
 
   const run = async (fn) => {
@@ -72,7 +80,7 @@ export default function FairModal({ fair = null, initialDate, onSaved, onClose }
   };
 
   const remove = (f) => {
-    if (!window.confirm(`${f.date} ${f.place} 박람회 일정을 삭제하시겠습니까?`)) return;
+    if (!window.confirm(`${f.date} ${f.label} 박람회 일정을 삭제하시겠습니까?`)) return;
     run(async () => {
       await fairApi.remove(f.id);
       if (editing?.id === f.id) startNew();
@@ -101,20 +109,26 @@ export default function FairModal({ fair = null, initialDate, onSaved, onClose }
                 </td>
               </tr>
               <tr>
-                <td className="label-col">장소<span className="star">*</span></td>
+                <td className="label-col">박람회 이름<span className="star">*</span></td>
                 <td className="input-col">
                   <input
                     className="input-text full"
-                    value={form.place}
-                    onChange={(e) => set('place', e.target.value)}
-                    placeholder="예: 지제역 필해링턴 - 장소 수원"
-                    maxLength={100}
+                    value={form.name}
+                    onChange={(e) => set('name', e.target.value)}
+                    placeholder="예: 지제역 필해링턴"
+                    maxLength={60}
                     autoFocus={!editing}
                   />
                 </td>
               </tr>
               <tr>
-                <td className="label-col">가는 실장<span className="star">*</span></td>
+                <td className="label-col">장소</td>
+                <td className="input-col">
+                  <input className="input-text full" value={form.place} onChange={(e) => set('place', e.target.value)} placeholder="예: 수원" maxLength={60} />
+                </td>
+              </tr>
+              <tr>
+                <td className="label-col">가는 실장</td>
                 <td className="input-col">
                   <div className="fair-staff">
                     {staff.map((u) => (
@@ -123,7 +137,21 @@ export default function FairModal({ fair = null, initialDate, onSaved, onClose }
                       </label>
                     ))}
                   </div>
-                  <div className="sub-text">일정관리 달력에 고른 실장 이름이 초록색으로 표시됩니다.</div>
+                </td>
+              </tr>
+              <tr>
+                <td className="label-col">가는 기사</td>
+                <td className="input-col">
+                  <div className="fair-staff">
+                    {engineerList.map((e) => (
+                      <label key={e.id} className={`fair-staff-chip ${form.engineerIds.includes(e.id) ? 'on' : ''}`}>
+                        <input type="checkbox" checked={form.engineerIds.includes(e.id)} onChange={() => toggleIn('engineerIds', e.id)} /> {e.name}
+                      </label>
+                    ))}
+                  </div>
+                  <div className="sub-text">
+                    실장·기사 중 한 명 이상 고르세요. 고른 사람 이름이 초록색으로 표시되고, <b>본인이 포함된 박람회만</b> 그 사람에게 보입니다 (실장: 일정관리, 기사: 기사모바일).
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -144,8 +172,8 @@ export default function FairModal({ fair = null, initialDate, onSaved, onClose }
             {upcoming.map((f) => (
               <div key={f.id} className={`fair-row ${editing?.id === f.id ? 'editing' : ''}`}>
                 <span className="fair-date">{f.endDate ? `${f.date} ~ ${f.endDate}` : f.date}</span>
-                <span className="fair-place">{f.place}</span>
-                <span className="fair-names">{f.staff.map((s) => s.name).join(', ')}</span>
+                <span className="fair-place">{f.label}</span>
+                <span className="fair-names">{[...f.staff, ...(f.engineers || [])].map((s) => s.name).join(', ')}</span>
                 <span className="fair-actions">
                   <button type="button" className="btn-link" onClick={() => startEdit(f)}>수정</button>
                   <button type="button" className="btn-link text-red" onClick={() => remove(f)}>삭제</button>

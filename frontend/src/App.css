@@ -5474,3 +5474,4 @@ a.btn-quick.blue:hover {
 .fair-row .fair-date { white-space: nowrap; font-weight: bold; }
 .fair-row .fair-place { flex: 1; min-width: 140px; }
 .fair-row .fair-actions { margin-left: auto; white-space: nowrap; }
+.fair-chip.mini { font-size: 10px; padding: 0 4px; display: inline-block; margin-top: 2px; }

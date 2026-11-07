@@ -81,6 +81,7 @@ function MySchedules() {
   const [picked, setPicked] = useState(memo.date || today());
   const [list, setList] = useState([]);
   const [offs, setOffs] = useState([]);
+  const [fairList, setFairList] = useState([]); // 내 박람회 일정 (본인이 포함된 것만)
   const [year, month] = ym;
 
   useEffect(() => {
@@ -95,10 +96,11 @@ function MySchedules() {
         : view === 'upcoming'
           ? [t, addDays(t, 30)]
           : [addDays(t, -30), addDays(t, -1)];
-    Promise.all([engineerApp.mySchedules({ from, to }), engineerApp.myOffs({ from, to })])
-      .then(([sch, off]) => {
+    Promise.all([engineerApp.mySchedules({ from, to }), engineerApp.myOffs({ from, to }), engineerApp.myFairs({ from, to }).catch(() => [])])
+      .then(([sch, off, fr]) => {
         setList(sch);
         setOffs(off);
+        setFairList(fr);
       })
       .catch(handleError);
   }, [view, year, month, handleError]);
@@ -124,10 +126,12 @@ function MySchedules() {
     if (view === 'calendar') map[picked] = [];
     else if (view === 'upcoming') map[today()] = [];
     if (view !== 'calendar') offs.forEach((o) => (map[o.date] = map[o.date] || []));
+    if (view !== 'calendar') fairList.forEach((f) => (map[f.date] = map[f.date] || []));
     list.forEach((s) => (view !== 'calendar' || s.date === picked) && (map[s.date] = map[s.date] || []).push(s));
     return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
-  }, [list, offs, view, picked]);
+  }, [list, offs, fairList, view, picked]);
   const offOf = (date) => offs.find((o) => o.date === date);
+  const fairsOf = (date) => fairList.filter((f) => f.date <= date && (f.endDate || f.date) >= date);
   const countOf = useMemo(() => {
     const m = {};
     list.forEach((s) => (m[s.date] = (m[s.date] || 0) + 1));
@@ -177,6 +181,7 @@ function MySchedules() {
                   >
                     <div className="day-number">{Number(date.slice(8))}</div>
                     {off && <span className={`off-chip off-${off.period}`}>{OFF_LABEL[off.period]}</span>}
+                    {fairsOf(date).length > 0 && <span className="fair-chip mini">박람회</span>}
                     {countOf[date] && <div className="schedule-badge">일정 {countOf[date]}</div>}
                   </div>
                 );
@@ -196,7 +201,14 @@ function MySchedules() {
             {offOf(date) && <span className={`off-chip off-${offOf(date).period}`}>{OFF_LABEL[offOf(date).period]} 휴무</span>}
           </h4>
           {offOf(date) && <div className="sub-text">휴무 사유: {offOf(date).reason}</div>}
-          {rows.length === 0 && !offOf(date) && (
+          {fairsOf(date).map((f) => (
+            <div key={`fair${f.id}`} className="day-fair-row">
+              <span className="fair-chip">박람회</span>
+              <strong className="fair-names">{f.label}</strong>
+              {f.endDate && <span className="sub-text">({f.date} ~ {f.endDate})</span>}
+            </div>
+          ))}
+          {rows.length === 0 && !offOf(date) && !fairsOf(date).length && (
             <div className="engineer-card empty">{date === today() ? '오늘' : '이 날'} 배정된 일정이 없습니다.</div>
           )}
           {rows.map((s) => (

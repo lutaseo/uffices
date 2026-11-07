@@ -282,22 +282,32 @@ export const scheduleSettings = {
 
 // ============================================================
 // 박람회 일정   (계약관리 위 [박람회 일정 등록] → 일정관리 달력에 초록색으로)
-//   업체 설정(company.fairs)에 보관: { id, date, endDate, place, staffIds, createdBy, createdAt }
-//   등록·수정·삭제: 관리자 또는 '박람회 일정 등록' 권한 / 보기: 일정 조회 권한 또는 등록 권한
+//   업체 설정(company.fairs)에 보관: { id, date, endDate, name(박람회 이름), place(장소), staffIds(실장), engineerIds(기사), createdBy, createdAt }
+//   등록·수정·삭제: 관리자 또는 '박람회 일정 등록' 권한
+//   보기: 본인이 포함된 박람회만 (실장은 일정관리, 기사는 기사모바일) — 관리자는 전부, 등록한 사람은 자기가 등록한 것도
 // ============================================================
 
+// 화면에 쓰는 한 줄 이름: '지제역 필해링턴 (수원)' — 이름 칸이 생기기 전 박람회는 장소 칸에 다 적혀 있음
+const fairLabel = (f) => (f.name ? (f.place ? `${f.name} (${f.place})` : f.name) : f.place || '');
 const fairView = (db, f) => ({
   ...clone(f),
+  name: f.name || f.place || '',
+  place: f.name ? f.place || '' : '',
+  label: fairLabel(f),
   staff: (f.staffIds || []).map((id) => db.users.find((u) => u.id === id)).filter(Boolean).map((u) => ({ id: u.id, name: u.name })),
+  engineers: (f.engineerIds || []).map((id) => db.engineers.find((e) => e.id === id)).filter(Boolean).map((e) => ({ id: e.id, name: e.name })),
 });
+const fairInRange = (f, from, to) => (!to || f.date <= to) && (!from || (f.endDate || f.date) >= from);
+const sortFairs = (a, b) => a.date.localeCompare(b.date) || a.id - b.id;
 
 export const fairs = {
-  // from~to 와 겹치는 박람회 (여러 날 박람회는 기간이 겹치면 포함)
+  // from~to 와 겹치는 박람회 (여러 날 박람회는 기간이 겹치면 포함) — 본인이 포함된 것만 (관리자는 전부)
   async list({ from, to } = {}) {
     const { db, user } = await authorizeAny(['schedule.view', 'fair.manage']);
+    const mine = (f) => user.role === ROLES.ADMIN || (f.staffIds || []).includes(user.id) || f.createdBy === user.id;
     return (companyOf(db, user)?.fairs || [])
-      .filter((f) => (!to || f.date <= to) && (!from || (f.endDate || f.date) >= from))
-      .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)
+      .filter((f) => mine(f) && fairInRange(f, from, to))
+      .sort(sortFairs)
       .map((f) => fairView(db, f));
   },
 
@@ -309,14 +319,19 @@ export const fairs = {
     const endDate = data.endDate ? String(data.endDate) : '';
     if (!isDateKey(date)) throw new ApiError('박람회 날짜를 골라 주세요.');
     if (endDate && (!isDateKey(endDate) || endDate < date)) throw new ApiError('끝나는 날짜는 시작 날짜와 같거나 뒤여야 합니다.');
-    const place = String(data.place || '').trim().slice(0, 100);
-    if (!place) throw new ApiError('박람회 장소를 적어 주세요. (예: 지제역 필해링턴 - 장소 수원)');
+    let name = String(data.name || '').trim().slice(0, 60);
+    let place = String(data.place || '').trim().slice(0, 60);
+    if (!name && place) [name, place] = [place, '']; // 예전 화면(장소 한 칸)에서 보낸 경우
+    if (!name) throw new ApiError('박람회 이름을 적어 주세요. (예: 지제역 필해링턴)');
     const staffIds = [...new Set((Array.isArray(data.staffIds) ? data.staffIds : []).map(Number))].filter((id) =>
       db.users.some((u) => u.id === id && u.companyId === user.companyId && u.role !== ROLES.SUPER),
     );
-    if (!staffIds.length) throw new ApiError('박람회에 가는 실장을 한 명 이상 골라 주세요.');
+    const engineerIds = [...new Set((Array.isArray(data.engineerIds) ? data.engineerIds : []).map(Number))].filter((id) =>
+      db.engineers.some((e) => e.id === id && e.companyId === user.companyId),
+    );
+    if (!staffIds.length && !engineerIds.length) throw new ApiError('박람회에 가는 실장이나 기사를 한 명 이상 골라 주세요.');
     company.fairs = company.fairs || [];
-    const fields = { date, endDate: endDate && endDate !== date ? endDate : '', place, staffIds, updatedAt: nowIso() };
+    const fields = { date, endDate: endDate && endDate !== date ? endDate : '', name, place, staffIds, engineerIds, updatedAt: nowIso() };
     let fair;
     if (data.id) {
       fair = company.fairs.find((f) => f.id === Number(data.id));
@@ -518,6 +533,15 @@ export const engineerApp = {
     addHistory(c, user, `기사 보고 (${stepIndex + 1}차)`, fields);
     saveDb(db);
     return mySchedule(db, user, c, s, stepIndex);
+  },
+
+  // 내 박람회 일정 (본인이 포함된 것만)
+  async myFairs({ from, to } = {}) {
+    const { db, user } = await authorizeEngineer();
+    return (companyOf(db, user)?.fairs || [])
+      .filter((f) => (f.engineerIds || []).includes(user.engineerId) && fairInRange(f, from, to))
+      .sort(sortFairs)
+      .map((f) => ({ id: f.id, date: f.date, endDate: f.endDate || '', label: fairLabel(f) }));
   },
 
   async myOffs({ from, to } = {}) {
