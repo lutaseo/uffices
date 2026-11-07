@@ -27,7 +27,7 @@ import {
   readableContracts,
 } from './core.js';
 import { addHistory, assigneeOf, contractView } from './views.js';
-import { ROLES } from '../auth/permissions.js';
+import { ROLES, can } from '../auth/permissions.js';
 import { numberOf } from './numbering.js';
 import { DEFAULT_SCHEDULE_SETTINGS, MOBILE_STATUS, OFF_LABEL } from '../constants.js';
 import { inRange, isDateKey, today } from '../utils/date.js';
@@ -284,7 +284,7 @@ export const scheduleSettings = {
 // 박람회 일정   (계약관리 위 [박람회 일정 등록] → 일정관리 달력에 초록색으로)
 //   업체 설정(company.fairs)에 보관: { id, date, endDate, name(박람회 이름), place(장소), staffIds(실장), engineerIds(기사), createdBy, createdAt }
 //   등록·수정·삭제: 관리자 또는 '박람회 일정 등록' 권한
-//   보기: 본인이 포함된 박람회만 (실장은 일정관리, 기사는 기사모바일) — 관리자는 전부, 등록한 사람은 자기가 등록한 것도
+//   보기: 관리자·'박람회 일정' 권한 있는 실장은 전부 / 기사는 기사모바일에서 본인이 포함된 것만
 // ============================================================
 
 // 화면에 쓰는 한 줄 이름: '지제역 필해링턴 (수원)' — 이름 칸이 생기기 전 박람회는 장소 칸에 다 적혀 있음
@@ -304,7 +304,9 @@ export const fairs = {
   // from~to 와 겹치는 박람회 (여러 날 박람회는 기간이 겹치면 포함) — 본인이 포함된 것만 (관리자는 전부)
   async list({ from, to } = {}) {
     const { db, user } = await authorizeAny(['schedule.view', 'fair.manage']);
-    const mine = (f) => user.role === ROLES.ADMIN || (f.staffIds || []).includes(user.id) || f.createdBy === user.id;
+    // 관리자·'박람회 일정' 권한이 있는 실장은 전부 (등록·관리하는 사람), 그 외는 본인 포함·본인이 등록한 것만
+    const all = user.role === ROLES.ADMIN || can(user, 'fair.manage');
+    const mine = (f) => all || (f.staffIds || []).includes(user.id) || f.createdBy === user.id;
     return (companyOf(db, user)?.fairs || [])
       .filter((f) => mine(f) && fairInRange(f, from, to))
       .sort(sortFairs)

@@ -41,7 +41,7 @@ export const PERMISSIONS = [
   { key: 'customer.edit', group: '계약자관리', label: '계약자 등록/수정/삭제', short: '계약자수정' },
   { key: 'schedule.view', group: '일정관리', label: '일정 조회', short: '일정조회' },
   { key: 'schedule.edit', group: '일정관리', label: '일정/기사배정 수정', short: '일정수정' },
-  { key: 'fair.manage', group: '일정관리', label: '박람회 일정 등록', short: '박람회' },
+  { key: 'fair.manage', group: '일정관리', label: '박람회 일정 등록·확인 (전체 박람회 보기)', short: '박람회' },
   { key: 'excel.export', group: '기타', label: '엑셀 다운로드', short: '엑셀' },
   { key: 'stats.view', group: '기타', label: '진행상황/통계 조회', short: '통계' },
   { key: 'settings.manage', group: '설정', label: '기사/팀/상품/아파트 관리', short: '기초설정' },

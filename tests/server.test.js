@@ -1045,7 +1045,7 @@ test('계약자 연결 바로잡기: 예전에 번호만으로 잘못 묶인 계
   assert.equal((await admin.ok('contracts', 'repairCustomerLinks')).fixed, 0, '두 번째는 할 일 없음');
 });
 
-test('박람회 일정: 이름·장소, 관리자는 바로·실장은 권한 받아야 등록, 본인이 포함된 것만 보임(실장·기사), 여러 날, 수정·삭제', async () => {
+test('박람회 일정: 이름·장소, 관리자는 바로·실장은 권한 받아야 등록·전체 보기, 권한 없으면 본인 것만, 기사는 본인 것만, 여러 날, 수정·삭제', async () => {
   const me = (await manager.ok('auth', 'me')).user;
   const adminMe = (await admin.ok('auth', 'me')).user;
   const eng = (await admin.ok('engineers', 'list')).find((e) => e.loginId === 'gong');
@@ -1074,6 +1074,7 @@ test('박람회 일정: 이름·장소, 관리자는 바로·실장은 권한 �
   assert.equal((await manager('fairs', 'remove', f.id)).status, 403);
   const u = (await admin.ok('users', 'list')).find((x) => x.id === me.id);
   await admin.ok('users', 'update', u.id, { permissions: [...u.permissions, 'fair.manage'] });
+  assert.equal((await manager.ok('fairs', 'list', { from: '2026-12-05', to: '2026-12-05' })).length, 2, '박람회 권한을 받은 실장은 전체 박람회를 봄');
   const mine = await manager.ok('fairs', 'save', { date: '2026-12-10', name: '실장 등록', staffIds: [me.id] });
   await manager.ok('fairs', 'save', { id: mine.id, date: '2026-12-11', name: '실장 등록 (바뀜)', place: '평택', staffIds: [me.id] });
   assert.equal((await manager.ok('fairs', 'list', { from: '2026-12-11', to: '2026-12-11' })).find((x) => x.id === mine.id).label, '실장 등록 (바뀜) (평택)');
