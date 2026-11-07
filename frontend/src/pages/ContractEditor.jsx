@@ -510,22 +510,26 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
               </td>
             </tr>
             <tr>
-              <td className="label-col">기타사항</td>
-              <td className="input-col">
-                <textarea className="input-text full" rows={3} name="memo" value={form.memo} onChange={onField} placeholder="내용입력 (내부용, 고객에게 표시되지 않음)" />
-              </td>
-            </tr>
-            <tr>
               <td className="label-col">기사전달사항</td>
               <td className="input-col">
-                <textarea className="input-text full" rows={2} name="engineerNote" value={form.engineerNote || ''} onChange={onField} placeholder="기사모바일에 표시됩니다 (예: 현관 비밀번호, 주차 안내, 고객 요청사항)" />
+                <textarea className="input-text full" rows={3} name="engineerNote" value={form.engineerNote || ''} onChange={onField} placeholder="본사·기사가 함께 보는 내부 메모 (고객에게 표시되지 않음) 예: 현관 비밀번호, 주차 안내, 고객 요청사항" />
               </td>
             </tr>
+            {/* 예전 '기타사항' 칸은 기사전달사항으로 합침 — 예전 계약에 적힌 내용이 있을 때만 보여 줌 (지우거나 옮길 수 있게) */}
+            {String(contract?.memo || '').trim() && (
+              <tr>
+                <td className="label-col">기타사항 (예전)</td>
+                <td className="input-col">
+                  <textarea className="input-text full" rows={2} name="memo" value={form.memo} onChange={onField} />
+                  <span className="info-guide">ⓘ 예전에 적은 내부 메모입니다. 새 내용은 위 [기사전달사항]에 적어 주세요.</span>
+                </td>
+              </tr>
+            )}
             <tr>
               <td className="label-col">고객 참고사항</td>
               <td className="input-col">
                 <textarea className="input-text full customer-note-input" rows={3} name="customerNote" value={form.customerNote || ''} onChange={onField} maxLength={1000} placeholder="고객에게 보이는 안내 (계약서·서명 화면에 표시) 예: 시공 당일 현관 비밀번호를 알려주세요. 시공 후 24시간 물 사용을 피해 주세요." />
-                <div className="sub-text text-blue">ⓘ 이 칸은 <b>고객에게 보입니다</b> (계약서·전자서명 화면). 내부 메모는 위 [기타사항]에 적어 주세요.</div>
+                <div className="sub-text text-blue">ⓘ 이 칸은 <b>고객에게 보입니다</b> (계약서·전자서명 화면). 내부 메모는 위 [기사전달사항]에 적어 주세요.</div>
               </td>
             </tr>
           </tbody>
