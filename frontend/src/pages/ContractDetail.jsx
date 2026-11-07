@@ -198,10 +198,12 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
             <th>현금영수증</th>
             <td>{head.cashReceipt}</td>
           </tr>
-          <tr>
-            <th>기타사항</th>
-            <td colSpan={5} className="pre-wrap">{head.memo}</td>
-          </tr>
+          {String(head.memo || '').trim() && (
+            <tr>
+              <th>기타사항 (예전)</th>
+              <td colSpan={5} className="pre-wrap">{head.memo}</td>
+            </tr>
+          )}
           <tr>
             <th>고객 참고사항</th>
             <td colSpan={5} className="pre-wrap">
