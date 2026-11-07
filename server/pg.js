@@ -240,7 +240,12 @@ export async function companyIdForCustomer(client, name, args, session) {
     return r[0] ? Number(r[0].id) : null;
   }
   if (name === 'customerApp.linkLogin') {
-    const r = await rows(client, `SELECT company_id FROM contracts WHERE data->>'customerToken' = $1`, [String(args[0] || '')]);
+    // 고객확인페이지 값 또는 서명 링크 값(지금·예전) — services.js customerApp.linkLogin 과 같게
+    const r = await rows(
+      client,
+      `SELECT company_id FROM contracts WHERE data->>'customerToken' = $1 OR data->'esign'->>'token' = $1 OR (data->'esign'->'pastTokens') ? $1 LIMIT 1`,
+      [String(args[0] || '')],
+    );
     return r[0] ? Number(r[0].company_id) : null;
   }
   return session?.customer?.companyId ? Number(session.customer.companyId) : null;
@@ -248,6 +253,11 @@ export async function companyIdForCustomer(client, name, args, session) {
 
 // 서명 링크 → { companyId, contractId } (없으면 null 들)
 export async function contractByEsignToken(client, token) {
-  const r = await rows(client, `SELECT id, company_id FROM contracts WHERE data->'esign'->>'token' = $1 ORDER BY id`, [String(token || '')]);
+  // 지금 서명 링크 값 → 예전 서명 링크 값 → 고객확인페이지 값 순으로 (contracts.js bundleByToken 과 같게)
+  const t = String(token || '');
+  let r = await rows(client, `SELECT id, company_id FROM contracts WHERE data->'esign'->>'token' = $1 ORDER BY id LIMIT 1`, [t]);
+  if (!r[0] && t) {
+    r = await rows(client, `SELECT id, company_id FROM contracts WHERE (data->'esign'->'pastTokens') ? $1 OR data->>'customerToken' = $1 ORDER BY id LIMIT 1`, [t]);
+  }
   return r[0] ? { companyId: Number(r[0].company_id), contractId: Number(r[0].id) } : { companyId: null, contractId: null };
 }

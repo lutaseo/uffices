@@ -381,7 +381,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
         {/* ---------------- 1. 계약정보 ---------------- */}
         <h3 className="form-section-title">&gt; 계약정보 {isEdit ? `수정 (No.${contract.no})` : '등록'}</h3>
         {isEdit && contract.esign?.status === '서명완료' && (
-          <p className="warn-box">⚠ 서명이 완료된 계약입니다. 시공내용이나 금액을 바꾸면 서명이 초기화되어 재서명이 필요합니다.</p>
+          <p className="warn-box">ⓘ 서명이 완료된 계약입니다. 고쳐도 다시 서명받지 않으며, 고객이 받은 계약서 링크에는 고친 내용이 보입니다.</p>
         )}
         <table className="form-grid-table">
           <tbody>

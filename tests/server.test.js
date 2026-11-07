@@ -649,7 +649,7 @@ test('계약 수정 화면 입금 줄 사진: paymentPhotos 로 추가·삭제, 
   assert.equal((await manager('contracts', 'paymentPhotos', c.id, pid, { add: [img(3)] })).status >= 400, true, '권한 없는 실장 차단');
 });
 
-test('고객 참고사항: 저장·이력, 서명 링크(고객)에는 보이고 내부 메모는 숨김, 서명 후 바뀌면 재서명', async () => {
+test('고객 참고사항: 저장·이력, 서명 링크(고객)에는 보이고 내부 메모는 숨김, 서명 후 고쳐도 다시 서명 안 받음', async () => {
   const c = await admin.ok('contracts', 'create', { ...base, customerName: '참고고객', customerPhone: '010-7777-4545', memo: '내부 메모', customerNote: '시공 후 24시간 물 사용 금지' });
   assert.equal(c.customerNote, '시공 후 24시간 물 사용 금지');
   const { url } = await admin.ok('contracts', 'requestSign', c.id);
@@ -660,11 +660,45 @@ test('고객 참고사항: 저장·이력, 서명 링크(고객)에는 보이고
   assert.equal(view.contract.memo, undefined, '내부 메모는 숨김');
   await anon.ok('esign', 'sign', token, { signerName: '참고고객', signature: 'data:image/png;base64,AAAA', agreed: true });
   const full = await admin.ok('contracts', 'get', c.id);
-  const u = await admin.ok('contracts', 'update', c.id, { ...full, customerNote: '바뀐 안내' });
-  assert.notEqual(u.esign.status, '서명완료', '고객 참고사항이 바뀌면 다시 서명 필요');
+  const u = await admin.ok('contracts', 'update', c.id, { ...full, customerNote: '바뀐 안내', totalAmount: (full.totalAmount || 0) + 10000 });
+  assert.equal(u.esign.status, '서명완료', '서명 뒤 고쳐도 서명완료 그대로');
+  assert.equal((await anon.ok('esign', 'getByToken', token)).contract.customerNote, '바뀐 안내', '보낸 서명 링크도 그대로 열림 (고친 내용으로)');
   assert.ok(u.history.at(-1).changes.some((ch) => ch.label === '고객 참고사항'));
   const row = (await admin.ok('contracts', 'list', {})).find((x) => x.id === c.id);
   assert.equal(row.customerNote, undefined, '목록에는 안 보냄');
+});
+
+test('서명 링크가 계속 열림: 다시 요청 전 예전 링크, 고객확인페이지 값으로 /e 열기, 서명 링크 값으로 고객확인페이지 열기, 예전에 풀린 서명 되돌리기', async () => {
+  const c = await admin.ok('contracts', 'create', { ...base, customerName: '링크고객', customerPhone: '010-7878-1212', category: '나노코팅' });
+  const first = (await admin.ok('contracts', 'requestSign', c.id)).url.split('/sign/')[1];
+  const second = (await admin.ok('contracts', 'requestSign', c.id)).url.split('/sign/')[1];
+  assert.notEqual(first, second);
+  const anon = client();
+  assert.equal((await anon.ok('esign', 'getByToken', first)).contract.id, c.id, '다시 요청하기 전에 보낸 링크도 열림');
+  const { token: custToken } = await admin.ok('contracts', 'customerLink', c.id);
+  assert.equal((await anon.ok('esign', 'getByToken', custToken)).contract.id, c.id, '계약완료 알림톡 값(고객확인페이지)으로 /e 열어도 계약서');
+  await anon.ok('esign', 'sign', first, { signerName: '링크고객', signature: 'data:image/png;base64,QkJC', agreed: true });
+  assert.equal((await admin.ok('contracts', 'get', c.id)).esign.status, '서명완료', '예전 링크로 서명해도 됨');
+  const phone = client();
+  assert.ok((await phone.ok('customerApp', 'linkLogin', second)).contracts.some((x) => x.id === c.id), '서명 링크 값으로 고객확인페이지 열기');
+  assert.equal((await client()('esign', 'getByToken', 'no-such-token')).status, 404);
+
+  // 예전 규칙으로 서명이 풀린 계약 → 서명완료로 되돌림 (한 번만)
+  const d = await admin.ok('contracts', 'create', { ...base, customerName: '풀린고객', customerPhone: '010-7878-3434', category: '나노코팅' });
+  const tk = (await admin.ok('contracts', 'requestSign', d.id)).url.split('/sign/')[1];
+  await anon.ok('esign', 'sign', tk, { signerName: '풀린고객', signature: 'data:image/png;base64,Q0ND', agreed: true });
+  const pgc = new pg.Client({ connectionString: url });
+  await pgc.connect();
+  await pgc.query(`UPDATE contracts SET data = jsonb_set(data, '{esign}', (data->'esign') || '{"status":"미발송","token":null}'::jsonb || jsonb_build_object('previousSignedAt', data->'esign'->'signedAt')) WHERE id = $1`, [d.id]);
+  await pgc.query(`UPDATE companies SET data = data - 'signRestored'`);
+  await pgc.end();
+  assert.equal((await admin.ok('contracts', 'get', d.id)).esign.status, '미발송');
+  const r = await admin.ok('contracts', 'repairCustomerLinks');
+  assert.ok(r.restored >= 1);
+  const back = await admin.ok('contracts', 'get', d.id);
+  assert.equal(back.esign.status, '서명완료', '서명완료로 되돌림');
+  assert.ok(back.esign.token && back.esign.signature, '링크 값·서명 이미지 있음');
+  assert.equal((await admin.ok('contracts', 'repairCustomerLinks')).restored, 0, '두 번째는 할 일 없음');
 });
 
 test('목록 변경 확인(listCached): 그대로면 목록 없이 응답, 수정·입금·휴지통·권한이 바뀌면 새 목록', async () => {
