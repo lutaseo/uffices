@@ -5559,16 +5559,26 @@ button.paper-add { font: inherit; }
 
 /* 계약 상세: 탭 옆 [수정] */
 .detail-tabs button.detail-edit-btn {
-  background: #1f2937;
-  border-color: #1f2937;
+  background: #1a6fe0;
+  border-color: #1a6fe0;
   color: #fff;
   font-weight: bold;
 }
-.detail-tabs button.detail-edit-btn:hover { background: #111827; }
+.detail-tabs button.detail-edit-btn:hover { background: #155bc0; }
 .sign-here-box {
   margin: 14px 0 6px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
+}
+
+/* 휴대폰 번호 세 칸 [010]-[0000]-[0000] (계약 등록) */
+.phone-input { display: inline-flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+.phone-input .input-text.phone-part { width: 84px; min-width: 0; text-align: center; letter-spacing: 1px; }
+.phone-input .input-text.phone-part.head { width: 64px; }
+.phone-input .phone-dash { color: #888; }
+@media (max-width: 480px) {
+  .phone-input .input-text.phone-part { width: 70px; }
+  .phone-input .input-text.phone-part.head { width: 56px; }
 }

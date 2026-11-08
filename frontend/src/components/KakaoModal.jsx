@@ -28,7 +28,7 @@ export default function KakaoModal({ contract, initialTemplate = '기사배정',
   const receiver =
     effectiveTarget === '기사'
       ? { name: engineer?.engineerName || '', phones: [engineer?.engineerPhone].filter(Boolean) }
-      : { name: contract.customerName, phones: [...new Set([contract.customerPhone, contract.customerPhone2].filter(Boolean))] };
+      : { name: contract.customerName, phones: [contract.customerPhone, contract.customerPhone2].filter((p, i, all) => p && all.findIndex((q) => q && q.replace(/\D/g, '') === p.replace(/\D/g, '')) === i) };
   const key = templateKeyOf(template, effectiveTarget);
   // 고객모바일 바로가기 링크 (알림톡 '내 계약 확인' 버튼)
   const [customerToken, setCustomerToken] = useState('');
@@ -45,9 +45,12 @@ export default function KakaoModal({ contract, initialTemplate = '기사배정',
 
   const handleSend = async () => {
     setSending(true);
-    try {
-      let live = false;
-      for (const phone of receiver.phones) {
+    // 고객 연락처 ①·② 각각 따로 보냄 — 한 번호가 실패해도 다른 번호는 끝까지 보냄
+    let live = false;
+    const sent = [];
+    const failed = [];
+    for (const phone of receiver.phones) {
+      try {
         const log = await notifications.send({
           contractId: contract.id,
           template,
@@ -61,18 +64,29 @@ export default function KakaoModal({ contract, initialTemplate = '기사배정',
           message,
         });
         live = live || log.result === 'SENT';
+        sent.push(phone);
+      } catch (e) {
+        if (e?.code === 'UNAUTHORIZED') {
+          handleError(e);
+          setSending(false);
+          return;
+        }
+        failed.push({ phone, message: e?.message || '발송 실패' });
       }
-      const to = receiver.phones.length > 1 ? ` (${receiver.phones.join(', ')} 두 번호 모두)` : '';
-      alert(
-        live
-          ? `${receiver.name}님에게${to} [${tpl.label}] 알림톡을 보냈습니다.`
-          : `${receiver.name}님에게${to} [${tpl.label}] 알림톡 발송을 요청했습니다.\n(비즈고 연결 전이라 실제로는 발송되지 않았습니다)`,
-      );
-      onClose();
-    } catch (e) {
-      handleError(e);
-      setSending(false);
     }
+    if (!sent.length) {
+      alert(failed.map((f) => `${f.phone}: ${f.message}`).join('\n'));
+      setSending(false);
+      return;
+    }
+    const to = receiver.phones.length > 1 && !failed.length ? ` (${sent.join(', ')} 두 번호 모두)` : sent.length < receiver.phones.length ? ` (${sent.join(', ')})` : '';
+    const fail = failed.length ? `\n\n⚠ 보내지 못한 번호: ${failed.map((f) => `${f.phone} — ${f.message}`).join(', ')}` : '';
+    alert(
+      (live
+        ? `${receiver.name}님에게${to} [${tpl.label}] 알림톡을 보냈습니다.`
+        : `${receiver.name}님에게${to} [${tpl.label}] 알림톡 발송을 요청했습니다.\n(비즈고 연결 전이라 실제로는 발송되지 않았습니다)`) + fail,
+    );
+    onClose();
   };
 
   const tag = (group, value, current, setter, label = value, extra = '') => (

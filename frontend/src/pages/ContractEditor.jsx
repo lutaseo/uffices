@@ -14,6 +14,7 @@ import PaymentPhotos from '../components/PaymentPhotos.jsx';
 import PaperPhotos from '../components/PaperPhotos.jsx';
 import EngineerPicker from '../components/EngineerPicker.jsx';
 import AptSearchInput from '../components/AptSearchInput.jsx';
+import PhoneInput from '../components/PhoneInput.jsx';
 import { ROLES } from '../auth/permissions.js';
 import {
   ISSUE_STATUS,
@@ -40,7 +41,7 @@ import {
   timeValueOf,
 } from '../utils/contract.js';
 import { today } from '../utils/date.js';
-import { formatPhone, won } from '../utils/format.js';
+import { won } from '../utils/format.js';
 import ContractViewModal from '../components/ContractViewModal.jsx';
 import OnSiteSign from '../components/OnSiteSign.jsx';
 import WorkRecord from '../components/WorkRecord.jsx';
@@ -437,13 +438,13 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
             <tr>
               <td className="label-col">고객 연락처 ①<span className="star">*</span></td>
               <td className="input-col">
-                <input type="tel" className="input-text" value={form.customerPhone} onChange={(e) => set('customerPhone', formatPhone(e.target.value))} placeholder="010-0000-0000" required />
+                <PhoneInput value={form.customerPhone} onChange={(v) => set('customerPhone', v)} required />
               </td>
             </tr>
             <tr>
               <td className="label-col">고객 연락처 ②</td>
               <td className="input-col">
-                <input type="tel" className="input-text" value={form.customerPhone2} onChange={(e) => set('customerPhone2', formatPhone(e.target.value))} placeholder="010-0000-0000" />
+                <PhoneInput value={form.customerPhone2} onChange={(v) => set('customerPhone2', v)} />
               </td>
             </tr>
             <tr>
