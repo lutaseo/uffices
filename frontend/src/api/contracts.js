@@ -32,6 +32,7 @@ import { digitsOnly, formatAddress, formatPhone, won } from '../utils/format.js'
 import { calcAmounts, firstScheduleDate, timeLabel } from '../utils/contract.js';
 import { ALIMTALK_TEMPLATES } from '../utils/alimtalk.js';
 import { categoriesFromName, legacyKeys } from '../utils/legacyImport.js';
+import { OWNER_FIX, ownerFixKey } from './ownerFixData.js';
 
 // ------------------------------------------------------------
 // 검색
@@ -1723,58 +1724,66 @@ export const imports = {
     return { trashed };
   },
 
-  // [임시 · 한 번만 쓰는 기능] 예전 프로그램 계약의 작성자(계약담당) 맞추기
-  //   가져온 계약은 모두 가져오기 한 관리자 이름으로 들어가 있어서, 예전 프로그램에서 실장님별로 거른 목록을
-  //   붙여 넣으면 같은 계약을 찾아 계약담당을 그 실장님으로 바꿈. apply=false 면 찾기만 (미리보기)
-  //   실장님 계약을 다 옮기면 이 함수와 설정 > 데이터 가져오기의 [6. 작성자 맞추기] 칸을 지웁니다.
-  async reassignOwner({ rows = [], ownerId, apply = false } = {}) {
-    const { db, user } = authorizeImport(await authorize('contract.create'));
-    const staff = db.users.find((u) => u.id === Number(ownerId) && u.companyId === user.companyId && ['ADMIN', 'MANAGER'].includes(u.role));
-    if (!staff) throw new ApiError('실장님을 골라 주세요.');
-    if (!Array.isArray(rows) || !rows.length) throw new ApiError('목록을 붙여 넣어 주세요.');
-    const list = db.contracts.filter((c) => c.companyId === user.companyId);
-    const pools = [new Map(), new Map()];
-    list.forEach((c) => legacyKeys(c).forEach((k, i) => pools[i].set(k, [...(pools[i].get(k) || []), c])));
-    const used = new Set();
-    const find = (r) => {
-      const ks = legacyKeys(r);
-      for (let i = 0; i < ks.length; i++) {
-        const c = (pools[i].get(ks[i]) || []).filter((x) => !used.has(x.id)).sort((a, b) => !!a.deletedAt - !!b.deletedAt || !b.legacyNo - !a.legacyNo || a.id - b.id)[0];
-        if (c) {
-          used.add(c.id);
-          return c;
-        }
-      }
-      return null;
-    };
-    const nameOf = (id) => {
-      const u = db.users.find((x) => x.id === id);
-      return u ? `${u.name}(${u.loginId})` : '-';
-    };
-    const result = { total: 0, matched: 0, changed: 0, already: 0, notFound: [], fromOwners: {} };
-    rows.slice(0, 5000).forEach((r) => {
-      result.total += 1;
-      const c = find(r);
-      if (!c) {
-        if (result.notFound.length < 100) result.notFound.push([r.contractDate, r.category, r.customerName, r.customerPhone, [r.aptName, [r.dong, r.ho].filter(Boolean).join('-')].filter(Boolean).join(' ')].join(' · '));
+  // [임시 · 한 번만] 예전 프로그램 계약의 작성자(계약담당) 맞추기
+  //   가져온 계약은 모두 가져오기 한 관리자 이름으로 들어가 있어서, 관리자가 보내 준 실장님별 목록(ownerFixData.js)대로
+  //   관리자가 로그인할 때 한 번 계약담당을 바꿈. 실장님마다 끝나면 company.ownerFix.owners 에 기록해 다시 하지 않음
+  //   (실장 계정이 아직 없으면 그분만 건너뛰고 다음 로그인 때 다시 시도) — 다 옮긴 뒤 이 함수와 ownerFixData.js 를 지웁니다.
+  async ownerFixAuto() {
+    const { db, user } = await authorize();
+    if (user.role !== 'ADMIN') return { skipped: true };
+    const company = db.companies.find((c) => c.id === user.companyId);
+    const state = company.ownerFix || { owners: {} };
+    const todo = OWNER_FIX.filter((o) => !state.owners[o.loginId || o.name]);
+    if (!todo.length) return { done: true, owners: state.owners };
+    const byKey = new Map();
+    db.contracts
+      .filter((c) => c.companyId === user.companyId)
+      .forEach((c) => {
+        const k = ownerFixKey(c);
+        byKey.set(k, [...(byKey.get(k) || []), c]);
+      });
+    const staffAll = db.users.filter((u) => u.companyId === user.companyId && (u.role === 'MANAGER' || u.role === 'ADMIN'));
+    const result = {};
+    let changedAny = false;
+    todo.forEach((o) => {
+      const named = staffAll.filter((u) => (o.loginId ? u.loginId === o.loginId : u.role === 'MANAGER' && u.name === o.name));
+      if (named.length !== 1) {
+        result[o.name] = { error: named.length ? '같은 이름의 실장 계정이 여러 개' : '실장 계정 없음' };
         return;
       }
-      result.matched += 1;
-      if (c.ownerId === staff.id) {
-        result.already += 1;
+      const staff = named[0];
+      const keys = o.keys.match(/.{8}/g) || [];
+      let changed = 0;
+      let already = 0;
+      let missing = 0;
+      new Set(keys).forEach((k) => {
+        const list = byKey.get(k) || [];
+        if (!list.length) missing += keys.filter((x) => x === k).length;
+        list.forEach((c) => {
+          if (c.ownerId === staff.id) {
+            already += 1;
+            return;
+          }
+          const before = db.users.find((u) => u.id === c.ownerId);
+          addHistory(c, user, '계약담당 변경 (예전 프로그램 작성자 맞추기)', [{ label: '계약담당', from: before ? `${before.name}(${before.loginId})` : '-', to: `${staff.name}(${staff.loginId})` }]);
+          c.ownerId = staff.id;
+          changed += 1;
+        });
+      });
+      if (!changed && !already) {
+        result[o.name] = { error: '맞는 계약을 못 찾음 (예전 계약을 가져오기 전) — 다음 로그인 때 다시' };
         return;
       }
-      const from = nameOf(c.ownerId);
-      result.fromOwners[from] = (result.fromOwners[from] || 0) + 1;
-      result.changed += 1;
-      if (apply) {
-        addHistory(c, user, '계약담당 변경 (예전 프로그램 작성자 맞추기)', [{ label: '계약담당', from, to: `${staff.name}(${staff.loginId})` }]);
-        c.ownerId = staff.id;
-      }
+      state.owners[o.loginId || o.name] = { name: staff.name, loginId: staff.loginId, changed, already, missing, at: nowIso() };
+      result[o.name] = state.owners[o.loginId || o.name];
+      changedAny = true;
     });
-    result.notFoundCount = result.total - result.matched;
-    if (apply && result.changed) saveDb(db);
-    return { ...result, ownerName: staff.name, ownerLoginId: staff.loginId, applied: !!apply };
+    if (changedAny) {
+      state.done = OWNER_FIX.every((o) => state.owners[o.loginId || o.name]);
+      company.ownerFix = state;
+      saveDb(db);
+    }
+    return { result, done: !!state.done };
   },
 
   //   options.sync: 이미 가져온 계약도 시공일·기사·시공상태를 파일대로 맞춤 (그 밖의 항목은 그대로)
