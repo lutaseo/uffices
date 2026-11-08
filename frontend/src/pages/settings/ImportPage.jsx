@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import * as XLSX from 'xlsx';
-import { apartments, imports } from '../../api/index.js';
+import { apartments, imports, users } from '../../api/index.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { categoriesFromName, legacyKeys, mapLegacyRow, parseLegacyHtml } from '../../utils/legacyImport.js';
 import { won } from '../../utils/format.js';
@@ -60,6 +60,7 @@ export default function ImportPage() {
       <UserImport />
       <ProductImport />
       <ApartmentImport />
+      <OwnerFix />
     </div>
   );
 }
@@ -596,6 +597,110 @@ function ApartmentImport() {
       {result && (
         <div className="import-result">
           ✔ 새로 등록 {result.created}개 · 지역 채움 {result.updated}개 · 이미 있어 건너뜀 {result.skipped}개
+        </div>
+      )}
+    </section>
+  );
+}
+
+// [임시 · 한 번만 쓰는 칸] 예전 프로그램 계약의 작성자(계약담당) 맞추기 — 실장님 계약을 다 옮기면 이 칸과 imports.reassignOwner 를 지웁니다
+//   예전 프로그램 계약관리에서 실장님별로 거른 목록(번호·브랜드·시공종류·…·연락처·아파트명 순서)을 표째 복사해 붙여 넣음
+const OWNER_FIELDS = ['contractDate', 'category', 'customerName', 'customerPhone', 'aptName', 'dong', 'ho'];
+function parseOwnerList(text) {
+  return String(text || '')
+    .split(/\r?\n/)
+    .map((l) => l.split('\t').map((x) => x.trim()))
+    .filter((cells) => /^\d+$/.test(cells[0]) && /^\d{4}-\d{2}-\d{2}$/.test(cells[6] || '')) // 제목 줄·빈 줄 빼고 계약 줄만
+    .map((cells) => {
+      const r = mapLegacyRow({ cells });
+      return Object.fromEntries(OWNER_FIELDS.map((k) => [k, r[k] || '']));
+    });
+}
+
+function OwnerFix() {
+  const { handleError } = useAuth();
+  const [staff, setStaff] = useState([]);
+  const [ownerId, setOwnerId] = useState('');
+  const [text, setText] = useState('');
+  const [preview, setPreview] = useState(null);
+  const [done, setDone] = useState(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    users
+      .staffOptions()
+      .then((list) => setStaff(list.filter((u) => u.role === 'ADMIN' || u.role === 'MANAGER')))
+      .catch(() => {});
+  }, []);
+  const rows = parseOwnerList(text);
+  const call = async (apply) => {
+    setBusy(true);
+    try {
+      const r = await imports.reassignOwner({ rows, ownerId, apply });
+      if (apply) {
+        setDone(r);
+        setPreview(null);
+        setText('');
+      } else {
+        setPreview(r);
+        setDone(null);
+      }
+    } catch (e) {
+      handleError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="import-box">
+      <h3>6. 예전 계약 작성자(계약담당) 맞추기 <span className="sub-text">— 임시 기능</span></h3>
+      <p className="sub-text">
+        예전 프로그램에서 가져온 계약은 모두 가져오기를 한 관리자 이름으로 들어가 있습니다. 예전 프로그램 계약관리에서 <b>실장님 한 분으로 거른 목록</b>을 표째 복사해 아래에 붙여 넣고,
+        그 실장님을 고른 뒤 [찾아보기] → [바꾸기]를 누르세요. 실장님마다 한 번씩 하면 됩니다.
+      </p>
+      <div className="inline-fields" style={{ marginBottom: 8 }}>
+        <select className="input-text" value={ownerId} onChange={(e) => { setOwnerId(e.target.value); setPreview(null); setDone(null); }}>
+          <option value="">실장님 고르기</option>
+          {staff.map((u) => (
+            <option key={u.id} value={u.id}>{u.name}</option>
+          ))}
+        </select>
+        <span className="sub-text">붙여 넣은 계약 {rows.length}건</span>
+      </div>
+      <textarea
+        className="input-text full"
+        rows={6}
+        value={text}
+        onChange={(e) => { setText(e.target.value); setPreview(null); setDone(null); }}
+        placeholder={'번호\t브랜드\t시공종류\t번호\t접수형태\t시공상태\t계약일\t계약자\t연락처\t아파트명 …\n214\t더좋은집\t줄눈\t박람\t시공\t미정\t2026-11-01\t박순자(승인)\t010-…'}
+      />
+      <div className="import-actions">
+        <button type="button" className="btn-dark-lg sm" disabled={busy || !ownerId || !rows.length} onClick={() => call(false)}>
+          {busy && !preview ? '찾는 중...' : '찾아보기'}
+        </button>
+        {preview && preview.changed > 0 && (
+          <button type="button" className="btn-dark-lg sm" disabled={busy} onClick={() => call(true)}>
+            {busy ? '바꾸는 중...' : `${preview.changed}건 계약담당을 ${preview.ownerName}(으)로 바꾸기`}
+          </button>
+        )}
+      </div>
+      {preview && (
+        <div className="import-result">
+          붙여 넣은 {preview.total}건 중 <b>{preview.matched}건 찾음</b>
+          {preview.changed > 0 && <> · 바뀔 계약 {preview.changed}건 (지금 담당: {Object.entries(preview.fromOwners).map(([k, v]) => `${k} ${v}건`).join(', ')})</>}
+          {preview.already > 0 && <> · 이미 {preview.ownerName} {preview.already}건</>}
+          {preview.notFoundCount > 0 && (
+            <div className="text-red">
+              못 찾은 계약 {preview.notFoundCount}건 (그대로 둡니다):
+              {preview.notFound.map((t, i) => (
+                <div key={i}>· {t}</div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {done && (
+        <div className="import-result">
+          ✔ {done.changed}건의 계약담당을 <b>{done.ownerName}</b>(으)로 바꿨습니다.{done.already ? ` (이미 ${done.ownerName} ${done.already}건)` : ''} 계약마다 변경이력에 남았습니다.
         </div>
       )}
     </section>
