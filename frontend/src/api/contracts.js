@@ -1747,7 +1747,10 @@ export const imports = {
       }
       return null;
     };
-    const nameOf = (id) => db.users.find((u) => u.id === id)?.name || '-';
+    const nameOf = (id) => {
+      const u = db.users.find((x) => x.id === id);
+      return u ? `${u.name}(${u.loginId})` : '-';
+    };
     const result = { total: 0, matched: 0, changed: 0, already: 0, notFound: [], fromOwners: {} };
     rows.slice(0, 5000).forEach((r) => {
       result.total += 1;
@@ -1765,13 +1768,13 @@ export const imports = {
       result.fromOwners[from] = (result.fromOwners[from] || 0) + 1;
       result.changed += 1;
       if (apply) {
-        addHistory(c, user, '계약담당 변경 (예전 프로그램 작성자 맞추기)', [{ label: '계약담당', from, to: staff.name }]);
+        addHistory(c, user, '계약담당 변경 (예전 프로그램 작성자 맞추기)', [{ label: '계약담당', from, to: `${staff.name}(${staff.loginId})` }]);
         c.ownerId = staff.id;
       }
     });
     result.notFoundCount = result.total - result.matched;
     if (apply && result.changed) saveDb(db);
-    return { ...result, ownerName: staff.name, applied: !!apply };
+    return { ...result, ownerName: staff.name, ownerLoginId: staff.loginId, applied: !!apply };
   },
 
   //   options.sync: 이미 가져온 계약도 시공일·기사·시공상태를 파일대로 맞춤 (그 밖의 항목은 그대로)

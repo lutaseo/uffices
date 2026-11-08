@@ -626,9 +626,10 @@ function OwnerFix() {
   const [done, setDone] = useState(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
+    // 같은 이름 계정(예: 관리자 장경국 / 실장 아이디 jang)이 있어도 구분되게 아이디까지 보여 줌
     users
-      .staffOptions()
-      .then((list) => setStaff(list.filter((u) => u.role === 'ADMIN' || u.role === 'MANAGER')))
+      .list()
+      .then((list) => setStaff(list.filter((u) => u.active !== false)))
       .catch(() => {});
   }, []);
   const rows = parseOwnerList(text);
@@ -661,7 +662,7 @@ function OwnerFix() {
         <select className="input-text" value={ownerId} onChange={(e) => { setOwnerId(e.target.value); setPreview(null); setDone(null); }}>
           <option value="">실장님 고르기</option>
           {staff.map((u) => (
-            <option key={u.id} value={u.id}>{u.name}</option>
+            <option key={u.id} value={u.id}>{u.name} ({u.loginId})</option>
           ))}
         </select>
         <span className="sub-text">붙여 넣은 계약 {rows.length}건</span>
@@ -679,7 +680,7 @@ function OwnerFix() {
         </button>
         {preview && preview.changed > 0 && (
           <button type="button" className="btn-dark-lg sm" disabled={busy} onClick={() => call(true)}>
-            {busy ? '바꾸는 중...' : `${preview.changed}건 계약담당을 ${preview.ownerName}(으)로 바꾸기`}
+            {busy ? '바꾸는 중...' : `${preview.changed}건 계약담당을 ${preview.ownerName}(${preview.ownerLoginId})(으)로 바꾸기`}
           </button>
         )}
       </div>
