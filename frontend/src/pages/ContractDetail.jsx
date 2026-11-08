@@ -671,6 +671,12 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
             {t}
           </button>
         ))}
+        {/* 탭 옆 [수정]: 지금 보고 있는 시공(위 시공정보의 계약)을 바로 수정 */}
+        {canDo('contract.edit') && !selected.deletedAt && (
+          <button type="button" className="detail-edit-btn" onClick={() => onEdit(selected)} title={`No.${selected.no} ${selected.category} 수정`}>
+            ✏️ 수정
+          </button>
+        )}
       </div>
 
       {tab === '시공관리' && (
