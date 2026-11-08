@@ -6,7 +6,8 @@ import KakaoModal from './KakaoModal.jsx';
 // 계약 등록 직후 그 자리(태블릿 등)에서 고객 서명받기
 //   ids: 방금 등록한 계약들. 한 장으로 서명하는 것(줄눈·청소)은 한 번에, 나머지(나노코팅 등)는 차례로
 //   서명이 끝나면 [계약완료] 알림톡 창이 바로 열림 → 고객에게 발송
-export default function OnSiteSign({ ids, onClose }) {
+//   first: 이미 있는 서명 링크로 바로 시작 { token, ids } (계약서 보기에서 [지금 이 기기에서 서명받기] — 보낸 링크와 같은 값)
+export default function OnSiteSign({ ids, first = null, onClose }) {
   const [left, setLeft] = useState(ids); // 아직 서명 화면을 안 띄운 계약
   const [cur, setCur] = useState(null); // { token, ids }
   const [done, setDone] = useState(false);
@@ -30,7 +31,10 @@ export default function OnSiteSign({ ids, onClose }) {
   };
 
   useEffect(() => {
-    start(ids);
+    if (first?.token) {
+      setCur({ token: first.token, ids: first.ids });
+      setLeft(ids.filter((id) => !first.ids.includes(id)));
+    } else start(ids);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 서명 완료 → 계약완료 알림톡 창 열기 (알림톡에 들어갈 계약 정보를 새로 불러옴)
