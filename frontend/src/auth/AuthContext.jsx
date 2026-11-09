@@ -1,5 +1,5 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { auth } from '../api/index.js';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { auth, imports } from '../api/index.js';
 import { can } from './permissions.js';
 
 const AuthContext = createContext(null);
@@ -41,6 +41,16 @@ export function AuthProvider({ children }) {
       window.removeEventListener('focus', onShow);
     };
   }, []);
+
+  // [임시] 관리자가 로그인하면 한 번: 예전 프로그램 계약의 계약담당을 실장님별로 맞춤 (끝나면 업체 정보에 기록 → 다시 안 함)
+  const ownerFixTried = useRef(false);
+  useEffect(() => {
+    if (state.user?.role !== 'ADMIN' || state.company?.ownerFix?.done || ownerFixTried.current) return;
+    ownerFixTried.current = true;
+    imports.ownerFixAuto().catch(() => {
+      ownerFixTried.current = false; // 실패하면 다음 화면 이동 때 다시
+    });
+  }, [state.user, state.company]);
 
   // kind 'engineer': 기사모바일(/업체주소/m) 로그인 — 기사 계정만, 'manager': 상담실장(/업체주소/t) — 직원 계정만
   const login = useCallback(async (loginId, password, companyCode, kind) => {
