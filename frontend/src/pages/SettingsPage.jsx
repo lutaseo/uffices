@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { API_MODE, auth } from '../api/index.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { ROLE_LABELS } from '../auth/permissions.js';
+import InstallCard from '../components/InstallCard.jsx';
+import { tabApp } from '../api/sessionSlots.js';
 
 // 설정 > 내 정보 (비밀번호 변경)
 export default function SettingsPage() {
@@ -46,6 +48,8 @@ export default function SettingsPage() {
           )}
         </tbody>
       </table>
+
+      {company?.code && <InstallCard code={company.code} app={tabApp() === 'manager' ? 'manager' : 'staff'} />}
 
       <h3 className="section-title">비밀번호 변경</h3>
       <form onSubmit={changePassword} className="inline-fields">

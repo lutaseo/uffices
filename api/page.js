@@ -39,9 +39,10 @@ export default async function handler(req, res) {
   const code = String(req.query.code || '').toLowerCase();
   const kind = validKind(req.query.kind) ? String(req.query.kind || '') : '';
   const host = req.headers['x-forwarded-host'] || req.headers.host;
+  const web = String(req.query.web || '') === '1'; // 브라우저처럼 열리는 바로가기용
 
   if (req.query.manifest) {
-    const meta = pageMeta(code, kind, await companyName(code, host));
+    const meta = pageMeta(code, kind, await companyName(code, host), web);
     res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
     res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=600');
     res.status(200).send(JSON.stringify(manifestFor(meta)));
@@ -51,7 +52,7 @@ export default async function handler(req, res) {
   try {
     const [html, name] = await Promise.all([indexHtml(req, host), companyName(code, host)]);
     res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=300'); // 5분 동안 같은 주소는 다시 만들지 않음 (배포하면 새로)
-    res.status(200).send(injectMeta(html, pageMeta(code, kind, name)));
+    res.status(200).send(injectMeta(html, pageMeta(code, kind, name, web)));
   } catch (e) {
     console.error('[page]', e.message);
     res.setHeader('Cache-Control', 'no-store');

@@ -5582,3 +5582,15 @@ button.paper-add { font: inherit; }
   .phone-input .input-text.phone-part { width: 70px; }
   .phone-input .input-text.phone-part.head { width: 56px; }
 }
+
+/* 앱 설치 · 바로가기 (내 정보, 기사모바일 휴무 설정 아래) */
+.install-card { margin: 18px 0 8px; }
+.install-card .btn-install { background: #1a6fe0; color: #fff; border: none; border-radius: 8px; padding: 12px 20px; font-size: 16px; font-weight: bold; cursor: pointer; }
+.install-card .btn-install:hover { background: #155bc0; }
+.install-card .install-ok { color: #157347; font-weight: bold; }
+.install-card .install-howto { background: #f4f8ff; border: 1px solid #d6e4fb; border-radius: 8px; padding: 10px 12px; line-height: 1.6; }
+.install-card .install-web { margin-top: 12px; font-size: 14px; }
+.install-card .install-web summary { cursor: pointer; color: #555; }
+.install-card .install-web ol { margin: 8px 0 4px; padding-left: 20px; line-height: 1.7; }
+.install-card .install-web code { background: #f2f2f2; padding: 1px 6px; border-radius: 4px; word-break: break-all; }
+.engineer-app .install-card { padding: 0 16px 24px; }

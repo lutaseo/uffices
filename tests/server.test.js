@@ -1480,6 +1480,14 @@ test('로그인 주소별 첫 화면 이름 (링크 미리보기·홈 화면): /
   assert.match(out, /og:title" content="기사모바일 · 더좋은집 VerityBase"/);
   assert.match(out, /rel="manifest" href="\/api\/page\?manifest=1&amp;code=thegood&amp;kind=m"/);
   assert.deepEqual([manifestFor(m).short_name, manifestFor(m).start_url], ['더좋은집 기사', '/thegood/m']);
+  // 앱 설치: 기본은 앱처럼(standalone), ?web=1 은 브라우저처럼 — 서로 다른 앱(id)
+  assert.equal(manifestFor(m).display, 'standalone');
+  assert.match(out, /apple-mobile-web-app-capable" content="yes"/);
+  const w = pageMeta('thegood', 'm', '더좋은집', true);
+  assert.deepEqual([manifestFor(w).display, manifestFor(w).start_url, manifestFor(w).id], ['browser', '/thegood/m?web=1', '/thegood/m?web=1']);
+  assert.match(injectMeta(html, w), /kind=m&amp;web=1"/);
+  assert.ok(!injectMeta(html, w).includes('apple-mobile-web-app-capable'), '브라우저처럼 주소는 아이폰도 브라우저로');
+  assert.ok(manifestFor(m).icons.some((i) => i.sizes === '192x192') && manifestFor(m).icons.some((i) => i.sizes === '512x512'), 'PC 설치에 필요한 아이콘 크기');
   assert.equal(pageMeta('contracts', '', '아무개'), null, '화면 이름은 업체 주소가 아님');
   assert.equal(validCode('admin'), false);
   assert.equal(injectMeta(html, null), html, '업체를 못 찾으면 원래 화면 그대로');
