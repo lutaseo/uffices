@@ -13,6 +13,7 @@ import { useRefreshOnReturn } from '../utils/useRefreshOnReturn.js';
 import PhotoViewer from '../components/PhotoViewer.jsx';
 import WorkRecord from '../components/WorkRecord.jsx';
 import LineItems from '../components/LineItems.jsx';
+import InstallCard from '../components/InstallCard.jsx';
 
 // 기사모바일: 기사 계정으로 로그인하면 이 화면만 보입니다 (휴대폰 화면 기준).
 export default function EngineerApp({ route }) {
@@ -598,7 +599,7 @@ function ContractView({ id, step }) {
 }
 
 function MyOffs() {
-  const { handleError } = useAuth();
+  const { handleError, company } = useAuth();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -703,6 +704,8 @@ function MyOffs() {
           onClose={() => setTarget(null)}
         />
       )}
+      {/* 기사님에게만 보이는 곳: 기사모바일을 앱으로 설치 */}
+      <InstallCard code={company?.code} app="engineer" />
     </div>
   );
 }

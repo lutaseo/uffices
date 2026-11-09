@@ -1,6 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { auth, imports } from '../api/index.js';
+import { API_MODE, auth, imports } from '../api/index.js';
 import { can } from './permissions.js';
+import { setAppManifest } from '../utils/install.js';
+import { tabApp } from '../api/sessionSlots.js';
 
 const AuthContext = createContext(null);
 
@@ -41,6 +43,11 @@ export function AuthProvider({ children }) {
       window.removeEventListener('focus', onShow);
     };
   }, []);
+
+  // 앱 설치 정보(manifest)를 로그인한 업체·화면(일반 / 상담실장 / 기사모바일)에 맞춤
+  useEffect(() => {
+    if (API_MODE === 'server' && state.company?.code) setAppManifest(state.company.code, tabApp()); // 데모(서버 없음)는 기본 앱 정보 그대로
+  }, [state.company?.code, state.user?.id]);
 
   // [임시] 관리자가 로그인하면 한 번: 예전 프로그램 계약의 계약담당을 실장님별로 맞춤 (끝나면 업체 정보에 기록 → 다시 안 함)
   const ownerFixTried = useRef(false);
