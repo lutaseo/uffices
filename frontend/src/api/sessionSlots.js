@@ -4,6 +4,15 @@
 //   예) 일반 화면에 관리자로 로그인한 채 새 탭에서 /업체/m 이나 /업체/t 를 열면 그 로그인 화면이 따로 뜸
 
 export const APP_HEADER = 'x-vb-app'; // 화면 → 서버: 'engineer' | 'manager' | (없음 = 일반)
+export const DEVICE_HEADER = 'x-vb-device'; // 화면 → 서버: 'pc' 면 브라우저(창)를 닫으면 사라지는 로그인 쿠키로
+
+// PC 인지 (마우스로 쓰는 기기) — 휴대폰·태블릿은 로그인을 유지 (기사님이 매번 다시 로그인하지 않게)
+export function isPcDevice() {
+  if (typeof window === 'undefined') return false;
+  const coarse = !!window.matchMedia?.('(pointer: coarse)').matches;
+  const ua = window.navigator?.userAgent || '';
+  return !coarse && !/Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+}
 const SLOTS = { engineer: 'eng', manager: 'mgr' };
 export const APPS = ['staff', ...Object.keys(SLOTS)];
 export const appOf = (v) => (SLOTS[v] ? v : 'staff');

@@ -2,7 +2,7 @@
 // 서버는 같은 services.js 코드를 실행하므로 함수 이름/인자/결과가 데모 모드와 동일합니다.
 
 import { ApiError } from './core.js';
-import { APP_HEADER, tabApp } from './sessionSlots.js';
+import { APP_HEADER, DEVICE_HEADER, isPcDevice, tabApp } from './sessionSlots.js';
 
 async function call(service, method, args) {
   let res;
@@ -12,7 +12,7 @@ async function call(service, method, args) {
   try {
     res = await fetch('/api/rpc', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', [APP_HEADER]: tabApp() }, // 이 탭의 로그인 칸 (일반 / 상담실장 / 기사)
+      headers: { 'Content-Type': 'application/json', [APP_HEADER]: tabApp(), [DEVICE_HEADER]: isPcDevice() ? 'pc' : 'mobile' }, // 이 탭의 로그인 칸 (일반 / 상담실장 / 기사) · PC 여부
       credentials: 'same-origin',
       body: JSON.stringify({ service, method, args }),
       signal: ctrl?.signal,

@@ -19,7 +19,7 @@ import { AUDIT_KEEP_DAYS, buildAuditEntry, skipAudit } from '../frontend/src/api
 import { hashPassword, verifyPassword } from './password.js';
 import { bootstrap } from './bootstrap.js';
 import { COOKIE_NAME, decodeSession, encodeSession, parseCookies, sessionCookie } from './session.js';
-import { APP_HEADER, appOf, mergeSession, viewSession } from '../frontend/src/api/sessionSlots.js';
+import { APP_HEADER, DEVICE_HEADER, appOf, mergeSession, viewSession } from '../frontend/src/api/sessionSlots.js';
 
 const store = new AsyncLocalStorage();
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -216,7 +216,7 @@ async function writeAuditLog(client, { name, session, db, scope, changes }) {
 function writeSession(ctx, full) {
   ctx.fullSession = full;
   ctx.session = viewSession(full, ctx.app);
-  ctx.setCookie = sessionCookie(full ? encodeSession(full) : '', { secure: ctx.secure });
+  ctx.setCookie = sessionCookie(full ? encodeSession(full) : '', { secure: ctx.secure, browserOnly: ctx.pc });
 }
 
 // 로그인 만료 시: 직원·기사모바일·고객모바일 로그인이 한 쿠키에 같이 있으므로 실패한 쪽만 지움
@@ -231,7 +231,7 @@ function keepOtherLogin(ctx, service) {
     if (full.customer) keep.customer = full.customer; // 고객모바일 로그인은 그대로
   }
   const out = keep && Object.keys(keep).filter((k) => k !== 'exp').length ? keep : null;
-  return sessionCookie(out ? encodeSession(out) : '', { secure: ctx.secure });
+  return sessionCookie(out ? encodeSession(out) : '', { secure: ctx.secure, browserOnly: ctx.pc });
 }
 
 // req: { body, headers }  → { status, headers, body }
@@ -247,6 +247,7 @@ export async function handleRpc({ body, headers }) {
   const proto = headers['x-forwarded-proto'] || (process.env.NODE_ENV === 'production' ? 'https' : 'http');
   const host = headers['x-forwarded-host'] || headers.host || 'localhost';
   const ctx = {
+    pc: headers[DEVICE_HEADER] === 'pc', // PC: 창을 닫으면 로그인이 풀리는 쿠키
     app: appOf(headers[APP_HEADER]), // 화면 종류 — 상담실장(/t)·기사모바일(/m)은 일반 화면과 따로 로그인
     fullSession: decodeSession(cookies[COOKIE_NAME]),
     setCookie: null,
