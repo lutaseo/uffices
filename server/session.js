@@ -44,9 +44,11 @@ export function parseCookies(header = '') {
   );
 }
 
-export function sessionCookie(value, { secure }) {
+// browserOnly: PC 는 기간 없는 쿠키(브라우저·앱 창을 모두 닫으면 사라짐) — 그래도 서명 안의 12시간 만료는 그대로
+export function sessionCookie(value, { secure, browserOnly = false }) {
   const parts = [`${COOKIE_NAME}=${value}`, 'Path=/', 'HttpOnly', 'SameSite=Lax'];
   if (secure) parts.push('Secure');
-  parts.push(value ? `Max-Age=${MAX_AGE_SEC}` : 'Max-Age=0');
+  if (!value) parts.push('Max-Age=0');
+  else if (!browserOnly) parts.push(`Max-Age=${MAX_AGE_SEC}`);
   return parts.join('; ');
 }

@@ -78,6 +78,14 @@ test('로그인: 쿠키 보안 속성, 비밀번호 해시 비노출', async () 
   assert.match(secure.lastCookie, /SameSite=Lax/);
   assert.match(secure.lastCookie, /Secure/);
   assert.ok(!JSON.stringify(me).includes('passwordHash'));
+  assert.match(secure.lastCookie, /Max-Age=43200/, '휴대폰·태블릿(기본): 12시간 유지');
+  // PC: 기간 없는 쿠키 → 브라우저를 모두 닫으면 로그인이 풀림 (서명 안의 12시간 만료는 그대로)
+  const pc = client({ 'x-forwarded-proto': 'https', 'x-vb-device': 'pc' });
+  await pc.ok('auth', 'login', 'admin', 'admin1234');
+  assert.ok(!/Max-Age|Expires/.test(pc.lastCookie), pc.lastCookie);
+  assert.equal((await pc.ok('auth', 'me')).user.loginId, 'admin');
+  await pc.ok('auth', 'logout');
+  assert.match(pc.lastCookie, /Max-Age=0/, 'PC 로그아웃은 쿠키 지움');
   await admin.ok('auth', 'login', 'admin', 'admin1234');
   await manager.ok('auth', 'login', 'manager', 'manager1234');
 });

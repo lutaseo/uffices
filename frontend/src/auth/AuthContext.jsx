@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { API_MODE, auth, imports } from '../api/index.js';
 import { can } from './permissions.js';
 import { setAppManifest } from '../utils/install.js';
+import { endStalePcLogin } from '../utils/pcSession.js';
 import { tabApp } from '../api/sessionSlots.js';
 
 const AuthContext = createContext(null);
@@ -11,6 +12,7 @@ export function AuthProvider({ children }) {
 
   const refresh = useCallback(async () => {
     try {
+      await endStalePcLogin(); // PC 에서 창을 모두 닫았다가 다시 열었으면 먼저 로그아웃
       const { user, company } = await auth.me();
       setState({ user, company, loading: false });
     } catch {
