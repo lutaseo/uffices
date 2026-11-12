@@ -1714,3 +1714,67 @@ test('업체 기능 스위치: 운영자만 켜고 끔, 끈 기능은 서버에�
   await admin.ok('contracts', 'setAs', [c.id], true, { request: '들뜸' });
   assert.equal((await client().ok('customerApp', 'login', 'thegood', '스위치고객', '01051516262')).contracts.length, 1, '켜면 고객확인페이지 열림');
 });
+
+test('수정로그 되돌리기: 관리자만, 수정·삭제·등록을 이전으로, 나중에 또 바뀌었으면 막음, 되돌린 것도 다시 되돌림, 알림톡은 불가', async () => {
+  const who = `되돌림${Date.now() % 100000}`;
+  const c = await admin.ok('contracts', 'create', { ...base, customerName: who, customerPhone: '010-3131-4141', totalAmount: 100000, payments: [] });
+  const g = await admin.ok('contracts', 'get', c.id);
+  await admin.ok('contracts', 'update', c.id, { ...g, contractDate: '2026-10-01', totalAmount: 200000 });
+  const find = async (action) => (await admin.ok('auditLogs', 'list', { q: who })).rows.find((r) => r.action === action && !r.undoneAt);
+  const edit = await find('계약 수정');
+  assert.equal(edit.canUndo, true);
+  assert.equal(edit.undo, undefined, '목록에는 이전·이후 자료를 보내지 않음');
+  const mgr = client();
+  await mgr.ok('auth', 'login', 'manager', 'manager1234');
+  assert.equal((await mgr('auditLogs', 'undo', edit.id)).status, 403, '실장은 불가');
+
+  await admin.ok('auditLogs', 'undo', edit.id);
+  const back = await admin.ok('contracts', 'get', c.id);
+  assert.equal(back.contractDate, base.contractDate, '계약일이 이전으로');
+  assert.equal(back.totalAmount, 100000);
+  assert.ok(back.history.some((h) => h.action.includes('되돌리기')), '변경이력에 되돌리기');
+  assert.equal((await admin('auditLogs', 'undo', edit.id)).status, 400, '두 번 되돌리기 불가');
+  const listed = (await admin.ok('auditLogs', 'list', { q: who })).rows.find((r) => r.id === edit.id);
+  assert.ok(listed.undoneAt && !listed.canUndo, '되돌림 표시');
+  // 되돌린 것을 다시 되돌리기 (다시 적용)
+  const redo = (await admin.ok('auditLogs', 'list', {})).rows.find((r) => r.undoOf === edit.id);
+  await admin.ok('auditLogs', 'undo', redo.id);
+  assert.equal((await admin.ok('contracts', 'get', c.id)).contractDate, '2026-10-01');
+
+  // 나중에 또 바뀐 자료는 막음
+  const g2 = await admin.ok('contracts', 'get', c.id);
+  await admin.ok('contracts', 'update', c.id, { ...g2, contractDate: '2026-10-02' });
+  const g3 = await admin.ok('contracts', 'get', c.id);
+  await admin.ok('contracts', 'update', c.id, { ...g3, contractDate: '2026-10-03' });
+  const rows = (await admin.ok('auditLogs', 'list', { q: who })).rows.filter((r) => r.action === '계약 수정' && !r.undoneAt && !r.undoOf);
+  const older = rows[1]; // 최신순
+  assert.equal((await admin('auditLogs', 'undo', older.id)).status, 400, '나중 수정을 덮어쓰지 않음');
+  await admin.ok('auditLogs', 'undo', rows[0].id);
+  await admin.ok('auditLogs', 'undo', older.id);
+  assert.equal((await admin.ok('contracts', 'get', c.id)).contractDate, '2026-10-01', '나중 것부터 차례로');
+
+  // 휴지통 이동 되돌리기, 등록 되돌리기(계약 없어짐)
+  await admin.ok('contracts', 'moveToTrash', [c.id]);
+  await admin.ok('auditLogs', 'undo', (await find('휴지통으로 이동')).id);
+  assert.ok(!(await admin.ok('contracts', 'get', c.id)).deletedAt, '휴지통에서 돌아옴');
+
+  // 알림톡 발송은 되돌릴 수 없음
+  await admin.ok('notifications', 'send', { contractId: c.id, template: '계약완료', templateKey: '계약완료', variables: {}, buttons: [], target: '고객', brand: '더좋은집', receiverName: who, receiverPhone: '010-3131-4141', message: 'x' });
+  const talk = (await admin.ok('auditLogs', 'list', {})).rows.find((r) => r.action === '알림톡 발송');
+  if (talk) {
+    assert.equal(talk.canUndo, false);
+    assert.equal((await admin('auditLogs', 'undo', talk.id)).status, 400);
+  }
+
+  // 기능 스위치를 끄면 막힘
+  const sup = client();
+  await sup.ok('auth', 'login', 'super', 'super-test-1234');
+  const good = (await sup.ok('companies', 'list')).find((x) => x.code === 'thegood');
+  await sup.ok('companies', 'update', good.id, { features: { auditUndo: false } });
+  const g4 = await admin.ok('contracts', 'get', c.id);
+  await admin.ok('contracts', 'update', c.id, { ...g4, contractDate: '2026-10-05' });
+  const latest = (await admin.ok('auditLogs', 'list', { q: who }));
+  assert.equal(latest.canUndo, false);
+  assert.equal((await admin('auditLogs', 'undo', latest.rows[0].id)).status, 403);
+  await sup.ok('companies', 'update', good.id, { features: {} });
+});

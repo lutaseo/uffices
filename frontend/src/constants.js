@@ -27,6 +27,7 @@ export const FEATURES = [
   { key: 'alimtalk', label: '카카오 알림톡 보내기', on: true },
   { key: 'manager', label: '상담실장 화면 (/t)', on: true },
   { key: 'customer', label: '고객 확인 페이지 (/c)', on: true },
+  { key: 'auditUndo', label: '수정로그 되돌리기 (관리자)', on: true },
 ];
 export function hasFeature(company, key) {
   const f = FEATURES.find((x) => x.key === key);

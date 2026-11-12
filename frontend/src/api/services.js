@@ -23,8 +23,9 @@ import {
 } from './runtime.js';
 import { ROLES, DATA_SCOPES, permissionsOf, isOwnScopeOnly, ALL_PERMISSION_KEYS } from '../auth/permissions.js';
 import { digitsOnly, formatPhone } from '../utils/format.js';
-import { CATEGORIES, DEPARTMENTS, brandTerms, companyCategories, parseCategories, parseFeatures, termsSource } from '../constants.js';
-import { AUDIT_KEEP_DAYS, auditText, skipAudit } from './audit.js';
+import { CATEGORIES, DEPARTMENTS, brandTerms, companyCategories, hasFeature, parseCategories, parseFeatures, termsSource } from '../constants.js';
+import { AUDIT_KEEP_DAYS, UNDO_KEEP, auditText, skipAudit, undoComparable } from './audit.js';
+import { addHistory } from './views.js';
 import {
   ApiError,
   authorize,
@@ -38,6 +39,7 @@ import {
   validatePassword,
   readableContracts,
   requireFeature,
+  companyOf,
 } from './core.js';
 
 export { ApiError } from './core.js';
@@ -64,7 +66,66 @@ export const auditLogs = {
       if (text && !`${r.actor?.name} ${r.action} ${auditText(r)}`.includes(text)) return false;
       return true;
     });
-    return { keepDays: AUDIT_KEEP_DAYS, demo: !db.auditLogs, rows: clone(rows.slice(0, 1000)) };
+    // 되돌린 기록 표시: 다른 기록의 undoOf 가 이 기록을 가리키면 '되돌림'
+    const undone = new Map((db.auditLogs || []).filter((r) => r.undoOf).map((r) => [Number(r.undoOf), r]));
+    const canUndo = hasFeature(companyOf(db, user), 'auditUndo');
+    return {
+      keepDays: AUDIT_KEEP_DAYS,
+      demo: !db.auditLogs,
+      canUndo,
+      rows: clone(
+        rows.slice(0, 1000).map(({ undo, ...r }) => {
+          const by = undone.get(r.id);
+          return { ...r, canUndo: canUndo && !!(undo?.length || r.hasUndo) && !by, undoneAt: by?.at || null, undoneBy: by?.actor?.name || '' };
+        }),
+      ),
+    };
+  },
+
+  // 되돌리기: 그 기록이 바꾼 행을 바뀌기 전으로 (업체 관리자만)
+  //   그 뒤에 같은 자료를 또 바꿨으면 막음 (나중 수정을 덮어쓰지 않게) — 나중 기록부터 차례로 되돌리면 됨
+  async undo(logId) {
+    const { db, user } = await session();
+    if (user.role !== ROLES.ADMIN) throw new ApiError('업체 관리자만 되돌릴 수 있습니다.', 'FORBIDDEN');
+    requireFeature(db, user, 'auditUndo');
+    if (!db.auditLogs) throw new ApiError('데모 모드에서는 되돌리기를 쓸 수 없습니다.');
+    const target = db.auditLogs.find((r) => r.id === Number(logId));
+    if (!target) throw new ApiError('기록을 찾을 수 없습니다. (2주 지난 기록은 지워집니다)', 'NOT_FOUND');
+    if (db.auditLogs.some((r) => Number(r.undoOf) === target.id)) throw new ApiError('이미 되돌린 기록입니다.');
+    const undo = target.undo; // 되돌리기 기록도 다시 되돌릴 수 있음 (다시 적용)
+    if (!Array.isArray(undo) || !undo.length) throw new ApiError('이 기록은 되돌릴 수 없습니다. (되돌리기 기능이 생기기 전 기록, 또는 알림톡 발송·대량 가져오기 등)');
+    const mine = (table, row) => (table === 'companies' ? row.id === user.companyId : row.companyId === user.companyId);
+    // 먼저 모두 확인하고 (하나라도 안 되면 아무것도 바꾸지 않음)
+    for (const ch of undo) {
+      const list = db[ch.table];
+      if (!Array.isArray(list)) throw new ApiError('되돌릴 수 없는 자료가 들어 있습니다.');
+      if (![ch.before, ch.after].filter(Boolean).every((r) => mine(ch.table, r))) throw new ApiError('권한이 없습니다.', 'FORBIDDEN');
+      const now = list.find((r) => r.id === ch.id) || null;
+      if (undoComparable(now) !== undoComparable(ch.after)) {
+        throw new ApiError('그 뒤에 같은 자료가 또 바뀌어서 되돌릴 수 없습니다. 더 나중 기록부터 차례로 되돌려 주세요.');
+      }
+    }
+    for (const ch of undo) {
+      const list = db[ch.table];
+      const i = list.findIndex((r) => r.id === ch.id);
+      if (!ch.before) {
+        list.splice(i, 1); // 그때 새로 생긴 것 → 없앰
+        continue;
+      }
+      const now = i >= 0 ? list[i] : null;
+      const row = clone(ch.before);
+      UNDO_KEEP.forEach((k) => {
+        if (now && k in now) row[k] = now[k];
+      });
+      if (ch.table === 'contracts') {
+        row.history = now?.history || ch.before.history || [];
+        addHistory(row, user, '되돌리기 (수정로그)', [{ label: '작업', from: '', to: target.action || '' }]);
+      }
+      if (i >= 0) list[i] = row;
+      else list.push(row); // 그때 지운 것 → 다시 살림
+    }
+    saveDb(db);
+    return { ok: true };
   },
 };
 

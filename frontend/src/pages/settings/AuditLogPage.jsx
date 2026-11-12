@@ -7,6 +7,12 @@ import { addDays, today } from '../../utils/date.js';
 const ROLE_LABEL = { ADMIN: '관리자', MANAGER: '실장', ENGINEER: '기사', CUSTOMER: '고객', SUPER: '운영자' };
 const TYPE_CLASS = { 추가: 'text-done', 삭제: 'text-red', 수정: '' };
 
+const auditPreview = (r) =>
+  (r.items || [])
+    .slice(0, 5)
+    .map((it) => `[${it.type}] ${it.target}`)
+    .join('\n');
+
 const timeText = (iso) => {
   const d = new Date(iso);
   const p = (n) => String(n).padStart(2, '0');
@@ -53,6 +59,21 @@ export default function AuditLogPage() {
     load(filter);
   };
   const rows = useMemo(() => data?.rows || [], [data]);
+  const [busy, setBusy] = useState(null);
+  const undo = async (r) => {
+    const what = auditPreview(r);
+    if (!window.confirm(`이 기록을 되돌릴까요?\n\n${timeText(r.at)} ${r.actor?.name || ''} — ${r.action}\n${what}\n\n바뀌기 전 상태로 돌아갑니다. (되돌린 것도 수정로그에 남고, 다시 되돌릴 수 있습니다)`)) return;
+    setBusy(r.id);
+    try {
+      await auditLogs.undo(r.id);
+      alert('되돌렸습니다.');
+      await load(filter);
+    } catch (e) {
+      handleError(e);
+    } finally {
+      setBusy(null);
+    }
+  };
 
   return (
     <div className="page-card">
@@ -60,6 +81,7 @@ export default function AuditLogPage() {
         <h2>수정로그</h2>
         <ul className="notice-list">
           <li>누가 언제 무엇을 등록·수정·삭제했는지 자동으로 남습니다. 최근 {data?.keepDays || 14}일 기록만 보관하고, 그보다 오래된 기록은 자동으로 지워집니다.</li>
+          {data?.canUndo && <li>잘못 바꾼 내용은 오른쪽 [되돌리기]로 바뀌기 전으로 돌려놓을 수 있습니다. 그 뒤에 같은 자료를 또 바꿨으면 더 나중 기록부터 차례로 되돌려 주세요. (알림톡 발송·업체 설정·대량 가져오기 등은 되돌릴 수 없습니다)</li>}
           <li>비밀번호·서명, 고객 연락처·주소, 메모 같은 내용은 &apos;변경&apos;만 표시하고 값은 남기지 않습니다. 금액·일정·상태·담당 등은 바뀌기 전 → 후 값을 보여 줍니다.</li>
         </ul>
       </div>
@@ -91,12 +113,13 @@ export default function AuditLogPage() {
               <th>누가</th>
               <th>작업</th>
               <th>무엇을</th>
+              {data?.canUndo && <th>되돌리기</th>}
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={4} className="no-data">
+                <td colSpan={data?.canUndo ? 5 : 4} className="no-data">
                   {loading ? '불러오는 중...' : '기록이 없습니다.'}
                 </td>
               </tr>
@@ -126,6 +149,21 @@ export default function AuditLogPage() {
                     </div>
                   ))}
                 </td>
+                {data?.canUndo && (
+                  <td className="nowrap">
+                    {r.undoneAt ? (
+                      <span className="sub-text">
+                        되돌림
+                        <br />
+                        {timeText(r.undoneAt)} {r.undoneBy}
+                      </span>
+                    ) : r.canUndo ? (
+                      <button type="button" className="btn-outline-action" disabled={busy === r.id} onClick={() => undo(r)}>
+                        {busy === r.id ? '되돌리는 중...' : '↩ 되돌리기'}
+                      </button>
+                    ) : null}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

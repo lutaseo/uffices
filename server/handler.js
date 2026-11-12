@@ -15,7 +15,7 @@ import { setRuntimeAdapter } from '../frontend/src/api/runtime.js';
 import { ApiError } from '../frontend/src/api/core.js';
 import { bizgoConfigured, listSenders, sendAlimtalk, inquiryReport } from './bizgo.js';
 import { getPool, loadSnapshot, persistChanges, saveAuditLog, resolveCompanyId, contractByEsignToken, companyIdForCustomer, fingerprint } from './pg.js';
-import { AUDIT_KEEP_DAYS, buildAuditEntry, skipAudit } from '../frontend/src/api/audit.js';
+import { AUDIT_KEEP_DAYS, buildAuditEntry, skipAudit, undoSnapshot } from '../frontend/src/api/audit.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { bootstrap } from './bootstrap.js';
 import { COOKIE_NAME, decodeSession, encodeSession, parseCookies, sessionCookie } from './session.js';
@@ -188,7 +188,7 @@ function ensureReady() {
 }
 
 // 수정 로그 한 줄 저장 (실패해도 본 저장은 그대로 — SAVEPOINT 로 분리)
-async function writeAuditLog(client, { name, session, db, scope, changes }) {
+async function writeAuditLog(client, { name, args, session, db, scope, changes }) {
   let actor;
   if (session?.userId) {
     const u = db.users.find((x) => x.id === session.userId);
@@ -201,6 +201,10 @@ async function writeAuditLog(client, { name, session, db, scope, changes }) {
   }
   const entry = buildAuditEntry({ action: name, actor, changes, db });
   if (!entry) return;
+  // 되돌리기용: 바뀐 행의 이전·이후 전체 (화면 목록에는 보내지 않음)
+  const undo = undoSnapshot(name, changes);
+  if (undo) entry.undo = undo;
+  if (name === 'auditLogs.undo') entry.undoOf = Number(args[0]);
   const first = changes[0];
   const row = first.after || (typeof first.before === 'string' ? JSON.parse(first.before) : first.before) || {};
   const companyId = scope.companyId ?? (first.table === 'companies' ? row.id : row.companyId) ?? null;
@@ -309,6 +313,7 @@ export async function handleRpc({ body, headers }) {
       if (name === 'contracts.get' || name === 'contracts.signBundle') scope.signatureFor = args[0]; // 계약서 보기일 때만 서명 이미지 로드
       if (RECEIPT_CALLS.has(name)) scope.receiptsFor = args[0]; // 이 계약의 영수증 사진만 로드
       if (name === 'auditLogs.list') scope.auditLogs = true; // 수정 로그 화면
+      if (name === 'auditLogs.undo') scope.auditLogId = Number(args[0]) || -1; // 되돌리기: 그 기록 하나 (+ 이미 되돌렸는지)
       if (SLIM_CALLS.has(name) && readOnlyCall) scope.slimContracts = true; // 목록: 긴 글·변경이력은 읽지 않음
     }
     // 계약 목록 '바뀌었나' 확인: 먼저 계약 요약만 읽어 보고, 바뀌었을 때만 계약 전체를 다시 읽음 (트래픽 절약)
@@ -345,7 +350,7 @@ export async function handleRpc({ body, headers }) {
     // 업무 코드가 저장(saveDb)한 내용만 반영. (예: 로그인 실패 횟수는 오류여도 저장됨)
     if (!readOnlyCall) {
       const changes = await persistChanges(client, before, ctx.committed, readOnly);
-      if (!error && changes.length && !skipAudit(name)) await writeAuditLog(client, { name, session: sessionAtStart, db, scope, changes });
+      if (!error && changes.length && !skipAudit(name)) await writeAuditLog(client, { name, args, session: sessionAtStart, db, scope, changes });
     }
     await client.query('COMMIT');
     // 느린 요청 기록 (Vercel 로그에서 '[느림]' 으로 검색) — 다음에 느릴 때 원인을 바로 찾기 위함
