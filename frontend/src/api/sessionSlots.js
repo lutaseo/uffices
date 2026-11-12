@@ -4,6 +4,7 @@
 //   예) 일반 화면에 관리자로 로그인한 채 새 탭에서 /업체/m 이나 /업체/t 를 열면 그 로그인 화면이 따로 뜸
 
 export const APP_HEADER = 'x-vb-app'; // 화면 → 서버: 'engineer' | 'manager' | (없음 = 일반)
+export const CO_HEADER = 'x-vb-co'; // 화면 → 서버: 이 탭의 업체 주소 (thegood, filelike …) — 업체마다 로그인을 따로 보관
 export const DEVICE_HEADER = 'x-vb-device'; // 화면 → 서버: 'pc' 면 브라우저(창)를 닫으면 사라지는 로그인 쿠키로
 
 // PC 인지 (마우스로 쓰는 기기) — 휴대폰·태블릿은 로그인을 유지 (기사님이 매번 다시 로그인하지 않게)
@@ -32,7 +33,22 @@ const withoutSlots = (o) => {
 //   예전 쿠키(칸 나누기 전)에 기사 로그인이 맨 위에 있으면 기사모바일 칸으로 봄 (기사는 다시 로그인 안 해도 됨)
 const legacyEngineer = (full) => (full && full.engineerId && !full.userId ? { engineerId: full.engineerId } : null);
 
-export function viewSession(full, app) {
+// 업체 칸: { cos: { thegood: { …일반·mgr·eng·customer }, filelike: {…} } } — 업체 주소마다 따로 로그인
+//   co 가 없거나(운영자 화면) 예전 쿠키(cos 없음)면 맨 위를 그대로 봄 — 업체 칸이 하나라도 생기면 업체 화면은 그 업체 칸만 봄
+const validCo = (co) => /^[a-z0-9-]{2,30}$/.test(String(co || ''));
+const withoutCos = (o) => {
+  if (!o) return o;
+  const { cos, ...rest } = o; // eslint-disable-line no-unused-vars
+  return rest;
+};
+
+export function viewSession(full, app, co = '') {
+  if (!full) return null;
+  if (validCo(co) && full.cos) return viewSlot(full.cos[co] || null, app);
+  return viewSlot(withoutCos(full), app);
+}
+
+function viewSlot(full, app) {
   if (!full) return null;
   const slot = SLOTS[app];
   const own = slot === 'eng' ? full.eng || legacyEngineer(full) : slot ? full[slot] : null;
@@ -41,7 +57,24 @@ export function viewSession(full, app) {
 }
 
 // 지금 화면의 로그인을 바꿈(data=null 이면 로그아웃) → 다른 칸은 그대로 둔 전체
-export function mergeSession(full, app, data) {
+export function mergeSession(full, app, data, co = '') {
+  if (validCo(co)) {
+    // 이 업체 칸만 바꾸고, 다른 업체 칸과 맨 위(예전 쿠키·운영자 로그인)는 그대로
+    const cos = { ...(full?.cos || {}) };
+    const top = clean(withoutCos(full));
+    const next = mergeSlot(cos[co] || null, app, data);
+    if (next) cos[co] = next;
+    else delete cos[co];
+    const out = { ...(top || {}) };
+    if (Object.keys(cos).length) out.cos = cos;
+    return Object.keys(out).length ? out : null;
+  }
+  const merged = mergeSlot(withoutCos(full), app, data);
+  if (!full?.cos) return merged;
+  return { ...(merged || {}), cos: full.cos }; // 업체 칸은 그대로
+}
+
+function mergeSlot(full, app, data) {
   const base = clean(full) || {};
   const slot = SLOTS[app];
   if (slot) {
@@ -89,6 +122,30 @@ export function tabApp() {
     return appOf(window.sessionStorage.getItem(TAB_KEY));
   } catch {
     return byPath || 'staff';
+  }
+}
+
+// 이 탭의 업체 주소: 주소 첫 단어가 업체 주소면 그것 (탭에 기억), 아니면(/contracts 등) 기억한 값
+const CO_KEY = 'vb.co';
+export function tabCompany() {
+  if (typeof window === 'undefined') return '';
+  const parts = String(window.location.pathname || '').split('/').filter(Boolean);
+  const PAGES = ['c', 'e', 'm', 't', 'consult', 'contracts', 'customers', 'schedule', 'progress', 'stats', 'admin', 'settings', 'me', 'engineer', 'sign', 'api', 'assets'];
+  const first = String(parts[0] || '').toLowerCase();
+  try {
+    if (first && !PAGES.includes(first) && validCo(first)) {
+      window.sessionStorage.setItem(CO_KEY, first);
+      window.localStorage.setItem(CO_KEY, first); // 업체 주소 없이 연 새 탭(즐겨찾기 /contracts 등)은 마지막 업체로
+      return first;
+    }
+    if (!first) {
+      window.sessionStorage.setItem(CO_KEY, ''); // 운영자 첫 화면(/) — 업체 없음
+      return '';
+    }
+    const own = window.sessionStorage.getItem(CO_KEY);
+    return own !== null ? own : window.localStorage.getItem(CO_KEY) || '';
+  } catch {
+    return validCo(first) && !PAGES.includes(first) ? first : '';
   }
 }
 

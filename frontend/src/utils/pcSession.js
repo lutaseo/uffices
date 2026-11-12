@@ -4,7 +4,7 @@
 //      30초마다 '열려 있음' 시각을 남기고, 화면을 새로 열 때 그 시각이 3분보다 오래됐으면(= 모든 창이 닫혀 있었음) 로그아웃
 //   휴대폰·태블릿은 그대로 (기사님이 매번 로그인하지 않게)
 import { API_MODE } from '../api/index.js';
-import { APP_HEADER, APPS, DEVICE_HEADER, isPcDevice } from '../api/sessionSlots.js';
+import { APP_HEADER, APPS, CO_HEADER, DEVICE_HEADER, isPcDevice, tabCompany } from '../api/sessionSlots.js';
 
 const KEY = 'vb.pcAlive';
 const STALE = 3 * 60 * 1000;
@@ -37,7 +37,7 @@ export async function endStalePcLogin() {
   for (const app of APPS) {
     await fetch('/api/rpc', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', [APP_HEADER]: app, [DEVICE_HEADER]: 'pc' },
+      headers: { 'Content-Type': 'application/json', [APP_HEADER]: app, [CO_HEADER]: tabCompany(), [DEVICE_HEADER]: 'pc' },
       credentials: 'same-origin',
       body: JSON.stringify({ service: 'auth', method: 'logout', args: [] }),
     }).catch(() => {});

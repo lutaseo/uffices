@@ -489,6 +489,36 @@ test('업체 주소 코드: 로그인 화면 조회, 그 업체 계정만 로그
   assert.equal((await e('auth', 'login', 'gong', 'gong1234', 'other-co')).status, 400, '기사도 자기 업체 주소에서만');
   await e.ok('auth', 'login', 'gong', 'gong1234', 'thegood');
   await a.ok('auth', 'login', 'otheradmin', 'other1234', 'other-co');
+
+  // 한 브라우저에서 두 업체 주소에 각각 로그인: 서로의 로그인을 바꾸지 않음 (x-vb-co 로 업체 칸을 나눔)
+  {
+    let cookie = '';
+    const as = (co) => async (service, method, ...args) => {
+      const out = await handleRpc({ body: { service, method, args }, headers: { cookie, host: 'test.local', 'x-vb-co': co } });
+      const sc = out.headers['Set-Cookie'];
+      if (sc) cookie = sc.split(';')[0];
+      return { status: out.status, ...JSON.parse(out.body) };
+    };
+    const good = as('thegood');
+    const oth = as('other-co');
+    assert.equal((await good('auth', 'login', 'admin', 'admin1234', 'thegood')).status, 200);
+    assert.equal((await oth('auth', 'me')).status, 401, '다른 업체 주소에서는 아직 로그인 전');
+    assert.equal((await oth('auth', 'login', 'otheradmin', 'other1234', 'other-co')).status, 200);
+    assert.equal((await good('auth', 'me')).result.user.loginId, 'admin', '첫 업체 로그인은 그대로');
+    assert.equal((await oth('auth', 'me')).result.user.loginId, 'otheradmin');
+    await oth('auth', 'logout');
+    assert.equal((await oth('auth', 'me')).status, 401);
+    assert.equal((await good('auth', 'me')).result.user.loginId, 'admin', '다른 업체 로그아웃은 영향 없음');
+    // 예전 쿠키(업체 칸 없음)는 그 업체 화면에서 그대로 로그인 유지, 다른 업체 화면에서는 그 업체 계정이 아니면 로그인 안 된 것으로
+    const legacy = client();
+    await legacy.ok('auth', 'login', 'admin', 'admin1234');
+    const legacyCookie = legacy.lastCookie.split(';')[0];
+    const same = await handleRpc({ body: { service: 'auth', method: 'me', args: [] }, headers: { cookie: legacyCookie, host: 'test.local', 'x-vb-co': 'thegood' } });
+    assert.equal(same.status, 200, '배포 전 로그인은 그 업체 화면에서 그대로');
+    const peek = await handleRpc({ body: { service: 'auth', method: 'me', args: [] }, headers: { cookie: legacyCookie, host: 'test.local', 'x-vb-co': 'other-co' } });
+    assert.equal(peek.status, 401, '다른 업체 계정 쿠키로는 그 업체 화면을 못 씀');
+    assert.ok(!peek.headers['Set-Cookie'], '원래 업체 로그인은 지우지 않음');
+  }
 });
 
 test('데이터 가져오기: 기사 목록 + 예전 계약 파일(중복 없이, 기사 자동 연결)', async () => {

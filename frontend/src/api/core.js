@@ -3,7 +3,7 @@
 // (백엔드에서는 인증 미들웨어 + 권한 가드에 해당)
 // ============================================================
 
-import { getSession, loadDb } from './runtime.js';
+import { getSession, loadDb, requestCompany } from './runtime.js';
 import { ROLES, can, isOwnScopeOnly } from '../auth/permissions.js';
 import { today } from '../utils/date.js';
 
@@ -72,6 +72,12 @@ export async function session() {
     user = e && e.passwordHash ? engineerAsUser(e) : null;
   }
   if (!user || !user.active) throw new ApiError('로그인이 필요합니다.', 'UNAUTHORIZED');
+  // 업체 주소별 로그인: 이 탭의 업체(예: /filelike)가 아닌 다른 업체 계정이면 로그인 안 된 것으로 (업체끼리 섞이지 않게)
+  const co = requestCompany();
+  if (co && user.role !== ROLES.SUPER) {
+    const mine = db.companies.find((c) => c.id === user.companyId);
+    if (mine && mine.code && mine.code !== co) throw new ApiError('로그인이 필요합니다.', 'UNAUTHORIZED');
+  }
   const err = companyAccessError(db, user);
   if (err) throw new ApiError(err, 'UNAUTHORIZED');
   return { db, user };
