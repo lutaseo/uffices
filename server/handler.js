@@ -19,7 +19,7 @@ import { AUDIT_KEEP_DAYS, buildAuditEntry, skipAudit } from '../frontend/src/api
 import { hashPassword, verifyPassword } from './password.js';
 import { bootstrap } from './bootstrap.js';
 import { COOKIE_NAME, decodeSession, encodeSession, parseCookies, sessionCookie } from './session.js';
-import { APP_HEADER, DEVICE_HEADER, appOf, mergeSession, viewSession } from '../frontend/src/api/sessionSlots.js';
+import { APP_HEADER, CO_HEADER, DEVICE_HEADER, appOf, mergeSession, viewSession } from '../frontend/src/api/sessionSlots.js';
 
 const store = new AsyncLocalStorage();
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -41,13 +41,14 @@ setRuntimeAdapter({
   // 지금 화면(일반 / 기사모바일)의 로그인 칸만 바꾸고 다른 칸은 그대로 (sessionSlots.js)
   setSession(data) {
     const ctx = store.getStore();
-    writeSession(ctx, mergeSession(ctx.fullSession, ctx.app, data));
+    writeSession(ctx, mergeSession(ctx.fullSession, ctx.app, data, ctx.co));
   },
   clearSession() {
     const ctx = store.getStore();
-    writeSession(ctx, mergeSession(ctx.fullSession, ctx.app, null));
+    writeSession(ctx, mergeSession(ctx.fullSession, ctx.app, null, ctx.co));
   },
   publicBaseUrl: () => store.getStore().baseUrl,
+  requestCompany: () => store.getStore().co || '',
   clientInfo: () => ({ userAgent: store.getStore().userAgent, ip: store.getStore().ip }),
   async resetDemoData() {
     throw new ApiError('서버 모드에서는 데이터 초기화를 할 수 없습니다.', 'FORBIDDEN');
@@ -215,15 +216,30 @@ async function writeAuditLog(client, { name, session, db, scope, changes }) {
 
 function writeSession(ctx, full) {
   ctx.fullSession = full;
-  ctx.session = viewSession(full, ctx.app);
+  ctx.session = viewSession(full, ctx.app, ctx.co);
   ctx.setCookie = sessionCookie(full ? encodeSession(full) : '', { secure: ctx.secure, browserOnly: ctx.pc });
 }
 
 // 로그인 만료 시: 직원·기사모바일·고객모바일 로그인이 한 쿠키에 같이 있으므로 실패한 쪽만 지움
 function keepOtherLogin(ctx, service) {
   const full = ctx.fullSession || {};
+  // 업체 주소별 로그인: 예전 쿠키(업체 칸 없음)를 다른 업체 화면에서 열었으면 쿠키는 건드리지 않음 (원래 업체 로그인 유지)
+  if (ctx.co && !full.cos) return null;
   let keep;
-  if (service === 'customerApp') {
+  if (ctx.co) {
+    const cos = { ...full.cos };
+    const part = cos[ctx.co] || {};
+    if (service === 'customerApp') {
+      const { customer, ...rest } = part; // eslint-disable-line no-unused-vars
+      cos[ctx.co] = rest;
+    } else {
+      cos[ctx.co] = mergeSession(part, ctx.app, null) || {};
+      if (part.customer) cos[ctx.co].customer = part.customer;
+    }
+    if (!Object.keys(cos[ctx.co]).filter((k) => k !== 'exp').length) delete cos[ctx.co];
+    const { cos: _old, ...top } = full; // eslint-disable-line no-unused-vars
+    keep = Object.keys(cos).length ? { ...top, cos } : top;
+  } else if (service === 'customerApp') {
     const { customer, ...rest } = full; // eslint-disable-line no-unused-vars
     keep = rest;
   } else {
@@ -247,6 +263,7 @@ export async function handleRpc({ body, headers }) {
   const proto = headers['x-forwarded-proto'] || (process.env.NODE_ENV === 'production' ? 'https' : 'http');
   const host = headers['x-forwarded-host'] || headers.host || 'localhost';
   const ctx = {
+    co: /^[a-z0-9-]{2,30}$/.test(String(headers[CO_HEADER] || '')) ? String(headers[CO_HEADER]) : '', // 이 탭의 업체 주소 — 업체마다 로그인 따로
     pc: headers[DEVICE_HEADER] === 'pc', // PC: 창을 닫으면 로그인이 풀리는 쿠키
     app: appOf(headers[APP_HEADER]), // 화면 종류 — 상담실장(/t)·기사모바일(/m)은 일반 화면과 따로 로그인
     fullSession: decodeSession(cookies[COOKIE_NAME]),
@@ -258,7 +275,7 @@ export async function handleRpc({ body, headers }) {
     committed: null,
     readOnly: READ_ONLY.has(name),
   };
-  ctx.session = viewSession(ctx.fullSession, ctx.app);
+  ctx.session = viewSession(ctx.fullSession, ctx.app, ctx.co);
 
   const readOnlyCall = READ_ONLY.has(name);
   const startedAt = Date.now();
@@ -338,7 +355,8 @@ export async function handleRpc({ body, headers }) {
     const extraHeaders = ctx.setCookie ? { 'Set-Cookie': ctx.setCookie } : {};
     if (error) {
       if (error instanceof ApiError) {
-        const cookieHeaders = error.code === 'UNAUTHORIZED' ? { 'Set-Cookie': keepOtherLogin(ctx, service) } : extraHeaders;
+        const kept = error.code === 'UNAUTHORIZED' ? keepOtherLogin(ctx, service) : null;
+        const cookieHeaders = kept ? { 'Set-Cookie': kept } : error.code === 'UNAUTHORIZED' ? {} : extraHeaders;
         return json(STATUS[error.code] || 400, { error: { message: error.message, code: error.code } }, cookieHeaders);
       }
       throw error;

@@ -1,7 +1,7 @@
 // 브라우저 데모 모드 저장소 (localStorage). 서버 연결 시에는 사용되지 않습니다.
 
 import { buildSeed, migrate } from './seed.js';
-import { mergeSession, tabApp, viewSession } from './sessionSlots.js';
+import { mergeSession, tabApp, tabCompany, viewSession } from './sessionSlots.js';
 
 const DB_KEY = 'uffice.db.v1';
 const SESSION_KEY = 'uffice.session';
@@ -65,15 +65,16 @@ export const browserAdapter = {
   verifyPassword: async (password, hash) => !!hash && (await sha256(password)) === hash,
   // 이 탭(일반 / 상담실장 / 기사모바일)의 로그인 칸만 보고 바꿈 (sessionSlots.js)
   getSession() {
-    return viewSession(readSession(), tabApp());
+    return viewSession(readSession(), tabApp(), tabCompany());
   },
   setSession(data) {
-    writeSession(mergeSession(readSession(), tabApp(), data));
+    writeSession(mergeSession(readSession(), tabApp(), data, tabCompany()));
   },
   clearSession() {
-    writeSession(mergeSession(readSession(), tabApp(), null));
+    writeSession(mergeSession(readSession(), tabApp(), null, tabCompany()));
   },
   publicBaseUrl: () => location.origin,
+  requestCompany: () => tabCompany(),
   clientInfo: () => ({ userAgent: navigator.userAgent }),
   async resetDemoData() {
     localStorage.removeItem(DB_KEY);
