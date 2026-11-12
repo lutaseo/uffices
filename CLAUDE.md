@@ -9,6 +9,7 @@
   - 저장/세션/암호화는 `runtime.js` 를 통해서만 사용 (브라우저 전용 API 직접 사용 금지)
   - 새 서비스 함수를 만들면 `server/handler.js` 의 `SERVICES`(및 읽기 전용이면 `READ_ONLY`)와 `frontend/src/api/remote.js` 의 `SERVICE_NAMES` 에 등록
   - 데이터 형태를 바꾸면 `seed.js` 의 `migrate()` 와 `SCHEMA_VERSION` 갱신
+  - **새 기능은 반드시 업체별 기능 스위치를 함께 만듭니다.** `frontend/src/constants.js` 의 `FEATURES` 에 한 줄 추가(`on`: 기본 켜짐 여부 — 특정 업체 전용·시험 기능은 `false`), 화면은 `currentHasFeature(key)`(또는 `hasFeature(company, key)`)로 숨기고, 서버 함수는 `requireFeature(db, user, key)` 로 막습니다. 운영자(super)가 업체/계정관리 > [수정/연장] > '기능 켜기/끄기'에서 업체마다 켭니다. 서버 시험도 추가.
 - 서버: `server/` (PostgreSQL, 쿠키 세션, scrypt), Vercel 입구 `api/rpc.js`
 
 ## 확인 명령

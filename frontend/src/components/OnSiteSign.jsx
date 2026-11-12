@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { contracts as contractApi } from '../api/index.js';
 import SignPage from '../pages/SignPage.jsx';
 import KakaoModal from './KakaoModal.jsx';
+import { currentHasFeature } from '../constants.js';
 
 // 계약 등록 직후 그 자리(태블릿 등)에서 고객 서명받기
 //   ids: 방금 등록한 계약들. 한 장으로 서명하는 것(줄눈·청소)은 한 번에, 나머지(나노코팅 등)는 차례로
@@ -56,7 +57,7 @@ export default function OnSiteSign({ ids, first = null, onClose }) {
         <b>✍ 고객 서명{left.length > 0 && ` (남은 계약서 ${left.length}장)`}</b>
         {done ? (
           <span className="onsite-sign-actions">
-            {talk && (
+            {talk && currentHasFeature('alimtalk') && (
               <button type="button" className="btn-kakao-talk sm" onClick={() => setTalkOpen(true)}>
                 계약완료 알림톡
               </button>

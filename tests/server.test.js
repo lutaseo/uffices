@@ -1691,3 +1691,26 @@ test('시공 구분: 운영자가 업체마다 목록·순서를 정함, 계약 
   await sup.ok('companies', 'update', good.id, { categories: [] });
   assert.deepEqual((await admin.ok('auth', 'me')).company.categories, []);
 });
+
+test('업체 기능 스위치: 운영자만 켜고 끔, 끈 기능은 서버에서 막힘, 다시 켜면 그대로', async () => {
+  const sup = client();
+  await sup.ok('auth', 'login', 'super', 'super-test-1234');
+  const good = (await sup.ok('companies', 'list')).find((c) => c.code === 'thegood');
+  assert.equal((await admin('companies', 'update', good.id, { features: { fair: false } })).status, 403, '업체 관리자는 못 바꿈');
+  const saved = await sup.ok('companies', 'update', good.id, { features: { fair: false, as: false, alimtalk: false, manager: false, customer: false, 없는기능: false, workRecord: 'x' } });
+  assert.deepEqual(saved.features, { fair: false, as: false, alimtalk: false, manager: false, customer: false }, '아는 기능의 켜기/끄기만 저장');
+  const me = await admin.ok('auth', 'me');
+  assert.equal(me.company.features.fair, false, '화면에서 스위치를 알 수 있음');
+  assert.equal((await admin('fairs', 'save', { date: '2026-12-05', name: '꺼진 박람회', staffIds: [me.user.id] })).status, 403, '박람회 등록 막힘');
+  assert.deepEqual(await admin.ok('fairs', 'list', {}), [], '박람회 목록은 비어 보임');
+  const c = await admin.ok('contracts', 'create', { ...base, customerName: '스위치고객', customerPhone: '010-5151-6262', totalAmount: 100000, payments: [] });
+  assert.equal((await admin('contracts', 'setAs', [c.id], true, { request: '들뜸' })).status, 403, 'AS 접수 막힘');
+  assert.equal((await admin('notifications', 'send', { contractId: c.id, template: '계약완료', templateKey: '계약완료', variables: {}, buttons: [], target: '고객', brand: '더좋은집', receiverName: '스위치고객', receiverPhone: '010-5151-6262', message: 'x' })).status, 403, '알림톡 막힘');
+  assert.equal((await client()('auth', 'login', 'manager', 'manager1234', 'thegood', 'manager')).status, 403, '상담실장(/t) 로그인 막힘');
+  assert.equal((await client().ok('auth', 'login', 'manager', 'manager1234', 'thegood')).user.loginId, 'manager', '일반 화면 로그인은 그대로');
+  assert.equal((await client()('customerApp', 'login', 'thegood', '스위치고객', '01051516262')).status, 403, '고객확인페이지 막힘');
+  // 다시 켜면 그대로
+  await sup.ok('companies', 'update', good.id, { features: {} });
+  await admin.ok('contracts', 'setAs', [c.id], true, { request: '들뜸' });
+  assert.equal((await client().ok('customerApp', 'login', 'thegood', '스위치고객', '01051516262')).contracts.length, 1, '켜면 고객확인페이지 열림');
+});

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { contracts as contractApi } from '../api/index.js';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { ESIGN_STATUS } from '../constants.js';
+import { ESIGN_STATUS, currentHasFeature } from '../constants.js';
 import ContractDocument from './ContractDocument.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
 import KakaoModal from './KakaoModal.jsx';
@@ -101,7 +101,9 @@ export default function ContractViewModal({ contractId, onClose, onChanged }) {
                   <input className="input-text full" readOnly value={signUrl} onFocus={(e) => e.target.select()} />
                   <button type="button" className="btn-dark-sm" onClick={copy}>링크 복사</button>
                   <a className="btn-dark-sm" href={signUrl} target="_blank" rel="noreferrer">열기</a>
-                  <button type="button" className="btn-kakao-talk" onClick={() => setKakaoOpen(true)}>알림톡으로 보내기</button>
+                  {currentHasFeature('alimtalk') && (
+                    <button type="button" className="btn-kakao-talk" onClick={() => setKakaoOpen(true)}>알림톡으로 보내기</button>
+                  )}
                 </div>
               </>
             ) : (

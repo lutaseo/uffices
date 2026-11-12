@@ -6,6 +6,7 @@
 import { getSession, loadDb, requestCompany } from './runtime.js';
 import { ROLES, can, isOwnScopeOnly } from '../auth/permissions.js';
 import { today } from '../utils/date.js';
+import { FEATURES, hasFeature } from '../constants.js';
 
 export class ApiError extends Error {
   constructor(message, code = 'BAD_REQUEST') {
@@ -137,4 +138,15 @@ export const ownsContract = (user, c) => !isOwnScopeOnly(user) || c.ownerId === 
 
 export function companyOf(db, user) {
   return db.companies.find((c) => c.id === user.companyId);
+}
+
+// 업체별 기능 스위치 — 꺼진 기능이면 막음 (운영자는 업체가 없으므로 통과)
+export function requireFeature(db, userOrCompanyId, key) {
+  const companyId = typeof userOrCompanyId === 'object' ? userOrCompanyId?.companyId : userOrCompanyId;
+  if (!companyId) return;
+  const company = db.companies.find((c) => c.id === companyId);
+  if (!hasFeature(company, key)) {
+    const label = FEATURES.find((f) => f.key === key)?.label || key;
+    throw new ApiError(`이 업체는 '${label}' 기능을 쓰지 않습니다.`, 'FORBIDDEN');
+  }
 }
