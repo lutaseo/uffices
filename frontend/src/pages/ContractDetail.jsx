@@ -199,12 +199,7 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
             <th>현금영수증</th>
             <td>{head.cashReceipt}</td>
           </tr>
-          {String(head.memo || '').trim() && (
-            <tr>
-              <th>기타사항 (예전)</th>
-              <td colSpan={5} className="pre-wrap">{head.memo}</td>
-            </tr>
-          )}
+          {/* 예전 프로그램의 '기타사항'(계약메모·서비스)은 화면에 보이지 않게 — 기록(memo)은 그대로 보관 */}
           <tr>
             <th>고객 참고사항</th>
             <td colSpan={5} className="pre-wrap">
