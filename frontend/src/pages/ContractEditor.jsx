@@ -516,16 +516,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
                 <textarea className="input-text full" rows={3} name="engineerNote" value={form.engineerNote || ''} onChange={onField} placeholder="본사·기사가 함께 보는 내부 메모 (고객에게 표시되지 않음) 예: 현관 비밀번호, 주차 안내, 고객 요청사항" />
               </td>
             </tr>
-            {/* 예전 '기타사항' 칸은 기사전달사항으로 합침 — 예전 계약에 적힌 내용이 있을 때만 보여 줌 (지우거나 옮길 수 있게) */}
-            {String(contract?.memo || '').trim() && (
-              <tr>
-                <td className="label-col">기타사항 (예전)</td>
-                <td className="input-col">
-                  <textarea className="input-text full" rows={2} name="memo" value={form.memo} onChange={onField} />
-                  <span className="info-guide">ⓘ 예전에 적은 내부 메모입니다. 새 내용은 위 [기사전달사항]에 적어 주세요.</span>
-                </td>
-              </tr>
-            )}
+            {/* 예전 '기타사항'(memo)은 화면에 보이지 않게 — 수정해도 기록은 그대로 저장됨 */}
             <tr>
               <td className="label-col">고객 참고사항</td>
               <td className="input-col">
