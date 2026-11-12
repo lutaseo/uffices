@@ -69,6 +69,7 @@ const ACTIONS = {
   'imports.users': '직원 계정 가져오기',
   'imports.products': '상품 가져오기',
   'notifications.send': '알림톡 발송',
+  'auditLogs.undo': '되돌리기',
 };
 
 // 표별 대상 이름
@@ -232,4 +233,56 @@ export function auditText(entry) {
       return `[${it.type}] ${it.target}${f ? ` — ${f}` : ''}`;
     })
     .join('\n');
+}
+
+// ---------------- 되돌리기 (업체 관리자, 수정로그 화면) ----------------
+// 저장할 때 바뀐 행의 이전·이후 전체를 기록에 함께 보관 → [되돌리기]로 이전 상태로 돌려놓음
+//   되돌릴 수 없는 작업: 업체 설정(운영자)·로그인·고객 서명·알림톡 발송(이미 보낸 문자)·완전 삭제
+const NO_UNDO = new Set(['companies.create', 'companies.update', 'companies.saveContractTerms', 'contracts.purge']);
+const NO_UNDO_SERVICES = new Set(['auth', 'esign', 'customerApp', 'notifications']);
+const NO_UNDO_TABLES = new Set(['notifications']); // 보낸 알림톡 기록은 그대로 둠
+const UNDO_MAX_ROWS = 200;
+const UNDO_MAX_BYTES = 500000; // 이보다 크면(대량 가져오기 등) 보관하지 않음 → 되돌리기 없음
+export const canUndoCall = (name) => !NO_UNDO.has(name) && !NO_UNDO_SERVICES.has(String(name || '').split('.')[0]);
+
+// changes(persistChanges 결과) → [{ table, id, before, after }] 또는 null(되돌릴 수 없음)
+export function undoSnapshot(name, changes) {
+  if (!canUndoCall(name)) return null;
+  const list = (changes || [])
+    .filter((ch) => !NO_UNDO_TABLES.has(ch.table))
+    .map((ch) => {
+      const before = typeof ch.before === 'string' ? JSON.parse(ch.before) : ch.before || null;
+      const after = ch.after || null;
+      return { table: ch.table, id: (after || before)?.id, before, after };
+    })
+    .filter((x) => x.id !== undefined && x.id !== null);
+  if (!list.length || list.length > UNDO_MAX_ROWS) return null;
+  if (JSON.stringify(list).length > UNDO_MAX_BYTES) return null;
+  return list;
+}
+
+// 되돌릴 때 지금 값을 그대로 두는 항목 (자동으로 바뀌는 값·비밀번호·변경이력)
+export const UNDO_KEEP = ['updatedAt', 'history', 'contractSeq', 'lastLoginAt', 'loginFailCount', 'lockedUntil', 'version', 'passwordHash'];
+// 비교용: 그 뒤에 다른 사람이 또 바꿨는지 (자동 항목은 빼고 비교)
+export function undoComparable(row) {
+  if (!row) return 'null';
+  const copy = { ...row };
+  UNDO_KEEP.forEach((k) => delete copy[k]);
+  if (copy.esign && typeof copy.esign === 'object') {
+    const { signature, ...esign } = copy.esign; // eslint-disable-line no-unused-vars
+    copy.esign = esign;
+  }
+  return stableJson(copy);
+}
+// 항목 순서와 상관없이 같은 내용이면 같은 글자 (DB 가 항목 순서를 바꿔 저장해도 비교되게)
+function stableJson(v) {
+  if (Array.isArray(v)) return `[${v.map(stableJson).join(',')}]`;
+  if (v && typeof v === 'object') {
+    return `{${Object.keys(v)
+      .filter((k) => v[k] !== undefined)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${stableJson(v[k])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(v ?? null);
 }

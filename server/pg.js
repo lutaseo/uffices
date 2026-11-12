@@ -95,8 +95,24 @@ export async function loadSnapshot(client, scope) {
   }
   // 수정 로그 화면: 이 업체의 최근 기록 (읽기 전용)
   if (scope.auditLogs && scope.companyId) {
+    // 되돌리기용 이전·이후 자료(undo)는 크므로 목록에서는 빼고 '있음'만
     db.auditLogs = (
-      await rows(client, `SELECT id, created_at, data FROM audit_logs WHERE company_id = $1 ORDER BY created_at DESC, id DESC LIMIT 3000`, [scope.companyId])
+      await rows(
+        client,
+        `SELECT id, created_at, data - 'undo' AS data, (data ? 'undo') AS has_undo FROM audit_logs WHERE company_id = $1 ORDER BY created_at DESC, id DESC LIMIT 3000`,
+        [scope.companyId],
+      )
+    ).map((r) => ({ ...r.data, hasUndo: !!r.has_undo, id: Number(r.id), at: new Date(r.created_at).toISOString() }));
+  }
+  // 되돌리기: 그 기록 하나(전체) + 그 기록을 되돌린 기록
+  if (scope.auditLogId && scope.companyId) {
+    db.auditLogs = (
+      await rows(
+        client,
+        `SELECT id, created_at, CASE WHEN id = $2 THEN data ELSE data - 'undo' END AS data FROM audit_logs
+          WHERE company_id = $1 AND (id = $2 OR data->>'undoOf' = $3)`,
+        [scope.companyId, scope.auditLogId, String(scope.auditLogId)],
+      )
     ).map((r) => ({ ...r.data, id: Number(r.id), at: new Date(r.created_at).toISOString() }));
   }
   // 목록 변경 확인(listCached): 계약 전체 대신 담당자별 건수·마지막 수정·번호 합만 (트래픽 절약)
