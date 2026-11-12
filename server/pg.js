@@ -114,6 +114,15 @@ export async function loadSnapshot(client, scope) {
         [scope.companyId, scope.auditLogId, String(scope.auditLogId)],
       )
     ).map((r) => ({ ...r.data, id: Number(r.id), at: new Date(r.created_at).toISOString() }));
+    // 사진(영수증 등)은 평소에 읽지 않는 표 → 이 기록이 바꾼 사진만 읽어 둠 (되돌릴 때 비교·복구)
+    const target = db.auditLogs.find((r) => r.id === scope.auditLogId);
+    const photoIds = (target?.undo || []).filter((x) => x.table === 'paymentReceipts').map((x) => Number(x.id));
+    if (photoIds.length) {
+      db.paymentReceipts = (
+        await rows(client, `SELECT data FROM payment_receipts WHERE company_id = $1 AND id = ANY($2::bigint[]) ORDER BY id`, [scope.companyId, photoIds])
+      ).map(toObj);
+      readOnly.delete('paymentReceipts');
+    }
   }
   // 목록 변경 확인(listCached): 계약 전체 대신 담당자별 건수·마지막 수정·번호 합만 (트래픽 절약)
   //   COLLATE "C" — 시각 문자열을 화면 코드(자바스크립트)와 같은 글자 순서로 비교

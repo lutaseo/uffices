@@ -1758,6 +1758,13 @@ test('수정로그 되돌리기: 관리자만, 수정·삭제·등록을 이전�
   await admin.ok('auditLogs', 'undo', (await find('휴지통으로 이동')).id);
   assert.ok(!(await admin.ok('contracts', 'get', c.id)).deletedAt, '휴지통에서 돌아옴');
 
+  // 사진(평소에 읽지 않는 표)도 되돌림
+  const img = 'data:image/jpeg;base64,' + Buffer.from('undo-photo').toString('base64');
+  await admin.ok('contracts', 'setPaperPhotos', c.id, { add: [img] });
+  assert.equal((await admin.ok('contracts', 'paperPhotos', c.id)).length, 1);
+  await admin.ok('auditLogs', 'undo', (await find('실물 계약서 사진')).id);
+  assert.equal((await admin.ok('contracts', 'paperPhotos', c.id)).length, 0, '추가한 사진이 없어짐');
+
   // 알림톡 발송은 되돌릴 수 없음
   await admin.ok('notifications', 'send', { contractId: c.id, template: '계약완료', templateKey: '계약완료', variables: {}, buttons: [], target: '고객', brand: '더좋은집', receiverName: who, receiverPhone: '010-3131-4141', message: 'x' });
   const talk = (await admin.ok('auditLogs', 'list', {})).rows.find((r) => r.action === '알림톡 발송');
