@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState, useRef } from 'react';
 import PhotoPickButton from '../components/CameraButton.jsx';
 import { contracts as contractApi } from '../api/index.js';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { BRANDS, CATEGORIES } from '../constants.js';
+import { BRANDS, currentWorkCategories } from '../constants.js';
 
 const TALK_BRAND_ORDER = ['더좋은집', '더스타트']; // 상세시공 알림톡 버튼: 더좋은집이 위 (PC·태블릿·모바일 공통)
 import { calcAmounts, isRefund, kindBreakdown, sumAmounts, timeLabel } from '../utils/contract.js';
@@ -418,7 +418,7 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
       {can('contract.create') && (
         <div className="section-actions">
           <span className="add-work-label">시공등록</span>
-          {CATEGORIES.filter((c) => c !== '기타').map((cat) => (
+          {currentWorkCategories().map((cat) => (
             <button key={cat} type="button" className="btn-dark-lg sm add-work-btn" onClick={() => onNewWork(head, cat)}>
               + {cat}
             </button>

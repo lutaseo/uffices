@@ -1669,3 +1669,25 @@ test('시공 시간 [무관]: 계약에 저장·표시, 예전 파일의 (무관
   const after = await admin.ok('contracts', 'get', id);
   assert.deepEqual([after.schedules[0].date, after.schedules[0].ampm], ['2026-11-19', 'ANY'], '날짜만 바뀌고 직접 고른 무관은 그대로');
 });
+
+test('시공 구분: 운영자가 업체마다 목록·순서를 정함, 계약 등록은 그 목록만, 뺀 구분의 예전 계약은 그대로', async () => {
+  const sup = client();
+  await sup.ok('auth', 'login', 'super', 'super-test-1234');
+  const good = (await sup.ok('companies', 'list')).find((c) => c.code === 'thegood');
+  const old = await admin.ok('contracts', 'create', { ...base, category: '탄성', customerName: '구분시험', customerPhone: '010-7777-1212', totalAmount: 100000, payments: [] });
+  // 순서 바꾸고 새 구분 추가, 탄성 빼기 (공백·중복·대괄호 정리)
+  const saved = await sup.ok('companies', 'update', good.id, { categories: [' 청소 ', '줄눈', '방충망', '줄눈', '[기타]'] });
+  assert.deepEqual(saved.categories, ['청소', '줄눈', '방충망', '기타']);
+  assert.deepEqual((await admin.ok('auth', 'me')).company.categories, ['청소', '줄눈', '방충망', '기타'], '업체 화면에 그 순서로');
+  const added = await admin.ok('contracts', 'create', { ...base, category: '방충망', customerName: '구분시험2', customerPhone: '010-7777-1313', totalAmount: 100000, payments: [] });
+  assert.equal((await admin.ok('contracts', 'get', added.id)).category, '방충망', '새 구분으로 등록');
+  const wrong = await admin.ok('contracts', 'create', { ...base, category: '탄성', customerName: '구분시험3', customerPhone: '010-7777-1414', totalAmount: 100000, payments: [] });
+  assert.equal((await admin.ok('contracts', 'get', wrong.id)).category, '청소', '목록에 없는 구분은 첫 구분으로');
+  const g = await admin.ok('contracts', 'get', old.id);
+  await admin.ok('contracts', 'update', old.id, { ...g, memo: g.memo || '' });
+  assert.equal((await admin.ok('contracts', 'get', old.id)).category, '탄성', '뺀 구분의 예전 계약은 고쳐도 그대로');
+  assert.equal((await admin('companies', 'update', good.id, { categories: ['x'] })).status, 403, '업체 관리자는 못 바꿈');
+  // 비우면 기본 목록
+  await sup.ok('companies', 'update', good.id, { categories: [] });
+  assert.deepEqual((await admin.ok('auth', 'me')).company.categories, []);
+});

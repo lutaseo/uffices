@@ -8,7 +8,7 @@ import {
   teams as teamApi,
 } from '../api/index.js';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { ASSIGN_TYPES, CATEGORIES, DEFAULT_SCHEDULE_SETTINGS, OFF_LABEL, WORK_STATUS } from '../constants.js';
+import { ASSIGN_TYPES, currentCategories, DEFAULT_SCHEDULE_SETTINGS, OFF_LABEL, WORK_STATUS } from '../constants.js';
 import { calcAmounts, offBlocks, slotOf, teamOffStatus, timeFieldsOf, timeLabel, timeOptions, timeValueOf } from '../utils/contract.js';
 import { WEEKDAYS, formatKoreanDate, toDateKey, today } from '../utils/date.js';
 import { formatAddress, won } from '../utils/format.js';
@@ -256,7 +256,7 @@ export default function ScheduleManagement() {
       <div className="schedule-filter-bar">
         <select className="schedule-select" value={filter.category} onChange={(e) => setFilter({ ...filter, category: e.target.value })}>
           <option value="">전체</option>
-          {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          {currentCategories().map((c) => <option key={c} value={c}>{c}</option>)}
           <option value={FAIR_ONLY}>박람회</option>
         </select>
         <select className="schedule-select" value={filter.engineerId} onChange={(e) => setFilter({ ...filter, engineerId: e.target.value })}>

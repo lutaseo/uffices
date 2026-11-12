@@ -3,12 +3,14 @@ import { API_MODE, auth, imports } from '../api/index.js';
 import { can } from './permissions.js';
 import { setAppManifest } from '../utils/install.js';
 import { endStalePcLogin } from '../utils/pcSession.js';
+import { setCurrentCompany } from '../constants.js';
 import { tabApp } from '../api/sessionSlots.js';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [state, setState] = useState({ user: null, company: null, loading: true });
+  setCurrentCompany(state.company); // 화면의 시공 구분 목록 = 이 업체 것 (운영자가 정한 순서)
 
   const refresh = useCallback(async () => {
     try {

@@ -11,7 +11,7 @@ import { invalidateNumbers, numberOf } from './numbering.js';
 import { can, ROLES, DATA_SCOPES, DEFAULT_MANAGER_PERMISSIONS, isOwnScopeOnly } from '../auth/permissions.js';
 import {
   ASSIGN_TYPES,
-  CATEGORIES,
+  companyCategories,
   ESIGN_STATUS,
   MAX_SCHEDULE_STEPS,
   ISSUE_STATUS,
@@ -166,9 +166,12 @@ function normalizeContractInput(db, user, data, existing) {
   const approval = existing?.approval || '승인';
 
   const status = oneOf(data.status, WORK_STATUS, '미정');
+  // 시공 구분: 업체에 정한 목록 (운영자가 정함) + 고치는 계약의 원래 구분은 목록에서 빠졌어도 그대로 허용
+  const coCats = companyCategories(db.companies.find((c) => c.id === user.companyId));
+  const okCats = existing?.category && !coCats.includes(existing.category) ? [...coCats, existing.category] : coCats;
   const out = {
     brand: data.brand,
-    category: oneOf(data.category, CATEGORIES, CATEGORIES[0]),
+    category: oneOf(data.category, okCats, okCats[0]),
     workType: oneOf(data.workType, WORK_TYPES, WORK_TYPES[0]),
     receptionType: oneOf(data.receptionType, RECEPTION_TYPES, RECEPTION_TYPES[0]),
     customerName,
@@ -587,7 +590,7 @@ export const contracts = {
     const engineers = db.engineers.filter((e) => e.companyId === company.id && e.active !== false);
     const products = db.products.filter((p) => p.companyId === company.id && p.visible !== false);
     const brands = company.brands?.length ? company.brands : [company.name];
-    const cats = CATEGORIES.filter((c) => c !== '기타');
+    const cats = companyCategories(company).filter((c) => c !== '기타');
     const pick = (a) => a[Math.floor(Math.random() * a.length)];
     const between = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
     const addDays = (key, d) => new Date(Date.parse(`${key}T00:00:00Z`) + d * 86400000).toISOString().slice(0, 10);
@@ -1680,7 +1683,7 @@ export const imports = {
         createdAt: nowIso(),
         name,
         kind,
-        category: CATEGORIES.includes(cat) ? cat : guess(`${name} ${detail}`),
+        category: companyCategories(db.companies.find((c) => c.id === user.companyId)).includes(cat) ? cat : guess(`${name} ${detail}`),
         detail,
         freeDetail: String(row.freeDetail || '').trim(),
         price: Math.max(0, Number(String(row.price ?? '').replace(/[^\d.]/g, '')) || 0),

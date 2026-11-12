@@ -74,7 +74,8 @@ export async function session() {
   if (!user || !user.active) throw new ApiError('로그인이 필요합니다.', 'UNAUTHORIZED');
   // 업체 주소별 로그인: 이 탭의 업체(예: /filelike)가 아닌 다른 업체 계정이면 로그인 안 된 것으로 (업체끼리 섞이지 않게)
   const co = requestCompany();
-  if (co && user.role !== ROLES.SUPER) {
+  if (co && user.role === ROLES.SUPER) throw new ApiError('로그인이 필요합니다.', 'UNAUTHORIZED'); // 운영자 로그인은 업체 화면에 쓰지 않음 (운영자는 / · /admin)
+  if (co) {
     const mine = db.companies.find((c) => c.id === user.companyId);
     if (mine && mine.code && mine.code !== co) throw new ApiError('로그인이 필요합니다.', 'UNAUTHORIZED');
   }

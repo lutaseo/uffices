@@ -5594,3 +5594,10 @@ button.paper-add { font: inherit; }
 .install-card .install-web ol { margin: 8px 0 4px; padding-left: 20px; line-height: 1.7; }
 .install-card .install-web code { background: #f2f2f2; padding: 1px 6px; border-radius: 4px; word-break: break-all; }
 .engineer-app .install-card { padding: 0 16px 24px; }
+
+/* 운영자: 업체 시공 구분 목록·순서 */
+.category-editor { display: flex; flex-direction: column; gap: 8px; }
+.category-editor .category-list { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 4px; }
+.category-editor .category-list li { display: flex; align-items: center; gap: 8px; }
+.category-editor .category-name { min-width: 110px; font-weight: bold; }
+.category-editor .btn-link:disabled { opacity: 0.3; cursor: default; }
