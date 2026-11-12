@@ -138,8 +138,8 @@ export function tabCompany() {
       window.localStorage.setItem(CO_KEY, first); // 업체 주소 없이 연 새 탭(즐겨찾기 /contracts 등)은 마지막 업체로
       return first;
     }
-    if (!first) {
-      window.sessionStorage.setItem(CO_KEY, ''); // 운영자 첫 화면(/) — 업체 없음
+    if (!first || first === 'admin') {
+      window.sessionStorage.setItem(CO_KEY, ''); // 운영자 화면(/, /admin) — 업체 없음
       return '';
     }
     const own = window.sessionStorage.getItem(CO_KEY);

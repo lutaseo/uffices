@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { apartments, engineers, products, scheduleSettings, teams } from '../../api/index.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
-import { CATEGORIES, DEFAULT_SCHEDULE_SETTINGS, PRODUCT_KINDS } from '../../constants.js';
+import { currentWorkCategories, DEFAULT_SCHEDULE_SETTINGS, PRODUCT_KINDS } from '../../constants.js';
 import { formatPhone, won } from '../../utils/format.js';
 import Pagination from '../../components/Pagination.jsx';
 import MoneyInput from '../../components/MoneyInput.jsx';
@@ -317,7 +317,7 @@ export function EngineerSettings({ path = '' }) {
       ]}
       api={engineers}
       searchKeys={['name', 'phone', 'loginId', 'address']}
-      filters={[{ key: 'category', placeholder: '담당시공', options: CATEGORIES, match: (r, v) => (r.categories || []).includes(v) }]}
+      filters={[{ key: 'category', placeholder: '담당시공', options: currentWorkCategories(), match: (r, v) => (r.categories || []).includes(v) }]}
       removeConfirm={(r) => `[${r.name}] 기사를 삭제하시겠습니까?\n(배정 이력이 있으면 미사용 처리됩니다)`}
       onAdd={() => navigateForward('/settings/engineers/new')}
       onEdit={(r) => navigateForward(`/settings/engineers/${r.id}`)}
@@ -362,9 +362,9 @@ export function TeamSettings() {
   );
 }
 
-const WORK_CATEGORIES = CATEGORIES.filter((c) => c !== '기타');
 
 export function ProductSettings({ path = '' }) {
+  const WORK_CATEGORIES = currentWorkCategories(); // 업체 구분 (운영자가 정한 순서)
   return (
     <MasterPage
       title="상품관리"

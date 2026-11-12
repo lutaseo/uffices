@@ -23,7 +23,7 @@ import {
 } from './runtime.js';
 import { ROLES, DATA_SCOPES, permissionsOf, isOwnScopeOnly, ALL_PERMISSION_KEYS } from '../auth/permissions.js';
 import { digitsOnly, formatPhone } from '../utils/format.js';
-import { CATEGORIES, DEPARTMENTS, brandTerms, termsSource } from '../constants.js';
+import { CATEGORIES, DEPARTMENTS, brandTerms, companyCategories, parseCategories, termsSource } from '../constants.js';
 import { AUDIT_KEEP_DAYS, auditText, skipAudit } from './audit.js';
 import {
   ApiError,
@@ -188,6 +188,7 @@ export const companies = {
       bizNo: company.bizNo || '',
       address: company.address || '',
       brands: company.brands?.length ? company.brands : [company.name.trim()],
+      ...(parseCategories(company.categories).length ? { categories: parseCategories(company.categories) } : {}),
       periodStart: company.periodStart,
       periodEnd: company.periodEnd,
       active: true,
@@ -207,7 +208,9 @@ export const companies = {
     const c = db.companies.find((x) => x.id === id);
     if (!c) throw new ApiError('업체를 찾을 수 없습니다.', 'NOT_FOUND');
     if ('code' in patch) patch = { ...patch, code: normalizeCode(db, patch.code, c.id) };
-    const allowed = ['code', 'name', 'ceo', 'bizNo', 'address', 'brands', 'periodStart', 'periodEnd', 'active'];
+    // 시공 구분: 운영자가 정한 순서 그대로 (비우면 기본 목록)
+    if ('categories' in patch) patch = { ...patch, categories: parseCategories(patch.categories) };
+    const allowed = ['code', 'name', 'ceo', 'bizNo', 'address', 'brands', 'categories', 'periodStart', 'periodEnd', 'active'];
     allowed.forEach((k) => {
       if (k in patch) c[k] = patch[k];
     });
@@ -222,7 +225,7 @@ export const companies = {
     const { db, user } = await session();
     if (user.role !== ROLES.SUPER) throw new ApiError('운영자만 볼 수 있습니다.', 'FORBIDDEN');
     return {
-      categories: [...CATEGORIES],
+      categories: [...new Set(db.companies.flatMap((c) => companyCategories(c)))],
       companies: db.companies.map((c) => {
         const brands = c.brands?.length ? c.brands : Object.keys(c.contractTerms || {});
         return {
@@ -448,8 +451,9 @@ export const engineers = masterTable('engineers', {
     const teamId = db.teams.some((t) => t.id === Number(d.teamId) && t.companyId === user.companyId && t.kind === '시공팀')
       ? Number(d.teamId)
       : null;
+    const coCats = companyCategories(db.companies.find((c) => c.id === user.companyId));
     const categories = Array.isArray(d.categories)
-      ? CATEGORIES.filter((c) => d.categories.includes(c))
+      ? coCats.filter((c) => d.categories.includes(c)) // 업체 구분 순서대로
       : categoriesOf({ category: d.category });
     return {
       name: required(d.name, '기사 이름을 입력해 주세요.'),

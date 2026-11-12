@@ -4,6 +4,30 @@ export const BRANDS = ['더좋은집', '더스타트'];
 
 // 구분 (품목)
 export const CATEGORIES = ['줄눈', '청소', '탄성', '새집증후군', '나노코팅', '기타'];
+
+// 업체의 시공 구분 (운영자가 업체/계정관리에서 순서까지 정함) — 정하지 않았으면 기본 목록
+export function companyCategories(company) {
+  const list = Array.isArray(company?.categories) ? company.categories.filter((c) => String(c || '').trim()) : [];
+  return list.length ? list : CATEGORIES;
+}
+// 화면에서 지금 로그인한 업체의 구분 (AuthContext 가 업체 정보를 받을 때마다 맞춤)
+let currentCompany = null;
+export function setCurrentCompany(company) {
+  currentCompany = company || null;
+}
+export const currentCategories = () => companyCategories(currentCompany);
+export const currentWorkCategories = () => currentCategories().filter((c) => c !== '기타');
+// 통계 등 순서: 업체 구분 순서 → 그 밖의 예전 구분
+export const categoryOrder = () => [...new Set([...currentCategories(), ...CATEGORIES])];
+
+// 기사 담당시공 · 상품 구분 등 실제 시공 구분 ('기타' 제외)
+export const workCategories = (company) => companyCategories(company).filter((c) => c !== '기타');
+
+// 운영자 입력(쉼표·줄바꿈 구분) → 구분 목록 (앞뒤 공백·중복 제거, 최대 20개, 이름 20자)
+export function parseCategories(value) {
+  const raw = Array.isArray(value) ? value : String(value || '').split(/[,\n]/);
+  return [...new Set(raw.map((c) => String(c || '').trim().replace(/[[\]]/g, '').slice(0, 20)).filter(Boolean))].slice(0, 20);
+}
 export const PRODUCT_KINDS = ['패키지', '추가시공품목', '무료시공']; // 상품 구분
 
 // 고객에게 계약서 한 장으로 묶어 보내는 구분 (같은 계약자·현장일 때). 그 외(나노코팅 등)는 따로

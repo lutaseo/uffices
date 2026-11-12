@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { engineers as engineerApi, reports } from '../api/index.js';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { DATE_TYPES } from '../constants.js';
+import { DATE_TYPES, categoryOrder } from '../constants.js';
 import { calcAmounts, firstScheduleDate } from '../utils/contract.js';
 import { presetRange, isoToDateKey } from '../utils/date.js';
 import { won } from '../utils/format.js';
@@ -16,7 +16,6 @@ const GROUPS = [
   { key: 'owner', label: '작성자별', fn: (c) => c.ownerName || '-' },
   { key: 'engineer', label: '시공기사별' }, // 시공 회차 날짜 기준 (아래 EngineerStats)
 ];
-const CATEGORY_ORDER = ['줄눈', '청소', '탄성', '새집증후군', '나노코팅', '기타'];
 // 시공기사별 금액 칸 (관리자: '회사 매출 합계 보기' 권한일 때만 서버가 보내줌)
 const MONEY = [
   ['total', '총금액'],
@@ -146,7 +145,7 @@ export default function StatsPage() {
                       시공기사: r.name,
                       배정: r.assigned,
                       시공완료: r.done,
-                      ...Object.fromEntries(CATEGORY_ORDER.map((k) => [`완료_${k}`, r.byCategory[k] || 0])),
+                      ...Object.fromEntries(categoryOrder().map((k) => [`완료_${k}`, r.byCategory[k] || 0])),
                       연기요청: r.postponed,
                       시공불가: r.unable,
                       ...moneyExcel(r.amounts),
@@ -245,7 +244,7 @@ export default function StatsPage() {
 function EngineerStats({ rows: all, onPick }) {
   const sharedRow = all.find((r) => r.shared); // 여러 기사 공동 시공 (금액만)
   const rows = all.filter((r) => !r.shared);
-  const cats = CATEGORY_ORDER.filter((k) => rows.some((r) => r.byCategory[k]));
+  const cats = categoryOrder().filter((k) => rows.some((r) => r.byCategory[k]));
   const maxDone = Math.max(1, ...rows.map((r) => r.done));
   const sum = rows.reduce((t, r) => ({ assigned: t.assigned + r.assigned, done: t.done + r.done, postponed: t.postponed + r.postponed, unable: t.unable + r.unable }), { assigned: 0, done: 0, postponed: 0, unable: 0 });
   const money = all.some((r) => r.amounts);
@@ -328,7 +327,7 @@ function EngineerStats({ rows: all, onPick }) {
 function EngineerDetail({ r }) {
   const [doneOnly, setDoneOnly] = useState(false);
   const jobs = doneOnly ? r.jobs.filter((j) => j.done) : r.jobs;
-  const cats = CATEGORY_ORDER.filter((k) => r.byCategory[k]);
+  const cats = categoryOrder().filter((k) => r.byCategory[k]);
   const money = !!r.amounts;
   const shown = money && (doneOnly ? r.doneAmounts : r.amounts);
   return (

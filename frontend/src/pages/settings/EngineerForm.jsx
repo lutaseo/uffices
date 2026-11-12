@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { engineerOffs, engineers, teams } from '../../api/index.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { ROLES } from '../../auth/permissions.js';
-import { CATEGORIES, OFF_LABEL } from '../../constants.js';
+import { currentWorkCategories, OFF_LABEL } from '../../constants.js';
 import { WEEKDAYS, toDateKey } from '../../utils/date.js';
 import { digitsOnly } from '../../utils/format.js';
 import { openPostcode } from '../../utils/postcode.js';
@@ -11,7 +11,6 @@ import OffModal from '../../components/OffModal.jsx';
 
 // 설정 > 기사관리 > 기사 등록/수정 (/settings/engineers/new, /settings/engineers/:id)
 const LIST_PATH = '/settings/engineers';
-const WORK_CATEGORIES = CATEGORIES.filter((c) => c !== '기타');
 const EMAIL_DOMAINS = ['naver.com', 'gmail.com', 'daum.net', 'hanmail.net', 'nate.com', 'kakao.com'];
 
 const splitPhone = (phone = '') => {
@@ -81,7 +80,7 @@ export default function EngineerForm({ engineerId }) {
 
   const set = (k, v) => setForm((prev) => ({ ...prev, [k]: v }));
   const toggleCategory = (c) =>
-    set('categories', form.categories.includes(c) ? form.categories.filter((x) => x !== c) : WORK_CATEGORIES.filter((x) => x === c || form.categories.includes(x)));
+    set('categories', form.categories.includes(c) ? form.categories.filter((x) => x !== c) : currentWorkCategories().filter((x) => x === c || form.categories.includes(x)));
 
   const searchAddress = () =>
     openPostcode(({ zipcode, address }) => setForm((prev) => ({ ...prev, zipcode, address }))).catch((e) => alert(e.message));
@@ -159,7 +158,7 @@ export default function EngineerForm({ engineerId }) {
             <tr>
               <td className="label-col">담당시공</td>
               <td className="input-col check-row">
-                {WORK_CATEGORIES.map((c) => (
+                {currentWorkCategories().map((c) => (
                   <label key={c} className="radio-item">
                     <input type="checkbox" checked={form.categories.includes(c)} onChange={() => toggleCategory(c)} /> {c}
                   </label>

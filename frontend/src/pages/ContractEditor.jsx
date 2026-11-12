@@ -20,7 +20,7 @@ import {
   ISSUE_STATUS,
   ASSIGN_TYPES,
   BRANDS,
-  CATEGORIES,
+  currentCategories,
   DEFAULT_SCHEDULE_SETTINGS,
   MAX_SCHEDULE_STEPS,
   OFF_LABEL,
@@ -57,6 +57,9 @@ const emptySchedule = () => ({ date: '', time: '', ampm: '', assignType: ASSIGN_
 // 기사의 담당시공에 이 구분이 들어 있는지 (예전 데이터는 category 글자로 판단)
 const doesCategory = (en, category) => (Array.isArray(en.categories) && en.categories.length ? en.categories.includes(category) : String(en.category || '').includes(category));
 
+// 업체 구분 목록 + 이 계약의 원래 구분 (운영자가 목록에서 뺐어도 예전 계약은 그대로 보이게)
+const catsWith = (current) => (current && !currentCategories().includes(current) ? [...currentCategories(), current] : currentCategories());
+
 function initialForm(contract, company, user) {
   if (contract) {
     const steps = contract.schedules.map((s) => ({
@@ -90,7 +93,7 @@ function initialForm(contract, company, user) {
     cashReceipt: '',
     engineerNote: '',
     memo: '',
-    category: CATEGORIES[0],
+    category: currentCategories()[0],
     workType: WORK_TYPES[0],
     receptionType: RECEPTION_TYPES[0],
     schedules: Array.from({ length: MAX_SCHEDULE_STEPS }, emptySchedule),
@@ -160,7 +163,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
     if (!isEdit && prefillFrom) {
       contractApi
         .get(prefillFrom)
-        .then((src) => setForm({ ...initialForm(null, company, user), ...groupPrefill(src), ...(CATEGORIES.includes(prefillCategory) ? { category: prefillCategory } : {}) }))
+        .then((src) => setForm({ ...initialForm(null, company, user), ...groupPrefill(src), ...(currentCategories().includes(prefillCategory) ? { category: prefillCategory } : {}) }))
         .catch(() => setForm(initialForm(null, company, user)));
     }
     if (isEdit) {
@@ -535,10 +538,10 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
               <td className="label-col">구분</td>
               <td className="input-col">
                 {isEdit ? (
-                  radios('category', CATEGORIES)
+                  radios('category', catsWith(form.category))
                 ) : (
                   <>
-                    {CATEGORIES.map((c) => (
+                    {currentCategories().map((c) => (
                       <label key={c} className="radio-item">
                         <input type="checkbox" checked={usedCategories.includes(c)} onChange={(e) => toggleCategory(c, e.target.checked)} /> {c}
                       </label>
@@ -674,7 +677,7 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
               type="button"
               className="btn-dark-lg sm"
               onClick={() => {
-                const category = CATEGORIES.find((c) => c !== '기타' && !usedCategories.includes(c)) || CATEGORIES[0];
+                const category = currentCategories().find((c) => c !== '기타' && !usedCategories.includes(c)) || currentCategories()[0];
                 setExtras((prev) => [...prev, newExtra(category)]);
               }}
             >
@@ -831,7 +834,7 @@ function ExtraWork({ no, work, products, showAmount, stepCtx, onChange, onRemove
         <tbody>
           <tr>
             <td className="label-col">구분</td>
-            <td className="input-col">{radios('category', CATEGORIES)}</td>
+            <td className="input-col">{radios('category', catsWith(work.category))}</td>
           </tr>
           <tr>
             <td className="label-col">시공종류</td>

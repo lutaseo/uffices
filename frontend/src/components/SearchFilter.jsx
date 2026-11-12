@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   WORK_TYPES,
   BRANDS,
-  CATEGORIES,
+  currentCategories,
   DATE_TYPES,
   ESIGN_STATUS,
   RECEPTION_TYPES,
@@ -142,7 +142,7 @@ export default function SearchFilter({ filter, onSearch, staff = [], engineers =
 
         <div className="filter-row">
           {select('brand', '브랜드선택', brands)}
-          {select('category', '구분', CATEGORIES)}
+          {select('category', '구분', currentCategories())}
           {select('sort', null, SORT_OPTIONS)}
           {select('receptionType', '접수형태', RECEPTION_TYPES)}
           {select('status', '시공상태', WORK_STATUS)}
