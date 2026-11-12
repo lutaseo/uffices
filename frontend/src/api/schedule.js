@@ -25,11 +25,12 @@ import {
   nowIso,
   session,
   readableContracts,
+  requireFeature,
 } from './core.js';
 import { addHistory, assigneeOf, contractView } from './views.js';
 import { ROLES, can } from '../auth/permissions.js';
 import { numberOf } from './numbering.js';
-import { DEFAULT_SCHEDULE_SETTINGS, MOBILE_STATUS, OFF_LABEL } from '../constants.js';
+import { DEFAULT_SCHEDULE_SETTINGS, MOBILE_STATUS, OFF_LABEL, hasFeature } from '../constants.js';
 import { inRange, isDateKey, today } from '../utils/date.js';
 import { calcAmounts, materialText, scopeOf, timeLabel } from '../utils/contract.js';
 import { formatAddress } from '../utils/format.js';
@@ -304,6 +305,7 @@ export const fairs = {
   // from~to 와 겹치는 박람회 (여러 날 박람회는 기간이 겹치면 포함) — 본인이 포함된 것만 (관리자는 전부)
   async list({ from, to } = {}) {
     const { db, user } = await authorizeAny(['schedule.view', 'fair.manage']);
+    if (!hasFeature(companyOf(db, user), 'fair')) return []; // 기능 꺼진 업체: 달력에 박람회 없음
     // 관리자·'박람회 일정' 권한이 있는 실장은 전부 (등록·관리하는 사람), 그 외는 본인 포함·본인이 등록한 것만
     const all = user.role === ROLES.ADMIN || can(user, 'fair.manage');
     const mine = (f) => all || (f.staffIds || []).includes(user.id) || f.createdBy === user.id;
@@ -316,6 +318,7 @@ export const fairs = {
   // 등록(id 없음) / 수정(id 있음)
   async save(data = {}) {
     const { db, user } = await authorize('fair.manage');
+    requireFeature(db, user, 'fair');
     const company = companyOf(db, user);
     const date = String(data.date || '');
     const endDate = data.endDate ? String(data.endDate) : '';
@@ -349,6 +352,7 @@ export const fairs = {
 
   async remove(id) {
     const { db, user } = await authorize('fair.manage');
+    requireFeature(db, user, 'fair');
     const company = companyOf(db, user);
     const before = (company.fairs || []).length;
     company.fairs = (company.fairs || []).filter((f) => f.id !== Number(id));
@@ -508,7 +512,7 @@ export const engineerApp = {
       : null;
     const has = list || Array.isArray(done) || Array.isArray(undone) || material || note || helpers;
     const record =
-      s.mobileStatus === '시공완료' && has
+      s.mobileStatus === '시공완료' && has && hasFeature(companyOf(db, user), 'workRecord')
         ? {
             ...(list ? { items: list } : {}),
             done: list ? list.filter((x) => x.done).map((x) => x.text) : texts(done),
@@ -540,6 +544,7 @@ export const engineerApp = {
   // 내 박람회 일정 (본인이 포함된 것만)
   async myFairs({ from, to } = {}) {
     const { db, user } = await authorizeEngineer();
+    if (!hasFeature(companyOf(db, user), 'fair')) return [];
     return (companyOf(db, user)?.fairs || [])
       .filter((f) => (f.engineerIds || []).includes(user.engineerId) && fairInRange(f, from, to))
       .sort(sortFairs)

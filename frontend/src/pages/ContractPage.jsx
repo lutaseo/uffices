@@ -13,6 +13,7 @@ import Pagination from '../components/Pagination.jsx';
 import { calcAmounts, itemsSummary, summarize, timeLabel } from '../utils/contract.js';
 import { formatAddress, won } from '../utils/format.js';
 import { downloadExcel } from '../utils/excel.js';
+import { currentHasFeature } from '../constants.js';
 import { goBack, match, navigate, navigateForward } from '../router.js';
 
 const PAGE_SIZE = 20;
@@ -82,6 +83,7 @@ export default function ContractPage({ route }) {
   }
   const mode = path === '/contracts/trash' ? 'trash' : path === '/contracts/as' ? 'as' : 'main';
   if (mode === 'trash' && !can('contract.delete')) return <NoPermission />;
+  if (mode === 'as' && !currentHasFeature('as')) return <NoPermission />;
   return <ContractList key={mode} mode={mode} engineers={engineers} />;
 }
 
@@ -277,7 +279,7 @@ function ContractList({ mode = 'main', engineers }) {
             수정
           </button>
         )}
-        {(
+        {currentHasFeature('alimtalk') && (
           <button type="button" className="btn-kakao-talk sm" onClick={() => setKakaoTarget(item)}>
             알림톡
           </button>
@@ -363,7 +365,7 @@ function ContractList({ mode = 'main', engineers }) {
       {(can('contract.delete') || can('contract.edit')) && (
         <div className="bulk-bar">
           <span className="sub-text">선택 {selectedIds.size}건</span>
-          {!trash && can('contract.edit') && (
+          {!trash && can('contract.edit') && currentHasFeature('as') && (
             <button
               type="button"
               className="btn-outline-action"

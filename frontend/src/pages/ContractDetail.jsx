@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState, useRef } from 'react';
 import PhotoPickButton from '../components/CameraButton.jsx';
 import { contracts as contractApi } from '../api/index.js';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { BRANDS, currentWorkCategories } from '../constants.js';
+import { BRANDS, currentHasFeature, currentWorkCategories } from '../constants.js';
 
 const TALK_BRAND_ORDER = ['더좋은집', '더스타트']; // 상세시공 알림톡 버튼: 더좋은집이 위 (PC·태블릿·모바일 공통)
 import { calcAmounts, isRefund, kindBreakdown, sumAmounts, timeLabel } from '../utils/contract.js';
@@ -320,7 +320,7 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
               <th>추가시공품목</th>
               <th>시공 등록</th>
               <th>시공기사</th>
-              <th>알림톡</th>
+              {currentHasFeature('alimtalk') && <th>알림톡</th>}
               <th>관리</th>
             </tr>
           </thead>
@@ -376,7 +376,7 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
                     </div>
                   ))}
                 </td>
-                {(
+                {currentHasFeature('alimtalk') && (
                   <td onClick={(e) => e.stopPropagation()}>
                     <div className="talk-btn-grid">
                       {talkBrands.map((b) =>
@@ -394,12 +394,12 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
                     {canDo('contract.edit', c) && (
                       <button type="button" className="btn-dark-action" onClick={() => onEdit(c)}>수정</button>
                     )}
-                    {canDo('contract.edit', c) && (
+                    {canDo('contract.edit', c) && currentHasFeature('as') && (
                       <button type="button" className="btn-outline-action" onClick={() => setAsTarget(c)}>
                         {c.asAt ? 'AS 추가 접수' : 'AS 접수'}
                       </button>
                     )}
-                    {canDo('contract.edit', c) && c.asAt && asLogsOf(c).some((l) => !l.doneAt) && (
+                    {canDo('contract.edit', c) && currentHasFeature('as') && c.asAt && asLogsOf(c).some((l) => !l.doneAt) && (
                       <button type="button" className="btn-outline-action" onClick={() => finishAs(c)}>
                         AS 완료
                       </button>

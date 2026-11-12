@@ -16,6 +16,33 @@ export function setCurrentCompany(company) {
   currentCompany = company || null;
 }
 export const currentCategories = () => companyCategories(currentCompany);
+// ---------------- 업체별 기능 스위치 ----------------
+// 운영자(super)가 업체/계정관리 > [수정/연장] 에서 업체마다 켜고 끕니다.
+// 새 기능을 만들면 여기에 한 줄 추가하고, 화면은 currentHasFeature(key), 서버는 requireFeature(db, user, key) 로 막습니다.
+// on: 업체에 따로 정하지 않았을 때의 기본값 (기존 기능은 true, 시험 중인 새 기능은 false 로 두면 켠 업체만 보임)
+export const FEATURES = [
+  { key: 'fair', label: '박람회 일정', on: true },
+  { key: 'as', label: 'AS관리', on: true },
+  { key: 'workRecord', label: '기사 시공 기록 (완료 보고 때)', on: true },
+  { key: 'alimtalk', label: '카카오 알림톡 보내기', on: true },
+  { key: 'manager', label: '상담실장 화면 (/t)', on: true },
+  { key: 'customer', label: '고객 확인 페이지 (/c)', on: true },
+];
+export function hasFeature(company, key) {
+  const f = FEATURES.find((x) => x.key === key);
+  const v = company?.features?.[key];
+  return typeof v === 'boolean' ? v : f ? f.on : true;
+}
+export const currentHasFeature = (key) => hasFeature(currentCompany, key);
+// 운영자 입력 → { key: true/false } (모르는 이름은 버림)
+export function parseFeatures(value) {
+  const out = {};
+  FEATURES.forEach((f) => {
+    if (value && typeof value[f.key] === 'boolean') out[f.key] = value[f.key];
+  });
+  return out;
+}
+
 export const currentWorkCategories = () => currentCategories().filter((c) => c !== '기타');
 // 통계 등 순서: 업체 구분 순서 → 그 밖의 예전 구분
 export const categoryOrder = () => [...new Set([...currentCategories(), ...CATEGORIES])];

@@ -4,7 +4,7 @@
 // ============================================================
 
 import { loadDb, saveDb, nextId, publicBaseUrl, clientInfo, getSession, setSession, alimtalkGateway, hashPassword } from './runtime.js';
-import { ApiError, authorize, authorizeAny, clone, companyOf, findContract, findReadableContract, ownsContract, readableContracts, isLoginIdTaken, nowIso, validatePassword, visibleContracts } from './core.js';
+import { ApiError, authorize, authorizeAny, clone, companyOf, findContract, findReadableContract, ownsContract, readableContracts, requireFeature, isLoginIdTaken, nowIso, validatePassword, visibleContracts } from './core.js';
 import { addHistory, assigneeOf, contractListView, contractView, hideAmounts } from './views.js';
 import { assertAssignable } from './schedule.js';
 import { invalidateNumbers, numberOf } from './numbering.js';
@@ -710,6 +710,7 @@ export const contracts = {
   //   asInfo = 지금 처리 중인 회차 (없으면 null = 완료)
   async setAs(ids, on = true, info = {}) {
     const { db, user } = await authorize('contract.edit');
+    requireFeature(db, user, 'as');
     const request = String(info.request || '').trim().slice(0, 500);
     if (on && !request) throw new ApiError('AS 요청 내용을 적어 주세요.');
     const photos = on && Array.isArray(info.photos) ? info.photos.filter(Boolean) : [];
@@ -1122,6 +1123,7 @@ export const notifications = {
   //   알림톡은 따로 권한 없이 계약을 볼 수 있는 직원이면 누구나 보냄 (볼 수 없는 계약은 findContract 가 막음)
   async send({ contractId, template, templateKey, variables, buttons, target, brand, receiverName, receiverPhone, message }) {
     const { db, user } = await authorize('contract.view');
+    requireFeature(db, user, 'alimtalk');
     const contract = findReadableContract(db, user, contractId); // 볼 수 있는 계약이면 알림톡 발송 가능 (다른 사람 계약 포함)
     if (digitsOnly(receiverPhone).length < 10) throw new ApiError('수신자 연락처가 없습니다.');
     const tpl = ALIMTALK_TEMPLATES[templateKey];
@@ -1309,6 +1311,7 @@ async function customerSession(db) {
   const cust = raw.customer;
   if (!cust?.companyId || !cust.phone) throw new ApiError('로그인이 필요합니다.', 'UNAUTHORIZED');
   if (!db.contracts.some((c) => ownedBy(c, cust))) throw new ApiError('로그인이 필요합니다.', 'UNAUTHORIZED');
+  requireFeature(db, cust.companyId, 'customer');
   return cust;
 }
 
@@ -1324,6 +1327,7 @@ export const customerApp = {
     const db = await loadDb();
     const company = db.companies.find((x) => x.code && x.code === String(companyCode || '').toLowerCase());
     if (!company || !company.active) throw new ApiError('존재하지 않는 업체 주소입니다.');
+    requireFeature(db, company.id, 'customer');
     if (!nameKey(name) || digitsOnly(phone).length < 10) throw new ApiError('이름과 휴대폰번호를 입력해 주세요.');
     const cust = { companyId: company.id, name: nameKey(name), phone: digitsOnly(phone) };
     if (!db.contracts.some((c) => ownedBy(c, cust))) throw new ApiError('이름과 휴대폰번호가 일치하는 계약이 없습니다.');
@@ -1343,6 +1347,7 @@ export const customerApp = {
     if (!c) throw new ApiError('유효하지 않은 링크입니다. 이름과 휴대폰번호로 로그인해 주세요.', 'NOT_FOUND');
     const company = db.companies.find((x) => x.id === c.companyId);
     if (!company || !company.active) throw new ApiError('사용이 정지된 업체입니다.');
+    requireFeature(db, company.id, 'customer');
     await startCustomerSession(company, c.customerName, c.customerPhone);
     return customerApp.me();
   },

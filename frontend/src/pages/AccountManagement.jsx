@@ -8,7 +8,10 @@ import {
   ROLES,
   permissionsOf,
 } from '../auth/permissions.js';
-import { CATEGORIES, DEPARTMENTS, POSITIONS, companyCategories } from '../constants.js';
+import { CATEGORIES, DEPARTMENTS, FEATURES, POSITIONS, companyCategories, hasFeature } from '../constants.js';
+
+// 업체 기능 스위치 → { key: true/false } (화면 체크박스용)
+const featureMap = (company) => Object.fromEntries(FEATURES.map((f) => [f.key, hasFeature(company, f.key)]));
 import { addDays, today } from '../utils/date.js';
 import { formatPhone } from '../utils/format.js';
 import { backdrop } from '../utils/backdrop.js';
@@ -72,6 +75,7 @@ function SuperAdminView() {
       address: '',
       brands: '',
       categories: [...CATEGORIES],
+      features: featureMap(null),
       periodStart: today(),
       periodEnd: addDays(today(), 365),
       adminLoginId: '',
@@ -91,6 +95,7 @@ function SuperAdminView() {
       address: f.address,
       brands: f.brands.split(',').map((b) => b.trim()).filter(Boolean),
       categories: f.categories, // 시공 구분: 이 순서대로 계약 등록·검색·통계에 나옴
+      features: f.features, // 기능 스위치: 이 업체에서 쓰는 기능만 켬
       periodStart: f.periodStart,
       periodEnd: f.periodEnd,
     };
@@ -190,6 +195,9 @@ function SuperAdminView() {
                     {c.name}
                     <div className="sub-text">브랜드: {c.brands.join(', ')}</div>
                     <div className="sub-text">시공 구분: {companyCategories(c).join(' · ')}</div>
+                    {FEATURES.some((f) => !hasFeature(c, f.key)) && (
+                      <div className="sub-text">꺼진 기능: {FEATURES.filter((f) => !hasFeature(c, f.key)).map((f) => f.label).join(' · ')}</div>
+                    )}
                     {c.code ? (
                       <div className="company-url">
                         <a href={`/${c.code}`} target="_blank" rel="noreferrer">{window.location.host}/{c.code}</a>
@@ -247,7 +255,7 @@ function SuperAdminView() {
                       <button
                         type="button"
                         className="btn-dark-action"
-                        onClick={() => setCompanyForm({ ...c, code: c.code || '', brands: c.brands.join(', '), categories: [...companyCategories(c)] })}
+                        onClick={() => setCompanyForm({ ...c, code: c.code || '', brands: c.brands.join(', '), categories: [...companyCategories(c)], features: featureMap(c) })}
                       >
                         수정/연장
                       </button>
@@ -292,6 +300,21 @@ function SuperAdminView() {
           </Row>
           <Row label="시공 구분">
             <CategoryEditor value={companyForm.categories || []} onChange={(categories) => setCompanyForm({ ...companyForm, categories })} />
+          </Row>
+          <Row label="기능 켜기/끄기">
+            <div className="feature-switches">
+              {FEATURES.map((f) => (
+                <label key={f.key} className="perm-check">
+                  <input
+                    type="checkbox"
+                    checked={!!companyForm.features?.[f.key]}
+                    onChange={(e) => setCompanyForm({ ...companyForm, features: { ...companyForm.features, [f.key]: e.target.checked } })}
+                  />
+                  {f.label}
+                </label>
+              ))}
+            </div>
+            <div className="sub-text">체크를 빼면 이 업체 화면에서 그 기능이 사라지고 서버에서도 막힙니다. (자료는 지워지지 않아 다시 켜면 그대로)</div>
           </Row>
           <Row label="이용기간 *">
             <input type="date" className="input-text" value={companyForm.periodStart} onChange={(e) => setCompanyForm({ ...companyForm, periodStart: e.target.value })} required />

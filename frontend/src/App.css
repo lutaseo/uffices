@@ -5601,3 +5601,11 @@ button.paper-add { font: inherit; }
 .category-editor .category-list li { display: flex; align-items: center; gap: 8px; }
 .category-editor .category-name { min-width: 110px; font-weight: bold; }
 .category-editor .btn-link:disabled { opacity: 0.3; cursor: default; }
+
+/* 업체 기능 스위치 (운영자 업체 수정 창) */
+.feature-switches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 6px 14px;
+  width: 100%;
+}

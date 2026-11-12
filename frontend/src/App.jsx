@@ -7,6 +7,7 @@ import { API_MODE, contracts as contractsApi } from './api/index.js';
 import { ROLES, ROLE_LABELS } from './auth/permissions.js';
 import { formatKoreanDate, today } from './utils/date.js';
 import { usePageTitle } from './utils/title.js';
+import { hasFeature } from './constants.js';
 
 import LoginPage, { loginEntry, setLoginEntry } from './pages/LoginPage.jsx';
 import SignPage from './pages/SignPage.jsx';
@@ -37,7 +38,7 @@ const MENUS = [
     path: '/contracts',
     subs: [
       { key: 'main', label: '계약관리', path: '/contracts' },
-      { key: 'as', label: 'AS관리', path: '/contracts/as' },
+      { key: 'as', label: 'AS관리', path: '/contracts/as', feature: 'as' },
       { key: 'trash', label: '휴지통', path: '/contracts/trash', perm: 'contract.delete' },
     ],
   },
@@ -130,8 +131,9 @@ function CompanyGate({ route }) {
 // 로그인한 채로 /업체/t (상담실장 주소)를 열었을 때
 //   실장(직원) 계정 → 상담실장 화면(상담홈)으로 바꿈 / 관리자 계정 → /t 는 직원 전용이라 안내 (로그아웃하고 실장으로)
 function ConsultSwitch() {
-  const { user, logout } = useAuth();
-  const staff = user.role === ROLES.MANAGER;
+  const { user, company, logout } = useAuth();
+  const off = !hasFeature(company, 'manager'); // 업체 기능 스위치로 상담실장 화면을 끔
+  const staff = user.role === ROLES.MANAGER && !off;
   useEffect(() => {
     if (!staff) return;
     setLoginEntry('manager');
@@ -146,11 +148,11 @@ function ConsultSwitch() {
           <p className="login-sub">
             지금 <b>{user.name}({ROLE_LABELS[user.role] || user.role})</b> 계정으로 로그인되어 있습니다.
             <br />
-            상담실장 화면(/t)은 실장(직원) 계정 전용입니다.
+            {off ? '이 업체는 상담실장 화면을 쓰지 않습니다. 일반화면을 이용해 주세요.' : '상담실장 화면(/t)은 실장(직원) 계정 전용입니다.'}
           </p>
         </div>
         <div className="login-form">
-          <button
+          {!off && <button
             type="button"
             onClick={async () => {
               await logout();
@@ -158,7 +160,7 @@ function ConsultSwitch() {
             }}
           >
             로그아웃하고 상담실장으로 로그인
-          </button>
+          </button>}
           <button type="button" className="consult-switch-back" onClick={() => navigate('/', { replace: true })}>
             지금 계정으로 계속 (일반화면)
           </button>
@@ -181,10 +183,11 @@ function MainLayout({ route }) {
   const { path } = route;
 
   const allowed = (item) => {
+    if (item.feature && !hasFeature(company, item.feature)) return false; // 업체 기능 스위치
     if (item.visible) return item.visible(user);
     return !item.perm || can(item.perm);
   };
-  const consult = user.role !== ROLES.SUPER && loginEntry() === 'manager'; // 상담실장 주소(/t)로 들어옴
+  const consult = user.role !== ROLES.SUPER && loginEntry() === 'manager' && hasFeature(company, 'manager'); // 상담실장 주소(/t)로 들어옴
   const menus = (consult ? [CONSULT_MENU, ...MENUS] : MENUS)
     .filter((m) => {
       if (user.role === ROLES.SUPER) return ['accounts', 'alimtalk', 'terms', 'setting'].includes(m.key);
@@ -286,7 +289,7 @@ function MainLayout({ route }) {
               + 계약 등록
             </a>
           )}
-          {can('fair.manage') && (
+          {can('fair.manage') && hasFeature(company, 'fair') && (
             <button type="button" className="btn-quick green" onClick={() => setFairOpen(true)}>
               🎪 박람회 일정 등록
             </button>

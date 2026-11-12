@@ -23,7 +23,7 @@ import {
 } from './runtime.js';
 import { ROLES, DATA_SCOPES, permissionsOf, isOwnScopeOnly, ALL_PERMISSION_KEYS } from '../auth/permissions.js';
 import { digitsOnly, formatPhone } from '../utils/format.js';
-import { CATEGORIES, DEPARTMENTS, brandTerms, companyCategories, parseCategories, termsSource } from '../constants.js';
+import { CATEGORIES, DEPARTMENTS, brandTerms, companyCategories, parseCategories, parseFeatures, termsSource } from '../constants.js';
 import { AUDIT_KEEP_DAYS, auditText, skipAudit } from './audit.js';
 import {
   ApiError,
@@ -37,6 +37,7 @@ import {
   session,
   validatePassword,
   readableContracts,
+  requireFeature,
 } from './core.js';
 
 export { ApiError } from './core.js';
@@ -98,6 +99,7 @@ export const auth = {
       if (!user.active) throw new ApiError('사용이 중지된 계정입니다. 관리자에게 문의해 주세요.');
       const err = companyAccessError(db, user);
       if (err) throw new ApiError(err);
+      if (kind === 'manager') requireFeature(db, user, 'manager'); // 상담실장 화면을 끈 업체
       user.lastLoginAt = nowIso();
       saveDb(db);
       await setSession({ userId: user.id });
@@ -189,6 +191,7 @@ export const companies = {
       address: company.address || '',
       brands: company.brands?.length ? company.brands : [company.name.trim()],
       ...(parseCategories(company.categories).length ? { categories: parseCategories(company.categories) } : {}),
+      ...(company.features ? { features: parseFeatures(company.features) } : {}),
       periodStart: company.periodStart,
       periodEnd: company.periodEnd,
       active: true,
@@ -210,7 +213,9 @@ export const companies = {
     if ('code' in patch) patch = { ...patch, code: normalizeCode(db, patch.code, c.id) };
     // 시공 구분: 운영자가 정한 순서 그대로 (비우면 기본 목록)
     if ('categories' in patch) patch = { ...patch, categories: parseCategories(patch.categories) };
-    const allowed = ['code', 'name', 'ceo', 'bizNo', 'address', 'brands', 'categories', 'periodStart', 'periodEnd', 'active'];
+    // 기능 스위치: 아는 기능 이름의 켜기/끄기만 저장
+    if ('features' in patch) patch = { ...patch, features: parseFeatures(patch.features) };
+    const allowed = ['code', 'name', 'ceo', 'bizNo', 'address', 'brands', 'categories', 'features', 'periodStart', 'periodEnd', 'active'];
     allowed.forEach((k) => {
       if (k in patch) c[k] = patch[k];
     });

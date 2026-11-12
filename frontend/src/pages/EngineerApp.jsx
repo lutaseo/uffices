@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePageTitle } from '../utils/title.js';
 import { API_MODE, engineerApp } from '../api/index.js';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { DEFAULT_SCHEDULE_SETTINGS, MOBILE_STATUS, OFF_LABEL } from '../constants.js';
+import { DEFAULT_SCHEDULE_SETTINGS, MOBILE_STATUS, OFF_LABEL, currentHasFeature } from '../constants.js';
 import { timeLabel } from '../utils/contract.js';
 import { WEEKDAYS, addDays, formatKoreanDate, toDateKey, today } from '../utils/date.js';
 import { won } from '../utils/format.js';
@@ -288,7 +288,7 @@ function ReportForm({ contractId, step, onReported }) {
     setNote(step.workRecord?.note || '');
   }, [step.mobileStatus, step.mobileMemo, step.workRecord]); // eslint-disable-line react-hooks/exhaustive-deps
   const setRow = (k, patch) => setRows((prev) => ({ ...prev, [k]: { ...prev[k], ...patch } }));
-  const completing = d.mobileStatus === '시공완료'; // 상품이 없는 계약도 자재·함께한 사람·직접 적기 칸은 나옴
+  const completing = d.mobileStatus === '시공완료' && currentHasFeature('workRecord'); // 기능 꺼진 업체는 기록 칸 없이 상태만 보고 / 상품이 없는 계약도 자재·함께한 사람·직접 적기 칸은 나옴
 
   const report = async () => {
     const items = scope.flatMap((g) => g.parts.map((p) => ({ text: p, ...(rows[scopeKey(g.group, p)] || { done: true }) })));
