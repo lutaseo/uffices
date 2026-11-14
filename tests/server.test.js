@@ -24,6 +24,7 @@ process.env.SESSION_SECRET ||= 'test-session-secret-0123456789abcdef-0123456789'
 process.env.INIT_SUPER_LOGIN = 'super';
 process.env.INIT_SUPER_PASSWORD = 'super-test-1234';
 process.env.INIT_DEMO_DATA = 'true';
+process.env.VB_VERIFY_FAST = '1'; // 빠른 불러오기: 매 요청마다 전체로 읽은 결과와 같은지 비교 (다르면 실패)
 
 const { handleRpc } = await import('../server/handler.js');
 const { closePool } = await import('../server/pg.js');
@@ -1784,4 +1785,28 @@ test('수정로그 되돌리기: 관리자만, 수정·삭제·등록을 이전�
   assert.equal(latest.canUndo, false);
   assert.equal((await admin('auditLogs', 'undo', latest.rows[0].id)).status, 403);
   await sup.ok('companies', 'update', good.id, { features: {} });
+});
+
+test('빠른 불러오기: 가볍게 읽은 계약을 고치면 알아챔(전체로 다시 처리), 스위치를 끄면 예전처럼 전체 읽기', async () => {
+  const { touchedSlim, fingerprint } = await import('../server/pg.js');
+  const db = { contracts: [{ id: 1, a: 1 }, { id: 2, a: 2 }] };
+  const fp = fingerprint(db);
+  assert.equal(touchedSlim(fp, { contracts: [{ id: 1, a: 1 }, { id: 2, a: 2 }, { id: 3 }] }, new Set([2])), false, '새 계약 추가만은 괜찮음');
+  assert.equal(touchedSlim(fp, { contracts: [{ id: 1, a: 9 }, { id: 2, a: 2 }] }, new Set([2])), false, '전체로 읽은 계약은 고쳐도 됨');
+  assert.equal(touchedSlim(fp, { contracts: [{ id: 1, a: 1 }, { id: 2, a: 3 }] }, new Set([2])), true, '가볍게 읽은 계약을 고침');
+  assert.equal(touchedSlim(fp, { contracts: [{ id: 1, a: 1 }] }, new Set([2])), true, '가볍게 읽은 계약을 지움');
+
+  const sup = client();
+  await sup.ok('auth', 'login', 'super', 'super-test-1234');
+  const good = (await sup.ok('companies', 'list')).find((x) => x.code === 'thegood');
+  await sup.ok('companies', 'update', good.id, { features: { fastLoad: false } });
+  const c = await admin.ok('contracts', 'create', { ...base, customerName: '빠른끔', customerPhone: '010-6161-7272', memo: '메모 유지' });
+  const g = await admin.ok('contracts', 'get', c.id);
+  await admin.ok('contracts', 'update', c.id, { ...g, contractDate: '2026-10-09' });
+  assert.equal((await admin.ok('contracts', 'get', c.id)).memo, '메모 유지', '스위치 꺼도 정상');
+  await sup.ok('companies', 'update', good.id, { features: {} });
+  const other = await admin.ok('contracts', 'get', c.id);
+  await admin.ok('contracts', 'addNote', c.id, '상담 메모');
+  assert.equal((await admin.ok('contracts', 'get', c.id)).memo, '메모 유지', '다른 요청 뒤에도 긴 글 그대로');
+  assert.ok(other.history.length > 0);
 });

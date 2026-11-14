@@ -14,10 +14,11 @@ import * as services from '../frontend/src/api/services.js';
 import { setRuntimeAdapter } from '../frontend/src/api/runtime.js';
 import { ApiError } from '../frontend/src/api/core.js';
 import { bizgoConfigured, listSenders, sendAlimtalk, inquiryReport } from './bizgo.js';
-import { getPool, loadSnapshot, persistChanges, saveAuditLog, resolveCompanyId, contractByEsignToken, companyIdForCustomer, fingerprint } from './pg.js';
+import { getPool, loadSnapshot, persistChanges, saveAuditLog, resolveCompanyId, contractByEsignToken, companyIdForCustomer, fingerprint, touchedSlim } from './pg.js';
 import { AUDIT_KEEP_DAYS, buildAuditEntry, skipAudit, undoSnapshot } from '../frontend/src/api/audit.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { bootstrap } from './bootstrap.js';
+import { hasFeature } from '../frontend/src/constants.js';
 import { COOKIE_NAME, decodeSession, encodeSession, parseCookies, sessionCookie } from './session.js';
 import { APP_HEADER, CO_HEADER, DEVICE_HEADER, appOf, mergeSession, viewSession } from '../frontend/src/api/sessionSlots.js';
 
@@ -165,6 +166,30 @@ const RECEIPT_CALLS = new Set(['contracts.receipt', 'contracts.addPayment', 'con
 
 // 계약 목록·통계: 저장하지 않는 요청이라 계약의 긴 글·변경이력 없이 읽어도 됨
 const SLIM_CALLS = new Set(['contracts.list', 'contracts.listCached', 'reports.contracts', 'reports.engineers']);
+
+// 계약 하나(또는 고른 몇 건)를 보거나 고치는 요청: 그 계약만 전체로 읽고 나머지 계약은 긴 글·변경이력 없이 (트래픽·속도)
+//   다른 계약까지 고치게 되면 자동으로 전체를 다시 읽어 처음부터 처리 (touchedSlim) — 결과는 예전과 같음
+//   첫 인자 = 계약 번호(또는 번호 목록). contracts.create 는 모두 가볍게 (새 계약만 전체)
+const FOCUS_CALLS = new Set([
+  'contracts.get',
+  'contracts.create',
+  'contracts.update',
+  'contracts.updateSchedule',
+  'contracts.setAs',
+  'contracts.moveToTrash',
+  'contracts.restore',
+  'contracts.setDiscount',
+  'contracts.paperPhotos',
+  'contracts.setPaperPhotos',
+  'contracts.receipt',
+  'contracts.addPayment',
+  'contracts.updatePayment',
+  'contracts.paymentPhotos',
+  'contracts.removePayment',
+  'contracts.addNote',
+  'contracts.asPhotos',
+]);
+const focusOf = (name, args) => (name === 'contracts.create' ? [] : [].concat(args[0]).map(Number).filter((x) => Number.isSafeInteger(x)));
 
 const STATUS = { UNAUTHORIZED: 401, FORBIDDEN: 403, NOT_FOUND: 404 };
 
@@ -315,16 +340,20 @@ export async function handleRpc({ body, headers }) {
       if (name === 'auditLogs.list') scope.auditLogs = true; // 수정 로그 화면
       if (name === 'auditLogs.undo') scope.auditLogId = Number(args[0]) || -1; // 되돌리기: 그 기록 하나 (+ 이미 되돌렸는지)
       if (SLIM_CALLS.has(name) && readOnlyCall) scope.slimContracts = true; // 목록: 긴 글·변경이력은 읽지 않음
+      if (FOCUS_CALLS.has(name) && scope.companyId && !scope.tables && hasFeature(await companyRow(client, scope.companyId), 'fastLoad')) {
+        scope.focusContracts = focusOf(name, args);
+      }
     }
     // 계약 목록 '바뀌었나' 확인: 먼저 계약 요약만 읽어 보고, 바뀌었을 때만 계약 전체를 다시 읽음 (트래픽 절약)
     const quickCheck = name === 'contracts.listCached' && args[1] && scope.companyId;
-    const fullScope = { ...scope };
+    const { focusContracts: _focus, ...fullScope } = scope; // eslint-disable-line no-unused-vars
     if (quickCheck) Object.assign(scope, { tables: ['teams'], contractSummary: true });
     const sessionAtStart = ctx.session; // 수정 로그: 요청한 사람
+    const fullSessionAtStart = ctx.fullSession;
     const tLoad = Date.now();
-    let { db, readOnly } = await loadSnapshot(client, scope);
+    let { db, readOnly, slimIds } = await loadSnapshot(client, scope);
     let loadMs = Date.now() - tLoad;
-    const before = readOnlyCall ? null : fingerprint(db); // 저장 비교용 지문 (읽기 전용은 생략)
+    let before = readOnlyCall ? null : fingerprint(db); // 저장 비교용 지문 (읽기 전용은 생략)
     ctx.committed = db;
 
     let result;
@@ -345,6 +374,26 @@ export async function handleRpc({ body, headers }) {
       } catch (e) {
         error = e;
       }
+    }
+
+    // 가볍게 읽은 계약까지 고쳤으면 → 전체를 다시 읽고 처음부터 (빠진 긴 글·변경이력이 지워지지 않게)
+    if (slimIds && !readOnlyCall && touchedSlim(before, ctx.committed, slimIds)) {
+      const t2 = Date.now();
+      ({ db, readOnly } = await loadSnapshot(client, fullScope));
+      loadMs += Date.now() - t2;
+      before = fingerprint(db);
+      Object.assign(ctx, { session: sessionAtStart, fullSession: fullSessionAtStart, setCookie: null, committed: db });
+      slimIds = null;
+      error = null;
+      try {
+        result = await store.run(ctx, () => fn(...args));
+      } catch (e) {
+        error = e;
+      }
+    }
+    // 시험용: 가볍게 읽은 결과가 전체로 읽은 결과와 똑같은지 매번 비교 (VB_VERIFY_FAST=1)
+    if (slimIds && process.env.VB_VERIFY_FAST === '1') {
+      await verifyFast({ slimIds, client, fullScope, fn, args, ctx, sessionAtStart, fullSessionAtStart, readOnlyCall, result, error, slimDb: ctx.committed, name });
     }
 
     // 업무 코드가 저장(saveDb)한 내용만 반영. (예: 로그인 실패 횟수는 오류여도 저장됨)
@@ -377,6 +426,50 @@ export async function handleRpc({ body, headers }) {
   } finally {
     client.release();
   }
+}
+
+async function companyRow(client, companyId) {
+  const r = await client.query(`SELECT data FROM companies WHERE id = $1`, [companyId]);
+  return r.rows[0]?.data || null;
+}
+
+// 시험용 비교: 같은 요청을 전체로 읽은 자료에서 한 번 더 실행해 응답·저장될 자료가 같은지 (다르면 오류)
+async function verifyFast({ slimIds, client, fullScope, fn, args, ctx, sessionAtStart, fullSessionAtStart, readOnlyCall, result, error, slimDb, name }) {
+  const { db: full } = await loadSnapshot(client, fullScope);
+  const originals = new Map(full.contracts.map((r) => [r.id, r]));
+  const ctx2 = { ...ctx, session: sessionAtStart, fullSession: fullSessionAtStart, setCookie: null, committed: clone(full) };
+  let result2;
+  let error2 = null;
+  try {
+    result2 = await store.run(ctx2, () => fn(...args));
+  } catch (e) {
+    error2 = e;
+  }
+  // 항목 순서·시각·무작위 값(토큰)은 빼고 비교
+  const norm = (v) => {
+    const walk = (x, k = '') => {
+      if (/token/i.test(k)) return '*';
+      if (typeof x === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(x)) return 'T';
+      if (Array.isArray(x)) return x.map((y) => walk(y));
+      if (x && typeof x === 'object') return Object.fromEntries(Object.keys(x).sort().map((key) => [key, walk(x[key], key)]));
+      return x;
+    };
+    return JSON.stringify(walk(v ?? null));
+  };
+  const problems = [];
+  if (norm(result) !== norm(result2)) problems.push('응답이 다름');
+  if ((error?.message || '') !== (error2?.message || '')) problems.push(`오류가 다름: ${error?.message} / ${error2?.message}`);
+  if (!readOnlyCall) {
+    // 저장될 자료: 가볍게 읽고 안 바뀐 계약은 원래 전체 행으로 바꿔 놓고 비교
+    const a = { ...slimDb, contracts: slimDb.contracts.map((r) => (slimIds.has(r.id) ? originals.get(r.id) : r)) };
+    for (const key of Object.keys(ctx2.committed)) {
+      if (!Array.isArray(ctx2.committed[key])) continue;
+      const x = norm((a[key] || []).slice().sort((p, q) => p.id - q.id));
+      const y = norm(ctx2.committed[key].slice().sort((p, q) => p.id - q.id));
+      if (x !== y) problems.push(`저장 자료가 다름: ${key}`);
+    }
+  }
+  if (problems.length) throw new Error(`[빠른 읽기 비교] ${name}: ${problems.join(', ')}`);
 }
 
 function json(status, body, headers = {}) {

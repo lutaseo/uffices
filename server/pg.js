@@ -62,6 +62,7 @@ const SLIM_DROP = ['history', 'memo', 'happyCallMemo', 'notes', 'engineerNote', 
 export async function loadSnapshot(client, scope) {
   const db = { seq: {}, version: 2 };
   const readOnly = new Set();
+  let slimIds = null; // 가볍게 읽은 계약 번호들 (scope.focusContracts)
   const meta = await rows(client, `SELECT key, value FROM meta WHERE key IN ('seq','schema_version')`);
   meta.forEach((m) => {
     if (m.key === 'seq') db.seq = m.value;
@@ -87,6 +88,19 @@ export async function loadSnapshot(client, scope) {
     } else if (scope.companyId && wanted.includes(key)) {
       // 목록 요청(읽기 전용)은 계약의 긴 글·변경이력을 DB 에서 아예 읽지 않음
       const cols = key === 'contracts' && scope.slimContracts ? `data ${SLIM_DROP}` : 'data';
+      if (key === 'contracts' && scope.focusContracts) {
+        // 계약 하나를 보거나 고칠 때: 그 계약만 전체, 나머지는 긴 글·변경이력 없이 (번호·묶음 계산에 필요한 값은 그대로)
+        const focus = scope.focusContracts.filter((x) => Number.isSafeInteger(x));
+        const got = await rows(
+          client,
+          `SELECT id, (id = ANY($2::bigint[])) AS full, CASE WHEN id = ANY($2::bigint[]) THEN data ELSE data ${SLIM_DROP} END AS data
+             FROM contracts WHERE company_id = $1 ORDER BY id`,
+          [scope.companyId, focus],
+        );
+        db.contracts = got.map(toObj);
+        slimIds = new Set(got.filter((r) => !r.full).map((r) => Number(r.id)));
+        continue;
+      }
       db[key] = (await rows(client, `SELECT ${cols} AS data FROM ${TABLE_MAP[key]} WHERE company_id = $1 ORDER BY id`, [scope.companyId])).map(toObj);
     } else {
       db[key] = [];
@@ -151,7 +165,7 @@ export async function loadSnapshot(client, scope) {
     }));
     readOnly.add('contracts');
   }
-  return { db, readOnly };
+  return { db, readOnly, slimIds };
 }
 
 // 계약의 서명 이미지는 별도 표에 저장 → 계약 데이터에서는 떼어냄
@@ -163,6 +177,19 @@ function splitSignature(row) {
 
 // 변경된 행만 저장 (추가/수정/삭제)
 // 저장 전 상태의 '지문'만 만들어 둠 (전체 복사 대신 행마다 JSON 글자 하나) → 쓰기 요청이 가벼워짐
+// 가볍게 읽은 계약을 업무 코드가 바꾸거나 지웠는지 (그러면 전체를 다시 읽어 처음부터 — 빠진 항목이 지워지지 않게)
+export function touchedSlim(fp, after, slimIds) {
+  if (!slimIds?.size) return false;
+  const prev = fp.contracts.rows;
+  let seen = 0;
+  for (const r of after.contracts || []) {
+    if (!slimIds.has(r.id)) continue;
+    seen++;
+    if (JSON.stringify(r) !== prev.get(r.id)) return true;
+  }
+  return seen !== slimIds.size;
+}
+
 export function fingerprint(db) {
   const fp = { __fingerprint: true };
   for (const key of TABLE_KEYS) {
