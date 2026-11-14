@@ -1,5 +1,8 @@
 // PostgreSQL 연결 + 데이터 읽기/쓰기
 import pg from 'pg';
+import { randomBytes } from 'node:crypto';
+import { photoStoreConfigured, uploadPhoto } from './photoStore.js';
+import { hasFeature } from '../frontend/src/constants.js';
 
 const TABLE_MAP = {
   companies: 'companies',
@@ -236,6 +239,21 @@ export async function persistChanges(client, before, after, readOnly) {
       ids.push(row.id);
       companyIds.push(key === 'companies' ? row.id : row.companyId ?? null);
       datas.push(json);
+    }
+    // 새 사진은 사진 전용 저장소로 (업체 스위치·설정이 있을 때) — DB·수정로그에는 'vbstore:경로' 만
+    if (key === 'paymentReceipts' && photoStoreConfigured()) {
+      await Promise.all(
+        changes.map(async (ch) => {
+          if (ch.table !== key || !ch.after || !String(ch.after.image || '').startsWith('data:')) return;
+          if (!hasFeature(after.companies?.find((c) => c.id === ch.after.companyId), 'photoStorage')) return;
+          const ext = /^data:image\/(png|webp)/.exec(ch.after.image)?.[1] || 'jpg';
+          const path = `${ch.after.companyId}/${ch.after.contractId || 0}/${ch.after.id}-${randomBytes(6).toString('hex')}.${ext}`;
+          const stored = await uploadPhoto(ch.after.image, path);
+          if (!stored) return;
+          ch.after = { ...ch.after, image: stored };
+          datas[ids.indexOf(ch.after.id)] = JSON.stringify(ch.after);
+        }),
+      );
     }
     // 바뀐 행을 표마다 한 번에 저장 (DB 가 멀어도 왕복 횟수가 적도록)
     for (let i = 0; i < ids.length; i += 500) {

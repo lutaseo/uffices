@@ -1810,3 +1810,64 @@ test('빠른 불러오기: 가볍게 읽은 계약을 고치면 알아챔(전체
   assert.equal((await admin.ok('contracts', 'get', c.id)).memo, '메모 유지', '다른 요청 뒤에도 긴 글 그대로');
   assert.ok(other.history.length > 0);
 });
+
+test('사진 전용 저장소: 새 사진은 저장소에 올리고 DB 에는 경로만, 보낼 때 서명 주소, 실패·스위치 끔이면 DB 에 저장, 되돌리기도 됨', async () => {
+  const http = await import('node:http');
+  const objects = new Map();
+  let failUpload = false;
+  const srv = http.createServer(async (req, res) => {
+    let raw = Buffer.alloc(0);
+    for await (const ch of req) raw = Buffer.concat([raw, ch]);
+    assert.equal(req.headers.authorization, 'Bearer test-service-key', '서비스 키로 요청');
+    if (req.url === '/storage/v1/bucket') return res.writeHead(409).end('{}');
+    if (req.url.startsWith('/storage/v1/object/sign/photos')) {
+      const { paths } = JSON.parse(raw.toString());
+      return res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(paths.map((p) => ({ path: p, signedURL: `/object/sign/photos/${p}?token=t1` }))));
+    }
+    if (req.url.startsWith('/storage/v1/object/photos/')) {
+      if (failUpload) return res.writeHead(500).end('boom');
+      objects.set(req.url.slice('/storage/v1/object/photos/'.length), raw);
+      return res.writeHead(200).end('{}');
+    }
+    res.writeHead(404).end();
+  });
+  await new Promise((ok) => srv.listen(0, ok));
+  const port = srv.address().port;
+  process.env.SUPABASE_URL = `http://127.0.0.1:${port}`;
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-key';
+  const { getPool } = await import('../server/pg.js');
+  try {
+    const img = 'data:image/jpeg;base64,' + Buffer.from('store-photo-1').toString('base64');
+    const c = await admin.ok('contracts', 'create', { ...base, customerName: '저장소고객', customerPhone: '010-5252-6363' });
+    await admin.ok('contracts', 'setPaperPhotos', c.id, { add: [img] });
+    assert.equal(objects.size, 1, '저장소에 올라감');
+    assert.equal([...objects.values()][0].toString(), 'store-photo-1', '사진 내용 그대로');
+    const { rows } = await getPool().query(`SELECT data->>'image' AS image FROM payment_receipts WHERE data->>'contractId' = $1`, [String(c.id)]);
+    assert.ok(rows[0].image.startsWith('vbstore:'), 'DB 에는 경로만');
+    const list = await admin.ok('contracts', 'paperPhotos', c.id);
+    assert.ok(list[0].image.startsWith(`http://127.0.0.1:${port}/storage/v1/object/sign/photos/`) && list[0].image.endsWith('?token=t1'), '보낼 때 서명 주소');
+    const logs = (await admin.ok('auditLogs', 'list', { q: '저장소고객' })).rows;
+    assert.ok(!JSON.stringify(logs).includes('store-photo'), '수정로그에 사진 내용 없음');
+    // 되돌리기 (사진 추가 취소)
+    await admin.ok('auditLogs', 'undo', logs.find((r) => r.action === '실물 계약서 사진').id);
+    assert.equal((await admin.ok('contracts', 'paperPhotos', c.id)).length, 0);
+    // 올리기 실패 → DB 에 저장 (사진이 사라지지 않음)
+    failUpload = true;
+    await admin.ok('contracts', 'setPaperPhotos', c.id, { add: [img] });
+    assert.equal((await admin.ok('contracts', 'paperPhotos', c.id))[0].image, img, '실패하면 DB 에');
+    failUpload = false;
+    // 스위치 끄면 DB 에
+    const sup = client();
+    await sup.ok('auth', 'login', 'super', 'super-test-1234');
+    const good = (await sup.ok('companies', 'list')).find((x) => x.code === 'thegood');
+    await sup.ok('companies', 'update', good.id, { features: { photoStorage: false } });
+    const before = objects.size;
+    await admin.ok('contracts', 'setPaperPhotos', c.id, { add: [img] });
+    assert.equal(objects.size, before, '스위치 끄면 올리지 않음');
+    await sup.ok('companies', 'update', good.id, { features: {} });
+  } finally {
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    srv.close();
+  }
+});
