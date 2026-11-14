@@ -16,5 +16,6 @@
 ```bash
 npm run build                       # 화면 빌드
 TEST_DATABASE_URL=... npm test      # 서버 시험 (시험 전용 DB, 실서비스 DB 거부)
+LOAD_DATABASE_URL=... npm run loadtest  # 부하 시험: 150명 동시 사용·동시 저장 (빈 시험 DB, 실서비스 DB 거부)
 ```
 CI(`.github/workflows/ci.yml`)가 PR 마다 빌드와 서버 시험을 실행합니다.
