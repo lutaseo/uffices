@@ -10,7 +10,7 @@
 //
 // 필요한 환경변수 (Vercel 에만, 코드·채팅에 넣지 않음):
 //   SUPABASE_URL               예) https://프로젝트ID.supabase.co
-//   SUPABASE_SERVICE_ROLE_KEY  Supabase > Project Settings > API 의 service_role 키
+//   SUPABASE_SERVICE_ROLE_KEY  Supabase > Settings > API Keys 의 Secret key (sb_secret_...) 또는 예전 service_role 키
 //   PHOTO_BUCKET               (선택) 저장소 이름, 기본 'photos' — 없으면 비공개로 자동 생성
 // ============================================================
 
@@ -22,7 +22,8 @@ const key = () => String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
 const bucket = () => String(process.env.PHOTO_BUCKET || 'photos').trim();
 export const photoStoreConfigured = () => !!(base() && key());
 
-const headers = (extra = {}) => ({ Authorization: `Bearer ${key()}`, apikey: key(), ...extra });
+// 새 방식 비밀 키(sb_secret_...)는 apikey 머리글로만, 예전 service_role 키(JWT)는 Authorization 에도
+const headers = (extra = {}) => (key().startsWith('sb_') ? { apikey: key(), ...extra } : { Authorization: `Bearer ${key()}`, apikey: key(), ...extra });
 
 let bucketReady = null; // 인스턴스마다 한 번만 확인
 async function ensureBucket() {

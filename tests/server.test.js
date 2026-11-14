@@ -1818,7 +1818,8 @@ test('사진 전용 저장소: 새 사진은 저장소에 올리고 DB 에는 �
   const srv = http.createServer(async (req, res) => {
     let raw = Buffer.alloc(0);
     for await (const ch of req) raw = Buffer.concat([raw, ch]);
-    assert.equal(req.headers.authorization, 'Bearer test-service-key', '서비스 키로 요청');
+    assert.equal(req.headers.apikey, process.env.SUPABASE_SERVICE_ROLE_KEY, '비밀 키로 요청');
+    assert.equal(req.headers.authorization, process.env.SUPABASE_SERVICE_ROLE_KEY.startsWith('sb_') ? undefined : `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`, '새 비밀 키는 Authorization 없이');
     if (req.url === '/storage/v1/bucket') return res.writeHead(409).end('{}');
     if (req.url.startsWith('/storage/v1/object/sign/photos')) {
       const { paths } = JSON.parse(raw.toString());
@@ -1856,6 +1857,11 @@ test('사진 전용 저장소: 새 사진은 저장소에 올리고 DB 에는 �
     await admin.ok('contracts', 'setPaperPhotos', c.id, { add: [img] });
     assert.equal((await admin.ok('contracts', 'paperPhotos', c.id))[0].image, img, '실패하면 DB 에');
     failUpload = false;
+    // 새 방식 비밀 키(sb_secret_...)
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'sb_secret_test';
+    const n0 = objects.size;
+    await admin.ok('contracts', 'setPaperPhotos', c.id, { add: [img] });
+    assert.equal(objects.size, n0 + 1, '새 비밀 키로도 올라감');
     // 스위치 끄면 DB 에
     const sup = client();
     await sup.ok('auth', 'login', 'super', 'super-test-1234');
