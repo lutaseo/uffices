@@ -11,7 +11,8 @@
     "dev:api": "node --env-file=.env server/dev.js",
     "db:setup": "node --env-file=.env server/setup.js",
     "build": "npm run build --prefix frontend",
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "loadtest": "node tests/load/run.mjs"
   },
   "dependencies": {
     "pg": "^8.16.0"
