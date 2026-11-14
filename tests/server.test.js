@@ -1877,3 +1877,28 @@ test('사진 전용 저장소: 새 사진은 저장소에 올리고 DB 에는 �
     srv.close();
   }
 });
+
+test('입금 사진 이름표: 입금을 지우고 새로 추가해도 지운 입금의 영수증 사진이 새 입금에 붙지 않음', async () => {
+  const img = 'data:image/jpeg;base64,' + Buffer.from('old-receipt').toString('base64');
+  const c = await admin.ok('contracts', 'create', {
+    ...base, customerName: '이름표고객', customerPhone: '010-7373-8484', totalAmount: 500000,
+    payments: [{ kind: '계약금', method: '현금', amount: 100000, date: '2026-10-01' }, { kind: '잔금', method: '현금', amount: 200000, date: '2026-10-02' }],
+  });
+  const g = await admin.ok('contracts', 'get', c.id);
+  const second = g.payments[1].id;
+  await admin.ok('contracts', 'paymentPhotos', c.id, second, { add: [img] });
+  // 수정 화면: 두 번째 입금을 지우고 새 입금 추가 (새 줄은 번호 없음)
+  const g2 = await admin.ok('contracts', 'get', c.id);
+  await admin.ok('contracts', 'update', c.id, { ...g2, payments: [g2.payments[0], { kind: '잔금', method: '카드', amount: 300000, date: '2026-10-05' }] });
+  const after = await admin.ok('contracts', 'get', c.id);
+  const added = after.payments[1];
+  assert.notEqual(added.id, second, '지운 입금 번호를 다시 쓰지 않음');
+  assert.equal(added.receiptCount || 0, 0);
+  assert.equal((await admin('contracts', 'receipt', c.id, added.id)).status, 404, '새 입금에는 사진 없음');
+  assert.equal((await admin('contracts', 'receipt', c.id, second)).status, 404, '지운 입금의 사진은 정리됨');
+  // 입금 등록(따로)도 새 번호
+  const v = await admin.ok('contracts', 'addPayment', c.id, { kind: '잔금', method: '현금', amount: 10000, date: '2026-10-06' });
+  assert.equal(new Set(v.payments.map((p) => p.id)).size, v.payments.length, '번호 겹침 없음');
+  // 원래 있던 입금은 번호 유지
+  assert.equal(after.payments[0].id, g.payments[0].id);
+});

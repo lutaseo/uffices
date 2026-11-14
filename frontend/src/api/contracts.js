@@ -225,11 +225,14 @@ function normalizeContractInput(db, user, data, existing) {
     out.discountReason = String(data.discountReason || '').trim().slice(0, 100);
     if (out.discount + out.voucher > out.totalAmount) throw new ApiError('할인/상품권 금액이 시공총액보다 큽니다.');
     const input = (data.payments || []).filter((p) => Number(p.amount));
-    let nextPid = Math.max(0, ...input.map((p) => Number(p.id) || 0));
+    // 입금 번호: 원래 있던 입금만 번호 유지, 새 줄은 예전에 쓴 적 없는 번호
+    //   (지운 입금의 번호를 다시 쓰면 그 입금의 영수증 사진이 새 입금에 붙어 보이던 문제 방지)
+    const known = new Set((existing?.payments || []).map((p) => p.id));
+    let nextPid = existing ? usedPaymentId(db, existing) : 0;
     const seen = new Set();
     out.payments = input.map((p) => {
       let id = Number(p.id) || 0;
-      if (!id || seen.has(id)) id = ++nextPid;
+      if (!known.has(id) || seen.has(id)) id = ++nextPid;
       seen.add(id);
       return normalizePayment(p, id);
     });
@@ -339,6 +342,12 @@ function syncReceiptCounts(db, c) {
     p.receiptCount = receiptsOf(db, c, p).length;
     p.hasReceipt = p.receiptCount > 0;
   });
+}
+
+// 이 계약에서 지금까지 쓴 가장 큰 입금 번호 (지금 입금 + 남아 있는 영수증 사진)
+function usedPaymentId(db, c) {
+  const photoIds = (db.paymentReceipts || []).filter((r) => r.contractId === c.id && r.paymentId).map((r) => Number(r.paymentId) || 0);
+  return Math.max(0, ...(c.payments || []).map((p) => Number(p.id) || 0), ...photoIds);
 }
 
 // 계약의 입금 내역에서 사라진 입금의 사진 정리
@@ -876,7 +885,7 @@ export const contracts = {
     const c = findContract(db, user, id);
     if (c.deletedAt) throw new ApiError('휴지통에 있는 계약입니다.');
     c.payments = c.payments || [];
-    const p = normalizePayment({ ...payment, hasReceipt: false, receiptCount: 0 }, Math.max(0, ...c.payments.map((x) => x.id)) + 1);
+    const p = normalizePayment({ ...payment, hasReceipt: false, receiptCount: 0 }, usedPaymentId(db, c) + 1);
     c.payments.push(p);
     changeReceipts(db, user, c, p, { ...receiptChangesOf(payment), image: payment.receiptImage || undefined });
     addHistory(c, user, `${p.kind === '환불' ? '환불' : '입금'} 등록`, [{ label: p.kind, from: '-', to: `${won(p.amount)}원 (${p.method})` }]);
