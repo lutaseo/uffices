@@ -29,6 +29,7 @@ export const FEATURES = [
   { key: 'customer', label: '고객 확인 페이지 (/c)', on: true },
   { key: 'auditUndo', label: '수정로그 되돌리기 (관리자)', on: true },
   { key: 'fastLoad', label: '빠른 불러오기 (계약 보기·저장 때 필요한 계약만 전체로 읽음)', on: true },
+  { key: 'photoStorage', label: '사진 전용 저장소 (새 사진을 DB 대신 사진 저장소에)', on: true },
 ];
 export function hasFeature(company, key) {
   const f = FEATURES.find((x) => x.key === key);

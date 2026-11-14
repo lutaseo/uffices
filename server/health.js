@@ -28,6 +28,7 @@ export async function healthReport() {
       INIT_SUPER_PASSWORD: !has('INIT_SUPER_PASSWORD') ? '없음' : String(process.env.INIT_SUPER_PASSWORD).length < 8 ? '너무 짧음 (8자 이상 필요)' : '있음',
     },
     DB연결: '확인 전',
+    사진저장소: has('SUPABASE_URL') && has('SUPABASE_SERVICE_ROLE_KEY') ? '설정됨 (새 사진은 Supabase Storage 에 저장)' : '설정 안 됨 (사진은 DB 에 저장) — SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY 필요',
   };
   if (!has('DATABASE_URL')) {
     report.DB연결 = 'DATABASE_URL 이 없어 확인할 수 없습니다.';

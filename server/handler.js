@@ -19,6 +19,7 @@ import { AUDIT_KEEP_DAYS, buildAuditEntry, skipAudit, undoSnapshot } from '../fr
 import { hashPassword, verifyPassword } from './password.js';
 import { bootstrap } from './bootstrap.js';
 import { hasFeature } from '../frontend/src/constants.js';
+import { photoStoreConfigured, signPhotosIn } from './photoStore.js';
 import { COOKIE_NAME, decodeSession, encodeSession, parseCookies, sessionCookie } from './session.js';
 import { APP_HEADER, CO_HEADER, DEVICE_HEADER, appOf, mergeSession, viewSession } from '../frontend/src/api/sessionSlots.js';
 
@@ -415,7 +416,9 @@ export async function handleRpc({ body, headers }) {
       }
       throw error;
     }
-    return json(200, { result: result === undefined ? null : result }, extraHeaders);
+    const ok = json(200, { result: result === undefined ? null : result }, extraHeaders);
+    if (photoStoreConfigured()) ok.body = await signPhotosIn(ok.body); // 사진 저장소의 사진 → 4시간짜리 주소
+    return ok;
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});
     console.error(`[rpc] ${name} 실패:`, e);
