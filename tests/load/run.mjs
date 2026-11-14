@@ -3,6 +3,7 @@
 //
 //   LOAD_DATABASE_URL=postgresql://...(비어 있는 시험 전용 DB) npm run loadtest
 //   선택: USERS=150 CONTRACTS=3000 SECONDS=180 THINK=20-60 (한 사람이 다음 작업까지 쉬는 초)
+//   물결 시험: WAVES=10,20,10 → 10명이 동시에 '계약 저장 + 사진 1장'을, 10초 간격으로 20번 (평소·몰림 시험 대신)
 //
 // ⚠ 시험 DB 의 표를 모두 지우고 시작합니다. 실서비스(Supabase) 주소는 거부합니다.
 // 결과는 이 컴퓨터 기준 (DB 가 같은 컴퓨터라 실제보다 빠름) — 숫자가 늘어나는 경향을 보는 용도
@@ -135,6 +136,35 @@ function report(title) {
     for (const [e, c] of Object.entries(s.errs)) console.log('    실패', c, '건:', e);
   }
   for (const k of Object.keys(stats)) delete stats[k];
+}
+
+if (process.env.WAVES) {
+  const [size, rounds, gap] = process.env.WAVES.split(',').map(Number);
+  console.log(`물결 시험: ${size}명이 동시에 계약 저장 + 사진 1장, ${gap}초 간격으로 ${rounds}번`);
+  const people = Array.from({ length: USERS }, (_, i) => client(i));
+  for (let i = 0; i < USERS; i += 10) await Promise.all(people.slice(i, i + 10).map((c, j) => c('auth', 'login', `load${i + j}`, 'load12345', 'thegood')));
+  delete stats['auth.login'];
+  const rows = [];
+  for (let r = 0; r < rounds; r++) {
+    const start = Date.now();
+    const waits = await Promise.all(
+      Array.from({ length: size }, async (_, k) => {
+        const i = (r * size + k) % USERS;
+        const call = people[i];
+        const t = Date.now();
+        const c = await call('contracts', 'create', { brand: '더좋은집', category: '줄눈', customerName: `물결${r}-${k}-${Date.now() % 1000}`, customerPhone: `010-6${String(r).padStart(3, '0')}-${String(k).padStart(4, '0')}`, aptName: '물결아파트', contractDate: '2026-11-14', totalAmount: 1000000, payments: [] });
+        if (c?.id) await call('contracts', 'setPaperPhotos', c.id, { add: [photo] });
+        return Date.now() - t;
+      }),
+    );
+    waits.sort((a, b) => a - b);
+    rows.push(waits[waits.length - 1]);
+    console.log(`  ${String(r + 1).padStart(2)}번째: 가장 빨리 끝난 사람 ${(waits[0] / 1000).toFixed(1)}초, 가장 늦게 끝난 사람 ${(waits[waits.length - 1] / 1000).toFixed(1)}초`);
+    await sleep(Math.max(0, gap * 1000 - (Date.now() - start)));
+  }
+  report(`물결 시험 — ${size}명 × ${rounds}번 (요청별)`);
+  servers.forEach((s) => s.kill());
+  process.exit(0);
 }
 
 console.log(`평소 사용: ${USERS}명이 ${SECONDS}초 동안 (한 사람이 ${TMIN / 1000}~${TMAX / 1000}초마다 한 번씩 작업)`);
