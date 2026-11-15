@@ -330,7 +330,7 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
                 key={c.id}
                 className={`selectable-row ${c.id === selected.id ? 'selected-row' : ''}`}
                 onClick={() => setSelectedId(c.id)}
-                title="누르면 위 시공정보에 표시됩니다"
+                title="누르면 아래 시공정보에 표시됩니다"
               >
                 <td>{c.no ?? '-'}</td>
                 <td className="nowrap">
@@ -666,7 +666,7 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
             {t}
           </button>
         ))}
-        {/* 탭 옆 [수정]: 지금 보고 있는 시공(위 시공정보의 계약)을 바로 수정 */}
+        {/* 탭 옆 [수정]: 지금 보고 있는 시공(시공정보의 계약)을 바로 수정 */}
         {canDo('contract.edit') && !selected.deletedAt && (
           <button type="button" className="detail-edit-btn" onClick={() => onEdit(selected)} title={`No.${selected.no} ${selected.category} 수정`}>
             ✏️ 수정
@@ -676,11 +676,11 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
 
       {tab === '시공관리' && (
         <>
-          {/* 계약 등록 화면과 같은 순서: 계약정보 → 시공내역·금액 → 시공정보 */}
+          {/* 순서: 계약정보 → 시공내역·금액 → 상세시공(시공 목록) → 시공정보(고른 시공) */}
           {basicInfo}
           {amountSection}
-          {workInfo}
           {workList}
+          {workInfo}
           {progressSection}
         </>
       )}
