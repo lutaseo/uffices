@@ -21,7 +21,7 @@ async function sendWithRetry(rows, options = {}, tries = 3) {
   try {
     return await imports.contracts(rows, options);
   } catch (err) {
-    const retryable = err.code === 'SERVER' || err.code === 'NETWORK';
+    const retryable = err.code === 'SERVER' || err.code === 'BUSY' || err.code === 'NETWORK';
     if (!retryable || tries <= 1) throw err;
     await new Promise((r) => setTimeout(r, 1500));
     if (rows.length > 5) {

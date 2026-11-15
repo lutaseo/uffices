@@ -193,6 +193,8 @@ const FOCUS_CALLS = new Set([
 const focusOf = (name, args) => (name === 'contracts.create' ? [] : [].concat(args[0]).map(Number).filter((x) => Number.isSafeInteger(x)));
 
 const STATUS = { UNAUTHORIZED: 401, FORBIDDEN: 403, NOT_FOUND: 404 };
+// 저장 줄 서기(잠금) 최대 대기 — 기본 15초 (시험에서만 짧게: DB_LOCK_TIMEOUT=1s)
+const LOCK_TIMEOUT = () => (/^\d{1,5}(ms|s)$/.test(String(process.env.DB_LOCK_TIMEOUT || '')) ? process.env.DB_LOCK_TIMEOUT : '15s');
 
 // 서버 인스턴스마다 첫 요청 때 한 번 DB 준비 (표 생성 / 최초 운영자 계정)
 let ready = null;
@@ -320,7 +322,7 @@ export async function handleRpc({ body, headers }) {
     await client.query('BEGIN');
     // 무엇이든 무한정 기다리지 않게: 잠금 대기 15초, 한 문장 45초, 트랜잭션 중 멈춤 60초 넘으면 오류로 끝냄
     //   (Vercel 함수 제한 60초 안에서 '불러오는 중...'이 끝없이 이어지지 않도록)
-    await client.query(`SET LOCAL lock_timeout = '15s'; SET LOCAL statement_timeout = '45s'; SET LOCAL idle_in_transaction_session_timeout = '60s'`);
+    await client.query(`SET LOCAL lock_timeout = '${LOCK_TIMEOUT()}'; SET LOCAL statement_timeout = '45s'; SET LOCAL idle_in_transaction_session_timeout = '60s'`);
     if (!readOnlyCall) await client.query(`SELECT 1 FROM meta WHERE key = 'seq' FOR UPDATE`); // 쓰기 직렬화
 
     // 필요한 업체 데이터 범위 결정
@@ -423,9 +425,10 @@ export async function handleRpc({ body, headers }) {
     await client.query('ROLLBACK').catch(() => {});
     console.error(`[rpc] ${name} 실패:`, e);
     // 55P03 잠금 대기 초과, 57014 시간 초과 → 다른 요청이 처리 중이라 잠시 뒤 다시 시도하면 됨
+    //   code 'BUSY' 는 저장이 취소(롤백)된 것이 확실한 경우 → 화면이 알아서 다시 보냄 (remote.js)
     const busy = e && (e.code === '55P03' || e.code === '57014');
     const message = busy ? '다른 작업을 처리하느라 서버가 바쁩니다. 잠시 후 다시 시도해 주세요.' : '서버 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
-    return json(busy ? 503 : 500, { error: { message, code: 'SERVER' } });
+    return json(busy ? 503 : 500, { error: { message, code: busy ? 'BUSY' : 'SERVER' } });
   } finally {
     client.release();
   }
