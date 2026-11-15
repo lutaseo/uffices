@@ -2,9 +2,30 @@
 // 서버는 같은 services.js 코드를 실행하므로 함수 이름/인자/결과가 데모 모드와 동일합니다.
 
 import { ApiError } from './core.js';
+import { currentHasFeature } from '../constants.js';
 import { APP_HEADER, CO_HEADER, DEVICE_HEADER, isPcDevice, tabApp, tabCompany } from './sessionSlots.js';
 
+// 서버가 '바쁨'(BUSY — 저장이 취소된 것이 확실함)으로 답하면 잠시 뒤 알아서 다시 보냄 (최대 2번)
+//   업체 기능 스위치 autoRetry 로 끌 수 있음. 그 밖의 오류(연결 끊김·시간 초과)는 저장됐을 수도 있어 다시 보내지 않음
+let RETRY_DELAYS = [1500, 3000];
+export const setRetryDelays = (list) => {
+  RETRY_DELAYS = list; // 시험용
+};
+const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
+
 async function call(service, method, args) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await callOnce(service, method, args);
+    } catch (e) {
+      const retry = e?.code === 'BUSY' && attempt < RETRY_DELAYS.length && currentHasFeature('autoRetry');
+      if (!retry) throw e;
+      await wait(RETRY_DELAYS[attempt] * (1 + Math.random() * 0.5)); // 여러 사람이 같은 순간에 다시 보내지 않게 조금씩 다르게
+    }
+  }
+}
+
+async function callOnce(service, method, args) {
   let res;
   // 서버가 응답하지 않으면 '불러오는 중...'에 머물지 않도록 70초에서 끊고 안내 (서버 제한 60초 + 여유)
   const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;

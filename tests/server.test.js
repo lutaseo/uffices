@@ -1902,3 +1902,52 @@ test('입금 사진 이름표: 입금을 지우고 새로 추가해도 지운 �
   // 원래 있던 입금은 번호 유지
   assert.equal(after.payments[0].id, g.payments[0].id);
 });
+
+
+test('바쁠 때 자동 다시 시도: 서버는 잠금 대기 초과를 BUSY(저장 취소됨)로 알리고, 화면은 BUSY 만 최대 2번 다시 보냄', async () => {
+  // 1) 서버: 다른 저장이 줄을 오래 잡고 있으면 503 BUSY (저장은 취소)
+  const { getPool } = await import('../server/pg.js');
+  const holder = await getPool().connect();
+  process.env.DB_LOCK_TIMEOUT = '1s';
+  try {
+    await holder.query('BEGIN');
+    await holder.query(`SELECT 1 FROM meta WHERE key = 'seq' FOR UPDATE`);
+    const r = await admin('contracts', 'create', { ...base, customerName: '바쁨고객', customerPhone: '010-1919-2828' });
+    assert.equal(r.status, 503);
+    assert.equal(r.error.code, 'BUSY');
+  } finally {
+    await holder.query('ROLLBACK');
+    holder.release();
+    delete process.env.DB_LOCK_TIMEOUT;
+  }
+  assert.ok(!(await admin.ok('contracts', 'list', {})).some((c) => c.customerName === '바쁨고객'), '바쁨이면 저장되지 않음 (다시 보내도 두 번 저장 안 됨)');
+
+  // 2) 화면(remote.js): BUSY 면 다시 보내고, 다른 오류는 그대로
+  const { remoteServices, setRetryDelays } = await import('../frontend/src/api/remote.js');
+  const { setCurrentCompany } = await import('../frontend/src/constants.js');
+  setRetryDelays([1, 1]);
+  const realFetch = globalThis.fetch;
+  let calls = 0;
+  const reply = (status, body) => ({ ok: status === 200, status, json: async () => body });
+  try {
+    globalThis.fetch = async () => (++calls <= 2 ? reply(503, { error: { message: '바쁨', code: 'BUSY' } }) : reply(200, { result: 'ok' }));
+    assert.equal(await remoteServices.contracts.list({}), 'ok', '두 번 바쁨 뒤 성공');
+    assert.equal(calls, 3);
+    calls = 0;
+    globalThis.fetch = async () => (++calls, reply(503, { error: { message: '바쁨', code: 'BUSY' } }));
+    await assert.rejects(remoteServices.contracts.list({}), (e) => e.code === 'BUSY');
+    assert.equal(calls, 3, '최대 2번까지만 다시');
+    calls = 0;
+    globalThis.fetch = async () => (++calls, reply(500, { error: { message: '오류', code: 'SERVER' } }));
+    await assert.rejects(remoteServices.contracts.create({}), (e) => e.code === 'SERVER');
+    assert.equal(calls, 1, '저장됐을 수도 있는 오류는 다시 보내지 않음');
+    calls = 0;
+    setCurrentCompany({ features: { autoRetry: false } });
+    globalThis.fetch = async () => (++calls, reply(503, { error: { message: '바쁨', code: 'BUSY' } }));
+    await assert.rejects(remoteServices.contracts.list({}), (e) => e.code === 'BUSY');
+    assert.equal(calls, 1, '스위치 끄면 다시 보내지 않음');
+  } finally {
+    globalThis.fetch = realFetch;
+    setCurrentCompany(null);
+  }
+});
