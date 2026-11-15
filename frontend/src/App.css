@@ -5609,3 +5609,10 @@ button.paper-add { font: inherit; }
   gap: 6px 14px;
   width: 100%;
 }
+
+/* 계약 상세: 패키지·추가시공품목 칸 아래 금액 */
+.line-items-total {
+  margin-top: 4px;
+  color: #1a5fd0;
+  font-weight: 700;
+}

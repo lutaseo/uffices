@@ -259,11 +259,11 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
           <tr>
             <th>패키지</th>
             <td colSpan={3}>
-              <LineItems lines={(selected.lineItems || [])} kind="패키지" />
+              <LineItems lines={(selected.lineItems || [])} kind="패키지" showTotal={showAmount && currentHasFeature('lineAmounts')} />
             </td>
             <th>추가시공품목</th>
             <td>
-              <LineItems lines={(selected.lineItems || [])} kind="추가시공품목" extra={selected.items} />
+              <LineItems lines={(selected.lineItems || [])} kind="추가시공품목" extra={selected.items} showTotal={showAmount && currentHasFeature('lineAmounts')} />
             </td>
           </tr>
           {showAmount && (
