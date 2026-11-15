@@ -87,6 +87,7 @@ const rec = (name, ms, err, bytes) => {
   s.t.push(ms); s.bytes += bytes;
   if (err) { s.fail++; s.errs[err] = (s.errs[err] || 0) + 1; }
 };
+let retries = 0; // 바쁨으로 다시 보낸 횟수
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const rnd = (a, b) => a + Math.random() * (b - a);
 const photo = 'data:image/jpeg;base64,' + Buffer.alloc(300 * 1024, 7).toString('base64'); // 휴대폰 사진 1장 (압축 후 약 300KB)
@@ -95,14 +96,24 @@ function client(i) {
   return async (service, method, ...args) => {
     const t = Date.now();
     let err = null, body = null, len = 0;
-    try {
-      const r = await fetch(`http://localhost:${PORTS[i % SERVERS]}/api/rpc`, { method: 'POST', headers: { 'content-type': 'application/json', cookie, 'x-vb-co': 'thegood', 'x-vb-device': 'pc' }, body: JSON.stringify({ service, method, args }) });
-      const sc = r.headers.get('set-cookie');
-      if (sc) cookie = sc.split(';')[0];
-      const txt = await r.text();
-      len = txt.length; body = JSON.parse(txt);
-      if (r.status !== 200) err = `${r.status} ${body?.error?.message || ''}`.slice(0, 60);
-    } catch (e) { err = e.message; }
+    // 화면(remote.js)처럼: 서버가 '바쁨'(BUSY)이면 약 1.5초·3초 뒤 최대 2번 다시 보냄
+    for (let attempt = 0; attempt < 3; attempt++) {
+      err = null;
+      try {
+        const r = await fetch(`http://localhost:${PORTS[i % SERVERS]}/api/rpc`, { method: 'POST', headers: { 'content-type': 'application/json', cookie, 'x-vb-co': 'thegood', 'x-vb-device': 'pc' }, body: JSON.stringify({ service, method, args }) });
+        const sc = r.headers.get('set-cookie');
+        if (sc) cookie = sc.split(';')[0];
+        const txt = await r.text();
+        len = txt.length; body = JSON.parse(txt);
+        if (r.status !== 200) err = `${r.status} ${body?.error?.message || ''}`.slice(0, 60);
+        if (body?.error?.code === 'BUSY' && attempt < 2) {
+          retries++;
+          await sleep([1500, 3000][attempt] * (1 + Math.random() * 0.5));
+          continue;
+        }
+      } catch (e) { err = e.message; }
+      break;
+    }
     rec(`${service}.${method}`, Date.now() - t, err, len);
     return body?.result;
   };
@@ -135,6 +146,8 @@ function report(title) {
     console.log(k.padEnd(28), String(t.length).padStart(4), String(s.fail).padStart(4), ...[pct(t, 0.5), pct(t, 0.95), t[t.length - 1], Math.round(s.bytes / t.length / 1024)].map((v) => String(v).padStart(7)));
     for (const [e, c] of Object.entries(s.errs)) console.log('    실패', c, '건:', e);
   }
+  if (retries) console.log(`  (서버가 바빠서 화면이 알아서 다시 보낸 횟수: ${retries}번)`);
+  retries = 0;
   for (const k of Object.keys(stats)) delete stats[k];
 }
 
