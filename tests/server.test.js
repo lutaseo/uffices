@@ -1527,6 +1527,12 @@ test('로그인 주소별 첫 화면 이름 (링크 미리보기·홈 화면): /
   assert.match(injectMeta(html, w), /kind=m&amp;web=1"/);
   assert.ok(!injectMeta(html, w).includes('apple-mobile-web-app-capable'), '브라우저처럼 주소는 아이폰도 브라우저로');
   assert.ok(manifestFor(m).icons.some((i) => i.sizes === '192x192') && manifestFor(m).icons.some((i) => i.sizes === '512x512'), 'PC 설치에 필요한 아이콘 크기');
+  // 일반·상담실장·기사모바일은 서로 다른 앱: id·이름·아이콘이 모두 다름
+  const apps = ['', 't', 'm'].map((k) => manifestFor(pageMeta('thegood', k, '더좋은집')));
+  assert.equal(new Set(apps.map((x) => x.id)).size, 3, '앱 id 가 화면마다 다름');
+  assert.equal(new Set(apps.map((x) => x.short_name)).size, 3, '이름이 화면마다 다름');
+  assert.deepEqual(apps.map((x) => x.icons[0].src), ['/icon-192.png', '/icon-192-t.png', '/icon-192-m.png'], '아이콘이 화면마다 다름');
+  assert.ok(injectMeta('<head><link rel="apple-touch-icon" href="/apple-touch-icon.png" /><link rel="manifest" href="/manifest.webmanifest" /></head>', pageMeta('thegood', 't', '더좋은집')).includes('/apple-touch-icon-t.png'), '아이폰 아이콘도 화면별');
   assert.equal(pageMeta('contracts', '', '아무개'), null, '화면 이름은 업체 주소가 아님');
   assert.equal(validCode('admin'), false);
   assert.equal(injectMeta(html, null), html, '업체를 못 찾으면 원래 화면 그대로');
