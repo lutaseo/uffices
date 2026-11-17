@@ -18,6 +18,20 @@ const icon = (name) => {
   return '📄';
 };
 
+// 저장소로 직접 올리기 (진행률 표시) → { ok, status, text }
+function putFile(url, file, onProgress) {
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url);
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+    xhr.setRequestHeader('x-upsert', 'true');
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(Math.floor((e.loaded / e.total) * 100));
+    xhr.onload = () => resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, text: xhr.responseText || '' });
+    xhr.onerror = () => resolve({ ok: false, status: 0, text: '' });
+    xhr.send(file);
+  });
+}
+
 export default function CompanyFilesPage() {
   const { user, can, handleError } = useAuth();
   const manage = user.role === ROLES.ADMIN || can('settings.manage');
@@ -47,12 +61,18 @@ export default function CompanyFilesPage() {
     try {
       for (let i = 0; i < picked.length; i += 1) {
         const f = picked[i];
-        setBusy(`올리는 중 ${i + 1}/${picked.length} · ${f.name}`);
+        const label = `올리는 중 ${i + 1}/${picked.length} · ${f.name}`;
+        setBusy(label);
         const { id, uploadUrl } = await companyFiles.add({ name: f.name, size: f.size, type: f.type, memo });
-        const r = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': f.type || 'application/octet-stream', 'x-upsert': 'true' }, body: f });
+        const r = await putFile(uploadUrl, f, (pct) => setBusy(`${label} · ${pct}%`));
         if (!r.ok) {
           await companyFiles.remove(id).catch(() => {});
-          throw new Error(`${f.name} 을(를) 올리지 못했습니다. 잠시 후 다시 시도해 주세요.`);
+          const tooBig = r.status === 413 || /size|large|exceed/i.test(r.text);
+          throw new Error(
+            tooBig
+              ? `${f.name} (${sizeText(f.size)}) 은(는) 파일 저장소의 크기 제한에 걸렸습니다.\n운영자가 Supabase > Storage > Settings 에서 올리기 크기 제한을 ${FILE_MAX_MB}MB 로 바꿔야 합니다.`
+              : `${f.name} 을(를) 올리지 못했습니다. 인터넷 연결을 확인하고 잠시 후 다시 시도해 주세요.`,
+          );
         }
         await companyFiles.confirm(id);
       }
@@ -86,7 +106,7 @@ export default function CompanyFilesPage() {
         <h2>회사 자료 백업</h2>
         <ul className="notice-list">
           <li>계약서 양식 · 회사 소개 PPT · 가격표 PDF 같은 회사 자료를 올려 두고, 필요할 때 어디서든 내려받으세요.</li>
-          <li>파일 하나에 {FILE_MAX_MB}MB 까지, 여러 개를 한 번에 고를 수 있습니다.</li>
+          <li>파일 하나에 {FILE_MAX_MB}MB 까지, 여러 개를 한 번에 고를 수 있습니다. 큰 파일은 와이파이에서 올리면 빠르고 안전합니다.</li>
           <li>관리자 · 실장님 모두 내려받을 수 있고, 올리기 · 지우기는 관리자(또는 기초설정 권한)만 할 수 있습니다.</li>
         </ul>
       </div>

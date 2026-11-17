@@ -13,7 +13,7 @@ import { saveDb, fileStore } from './runtime.js';
 import { ApiError, session, nowIso, requireFeature } from './core.js';
 import { ROLES, can } from '../auth/permissions.js';
 
-export const FILE_MAX_MB = 50;
+export const FILE_MAX_MB = 200; // Supabase > Storage > Settings 의 '올리기 크기 제한'도 이 이상이어야 함
 const FILE_MAX = FILE_MAX_MB * 1024 * 1024;
 const FILES_PER_COMPANY = 300; // 목록은 업체 정보에 담겨 매 요청 함께 읽히므로 적당히
 const PENDING_HOURS = 6; // 올리다 멈춘 자리는 이 시간 뒤 정리

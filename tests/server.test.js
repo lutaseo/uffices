@@ -2042,7 +2042,8 @@ test('회사 자료 백업: 관리자가 올리고 실장은 내려받기만, �
   const f = list.find((x) => x.id === added.id);
   assert.ok(f && f.name === '2026 가격표.pdf' && f.memo === '가격표' && f.url.startsWith('fake://download/'), '목록 + 내려받기 주소');
   assert.equal(f.path, undefined, '저장소 경로는 안 보냄');
-  assert.equal((await admin('companyFiles', 'add', { name: 'big.pptx', size: 51 * 1024 * 1024 })).status, 400, '50MB 넘으면 막힘');
+  assert.equal((await admin('companyFiles', 'add', { name: 'ok.pptx', size: 150 * 1024 * 1024 })).status, 200, '150MB 는 됨');
+  assert.equal((await admin('companyFiles', 'add', { name: 'big.pptx', size: 201 * 1024 * 1024 })).status, 400, '200MB 넘으면 막힘');
   assert.equal((await admin.ok('auth', 'me')).company.files, undefined, '로그인 정보에는 자료 목록 안 실음');
   // 실장: 보기만
   const mgr = client();
