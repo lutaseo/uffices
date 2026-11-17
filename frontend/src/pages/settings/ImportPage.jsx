@@ -615,7 +615,8 @@ function BulkFix() {
   const [preview, setPreview] = useState(null); // { kind, count, sample }
   const [busy, setBusy] = useState(false);
   if (user.role !== ROLES.ADMIN || !currentHasFeature('bulkFix')) return null;
-  const opts = (kind) => (kind === 'done' ? { kind, until } : { kind, untilNo: Number(untilNo) });
+  const opts = (kind) => (kind === 'done' ? { kind, until } : kind === 'asAssign' ? { kind } : { kind, untilNo: Number(untilNo) });
+  const LABEL = { done: '시공완료로', signed: '서명완료로', asAssign: 'AS 담당을 시공등록① 기사로' };
   const look = async (kind) => {
     setBusy(true);
     try {
@@ -627,7 +628,7 @@ function BulkFix() {
     }
   };
   const apply = async () => {
-    const label = preview.kind === 'done' ? '시공완료로' : '서명완료로';
+    const label = LABEL[preview.kind];
     if (!window.confirm(`${preview.count}건을 ${label} 바꿉니다. 건수가 많으면 되돌리기가 안 됩니다. 진행할까요?`)) return;
     setBusy(true);
     try {
@@ -659,15 +660,24 @@ function BulkFix() {
           <button type="button" className="btn-dark-sm" disabled={busy || !untilNo} onClick={() => look('signed')}>미리보기</button>
         </span>
       </div>
+      {currentHasFeature('asEngineer') && (
+        <div className="bulkfix-row">
+          <b>③ 예전 AS → 담당 기사 배정</b>
+          <span className="sub-text">처리 중인 AS 중 담당 기사가 없는 것을 그 계약 <b>시공등록①의 기사</b>에게 배정 (팀 배정·기사 없는 계약은 건너뜀)</span>
+          <span>
+            <button type="button" className="btn-dark-sm" disabled={busy} onClick={() => look('asAssign')}>미리보기</button>
+          </span>
+        </div>
+      )}
       {preview && (
         <div className="import-result">
           <p>
-            대상 <b>{preview.count}건</b> {preview.kind === 'done' ? '→ 시공완료' : '→ 서명완료'}
+            대상 <b>{preview.count}건</b> {preview.kind === 'done' ? '→ 시공완료' : preview.kind === 'asAssign' ? '→ AS 담당 배정' : '→ 서명완료'}
           </p>
           {preview.sample.length > 0 && (
             <ul className="sub-text">
               {preview.sample.map((x) => (
-                <li key={x.no}>No.{x.no} {x.customerName} · {x.category} · {preview.kind === 'done' ? `${x.status} · 시공일 ${x.date}` : x.esign}</li>
+                <li key={x.no}>No.{x.no} {x.customerName} · {x.category} · {preview.kind === 'done' ? `${x.status} · 시공일 ${x.date}` : preview.kind === 'asAssign' ? `담당 → ${x.engineerName}` : x.esign}</li>
               ))}
               {preview.count > preview.sample.length && <li>… 외 {preview.count - preview.sample.length}건</li>}
             </ul>
