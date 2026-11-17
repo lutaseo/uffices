@@ -30,5 +30,7 @@ export const resetDemoData = () => adapter.resetDemoData();
 export const requestCompany = () => (adapter.requestCompany ? adapter.requestCompany() : '');
 // 알림톡 발송(비즈고) — 서버에서만. 브라우저 데모 모드는 '연결 안 됨'
 export const alimtalkGateway = () => adapter.alimtalk || null;
+// 회사 자료 파일 저장소(Supabase Storage) — 서버에서만. 브라우저 데모 모드는 null
+export const fileStore = () => adapter.files || null;
 
 export { nextId } from './seed.js';

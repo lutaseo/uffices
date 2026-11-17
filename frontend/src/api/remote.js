@@ -85,6 +85,7 @@ export const SERVICE_NAMES = [
   'fairs',
   'imports',
   'customerApp',
+  'companyFiles',
 ];
 
 export const remoteServices = Object.fromEntries(SERVICE_NAMES.map((name) => [name, proxy(name)]));

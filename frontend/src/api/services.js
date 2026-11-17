@@ -44,6 +44,7 @@ import {
 
 export { ApiError } from './core.js';
 export { contracts, esign, notifications, reports, imports, customerApp } from './contracts.js';
+export { companyFiles } from './files.js';
 export { schedules, engineerOffs, engineerApp, scheduleSettings, fairs } from './schedule.js';
 
 // ============================================================
@@ -186,7 +187,8 @@ export const auth = {
   async me() {
     const { db, user } = await session();
     const company = db.companies.find((c) => c.id === user.companyId) || null;
-    return { user: publicUser(user), company: company && clone(company) };
+    const { files: _files, ...co } = company || {}; // eslint-disable-line no-unused-vars -- 회사 자료 목록은 그 화면에서만 받음
+    return { user: publicUser(user), company: company && clone(co) };
   },
 
   async changePassword(currentPassword, newPassword) {

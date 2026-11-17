@@ -16,6 +16,7 @@ const NO_AUDIT = new Set([
   'apartments.importMany',
   'apartments.fromContracts',
   'contracts.repairCustomerLinks', // 계약자 연결 자동 정리 (사람이 한 수정이 아님)
+  'companyFiles.confirm', // 올리기 완료 표시 (올리기는 add 로 기록됨)
 ]);
 const NO_AUDIT_SERVICES = new Set(['products']);
 export const skipAudit = (name) => NO_AUDIT.has(name) || NO_AUDIT_SERVICES.has(String(name || '').split('.')[0]);
@@ -75,6 +76,9 @@ const ACTIONS = {
   'engineerApp.setAsVisit': 'AS 방문일 등록',
   'engineerApp.transferAs': 'AS 담당 기사 변경',
   'engineerApp.reportAs': 'AS 기사 보고',
+  'companyFiles.add': '회사 자료 올리기',
+  'companyFiles.confirm': '회사 자료 올리기 완료',
+  'companyFiles.remove': '회사 자료 삭제',
 };
 
 // 표별 대상 이름

@@ -85,3 +85,45 @@ export async function signPhotosIn(body) {
   }
   return body.replace(/"vbstore:([^"\\]+)"/g, (all, p) => (urls.has(p) ? JSON.stringify(urls.get(p)) : all));
 }
+
+// ---------------- 회사 자료 (PDF · PPT 등, files/업체번호/...) ----------------
+// 화면이 직접 올릴 주소 (2시간 동안 열림) — 서버를 거치지 않아 큰 파일도 올라감
+export async function createUploadUrl(path) {
+  await ensureBucket();
+  const r = await fetch(`${base()}/storage/v1/object/upload/sign/${bucket()}/${path}`, {
+    method: 'POST',
+    headers: headers({ 'Content-Type': 'application/json' }),
+    body: '{}',
+  });
+  if (!r.ok) throw new Error(`올릴 주소 만들기 실패 ${r.status} ${(await r.text()).slice(0, 100)}`);
+  const { url } = await r.json();
+  return `${base()}/storage/v1${url.startsWith('/') ? '' : '/'}${url}`;
+}
+
+// 내려받을 주소 (4시간, 받을 때 원래 파일 이름으로) — { 경로: 주소 }
+export async function signDownloads(items) {
+  if (!items.length) return {};
+  const r = await fetch(`${base()}/storage/v1/object/sign/${bucket()}`, {
+    method: 'POST',
+    headers: headers({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ expiresIn: SIGN_SECONDS, paths: items.map((x) => x.path) }),
+  });
+  if (!r.ok) throw new Error(`내려받을 주소 만들기 실패 ${r.status}`);
+  const names = new Map(items.map((x) => [x.path, x.name]));
+  const out = {};
+  for (const x of await r.json()) {
+    if (!x.signedURL || !x.path) continue;
+    const u = `${base()}/storage/v1${x.signedURL.startsWith('/') ? '' : '/'}${x.signedURL}`;
+    out[x.path] = `${u}${u.includes('?') ? '&' : '?'}download=${encodeURIComponent(names.get(x.path) || '')}`;
+  }
+  return out;
+}
+
+export async function removeObjects(paths) {
+  const r = await fetch(`${base()}/storage/v1/object/${bucket()}`, {
+    method: 'DELETE',
+    headers: headers({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ prefixes: paths }),
+  });
+  if (!r.ok) throw new Error(`지우기 실패 ${r.status}`);
+}

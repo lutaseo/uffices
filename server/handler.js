@@ -19,7 +19,7 @@ import { AUDIT_KEEP_DAYS, buildAuditEntry, skipAudit, undoSnapshot } from '../fr
 import { hashPassword, verifyPassword } from './password.js';
 import { bootstrap } from './bootstrap.js';
 import { hasFeature } from '../frontend/src/constants.js';
-import { photoStoreConfigured, signPhotosIn } from './photoStore.js';
+import { createUploadUrl, photoStoreConfigured, removeObjects, signDownloads, signPhotosIn } from './photoStore.js';
 import { COOKIE_NAME, decodeSession, encodeSession, parseCookies, sessionCookie } from './session.js';
 import { APP_HEADER, CO_HEADER, DEVICE_HEADER, appOf, mergeSession, viewSession } from '../frontend/src/api/sessionSlots.js';
 
@@ -57,6 +57,11 @@ setRuntimeAdapter({
   },
   // 비즈고 알림톡 (API Key 는 서버 환경변수에만)
   alimtalk: { configured: bizgoConfigured, listSenders, sendAlimtalk, inquiryReport },
+  // 회사 자료 파일 저장소 (사진 저장소와 같은 Supabase Storage) — 시험(FILE_STORE_FAKE=1)은 가짜 주소
+  files:
+    process.env.FILE_STORE_FAKE === '1'
+      ? { configured: () => true, uploadUrl: async (p) => `fake://upload/${p}`, downloadUrls: async (items) => Object.fromEntries(items.map((x) => [x.path, `fake://download/${x.path}`])), remove: async () => {} }
+      : { configured: photoStoreConfigured, uploadUrl: createUploadUrl, downloadUrls: signDownloads, remove: removeObjects },
 });
 
 // 호출 가능한 서비스/함수 목록 (그 외는 거부)
@@ -81,6 +86,7 @@ const SERVICES = {
   fairs: services.fairs,
   imports: services.imports,
   customerApp: services.customerApp,
+  companyFiles: services.companyFiles,
 };
 const BLOCKED = new Set(['auth.resetDemoData']);
 
@@ -123,6 +129,7 @@ const READ_ONLY = new Set([
   'engineerApp.contract',
   'engineerApp.paperPhotos',
   'engineerApp.myAs',
+  'companyFiles.list',
   'engineerApp.colleagues',
   'engineerApp.asPhotos',
   'contracts.receipt',
@@ -157,6 +164,10 @@ const LIGHT_TABLES = {
   'fairs.remove': [],
   'engineerApp.myFairs': [],
   'engineerApp.colleagues': [], // 기사 목록만
+  'companyFiles.list': [], // 회사 자료: 업체 정보만
+  'companyFiles.add': [],
+  'companyFiles.confirm': [],
+  'companyFiles.remove': [],
   'notifications.gatewayStatus': [],
   'notifications.testSend': [],
   'notifications.testResult': [],
