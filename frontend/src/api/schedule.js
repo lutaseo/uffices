@@ -457,6 +457,30 @@ export const engineerApp = {
         if (s.date && inRange(s.date, from, to) && isMine(user, s)) out.push(mySchedule(db, user, c, s, i));
       }),
     );
+    // 방문일을 등록한 내 AS 도 일정에 (카드에 'AS' 표시)
+    if (hasFeature(companyOf(db, user), 'asEngineer')) {
+      activeContracts(db, user.companyId).forEach((c) =>
+        (c.asLogs || []).forEach((l, asIndex) => {
+          if (l.doneAt || l.engineerId !== user.engineerId || !l.visitDate || !inRange(l.visitDate, from, to)) return;
+          out.push({
+            isAs: true,
+            asIndex,
+            stepIndex: -1,
+            contractId: c.id,
+            date: l.visitDate,
+            time: l.visitTime || '',
+            category: c.category,
+            workType: 'AS',
+            customerName: c.customerName,
+            customerPhone: c.customerPhone,
+            address: formatAddress(c),
+            aptName: c.aptName || '',
+            request: l.request,
+            photoCount: l.photoCount || 0,
+          });
+        }),
+      );
+    }
     return out.sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''));
   },
 
@@ -536,6 +560,33 @@ export const engineerApp = {
     addHistory(c, user, 'AS 방문일 등록', [{ label: `AS ${Number(asIndex) + 1}회 방문`, from: before, to: [date, t].filter(Boolean).join(' ') }]);
     saveDb(db);
     return { visitDate: entry.visitDate, visitTime: entry.visitTime };
+  },
+
+  // AS 를 다른 기사에게 넘기기 (담당 기사 본인만) — 방문일은 새 기사가 다시 정함
+  async transferAs(contractId, asIndex, engineerId) {
+    const { db, user } = await authorizeEngineer();
+    requireFeature(db, user, 'asEngineer');
+    const c = db.contracts.find((x) => x.id === Number(contractId) && x.companyId === user.companyId && !x.deletedAt);
+    const entry = c?.asLogs?.[Number(asIndex)];
+    if (!entry || entry.engineerId !== user.engineerId) throw new ApiError('나에게 맡겨진 AS 가 아닙니다.', 'FORBIDDEN');
+    if (entry.doneAt) throw new ApiError('이미 완료된 AS 입니다.');
+    const to = db.engineers.find((e) => e.id === Number(engineerId) && e.companyId === user.companyId && e.active !== false);
+    if (!to || to.id === user.engineerId) throw new ApiError('넘길 기사님을 골라 주세요.');
+    const from = entry.engineerName || '';
+    Object.assign(entry, { engineerId: to.id, engineerName: to.name, visitDate: '', visitTime: '' });
+    if (c.asInfo && Number(asIndex) === c.asLogs.length - 1) c.asInfo = { ...entry };
+    addHistory(c, user, 'AS 담당 기사 변경', [{ label: `AS ${Number(asIndex) + 1}회 담당`, from, to: to.name }]);
+    saveDb(db);
+    return { engineerName: to.name };
+  },
+
+  // AS 넘길 때 고를 다른 기사님 (이름만)
+  async colleagues() {
+    const { db, user } = await authorizeEngineer();
+    return db.engineers
+      .filter((e) => e.companyId === user.companyId && e.active !== false && e.id !== user.engineerId)
+      .map((e) => ({ id: e.id, name: e.name }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
   },
 
   // AS 사진 (나에게 맡겨진 AS 회차만)

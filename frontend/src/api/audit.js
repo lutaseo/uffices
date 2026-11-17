@@ -73,6 +73,7 @@ const ACTIONS = {
   'contracts.addAsPhotos': 'AS 사진 추가',
   'contracts.bulkFix': '데이터 일괄 정리',
   'engineerApp.setAsVisit': 'AS 방문일 등록',
+  'engineerApp.transferAs': 'AS 담당 기사 변경',
 };
 
 // 표별 대상 이름
