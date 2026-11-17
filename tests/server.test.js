@@ -52,7 +52,7 @@ before(async () => {
   const c = new pg.Client({ connectionString: url });
   await c.connect();
   await c.query(`DROP TABLE IF EXISTS meta, companies, users, engineers, engineer_offs, teams, products,
-    apartments, customers, contracts, notifications, contract_signatures, payment_receipts CASCADE`);
+    apartments, customers, contracts, notifications, contract_signatures, payment_receipts, call_logs CASCADE`);
   await c.end();
 });
 
@@ -2032,3 +2032,75 @@ test('AS 담당 기사: 시공등록① 기사가 자동 담당, 다른 기사�
   assert.equal((await admin.ok('contracts', 'get', c.id)).asLogs.at(-1).engineerId, undefined);
 });
 
+test('상담내역: 권한 있는 사람만 작성·조회, 전화번호 가운데·뒷자리와 메모 글자로 검색, 다른 업체와 분리', async () => {
+  const boss = client();
+  await boss.ok('auth', 'login', 'admin', 'admin1234');
+  const a = await boss.ok('callLogs', 'save', { phone: '01012345678', name: '김문의', memo: '줄눈 견적 문의, 화요일 재연락' });
+  assert.equal(a.phone, '010-1234-5678', '번호는 010-0000-0000 모양으로');
+  await boss.ok('callLogs', 'save', { phone: '010-9999-1234', memo: '탄성 시공 날짜 문의' });
+  assert.equal((await boss('callLogs', 'save', { phone: '010-12', memo: 'x' })).status, 400, '번호가 짧으면 거부');
+  assert.equal((await boss('callLogs', 'save', { phone: '010-1111-2222', memo: ' ' })).status, 400, '메모 없으면 거부');
+
+  assert.equal((await boss.ok('callLogs', 'list', { q: '5678' })).length, 1, '뒷자리 4자리');
+  assert.equal((await boss.ok('callLogs', 'list', { q: '1234' })).length, 2, '가운데·뒷자리 어디든');
+  assert.equal((await boss.ok('callLogs', 'list', { q: '재연락' }))[0].id, a.id, '메모 글자로도');
+  const all = await boss.ok('callLogs', 'list', {});
+  assert.equal(all.length, 2);
+  assert.equal(all[0].writerName, '장경국', '작성자 이름');
+
+  await boss.ok('callLogs', 'save', { ...a, memo: '줄눈 견적 문의 → 계약함' });
+  assert.match((await boss.ok('callLogs', 'list', { q: '5678' }))[0].memo, /계약함/, '수정');
+
+  await boss.ok('users', 'create', { role: 'MANAGER', loginId: 'callmgr', password: 'call12345', name: '상담없는실장', permissions: ['contract.view'], dataScope: 'all' });
+  const mgr = client();
+  await mgr.ok('auth', 'login', 'callmgr', 'call12345');
+  assert.equal((await mgr('callLogs', 'list', {})).status, 403, '권한 없으면 조회 불가');
+  assert.equal((await mgr('callLogs', 'save', { phone: '010-1111-2222', memo: 'x' })).status, 403, '작성 불가');
+
+  const other = client();
+  await other.ok('auth', 'login', 'otheradmin', 'other1234', 'other-co');
+  assert.equal((await other.ok('callLogs', 'list', {})).length, 0, '다른 업체 상담내역은 안 보임');
+  assert.equal((await other('callLogs', 'remove', a.id)).status, 404);
+  await boss.ok('callLogs', 'remove', a.id);
+  assert.equal((await boss.ok('callLogs', 'list', {})).length, 1, '삭제');
+
+  // 업체 기능 스위치를 끄면 막힘
+  const sup = client();
+  await sup.ok('auth', 'login', 'super', 'super-test-1234');
+  const good = (await sup.ok('companies', 'list')).find((x) => x.code === 'thegood');
+  await sup.ok('companies', 'update', good.id, { features: { callLog: false } });
+  assert.equal((await boss('callLogs', 'list', {})).status, 403, '기능을 끈 업체는 상담내역 불가');
+  await sup.ok('companies', 'update', good.id, { features: {} });
+});
+
+test('시공일자·기사배정: schedule.edit 권한(관리자)만 — 권한 없는 실장은 계약 등록·수정해도 일정이 바뀌지 않음', async () => {
+  const boss = client();
+  await boss.ok('auth', 'login', 'admin', 'admin1234');
+  await boss.ok('users', 'create', { role: 'MANAGER', loginId: 'nosched', password: 'nosched123', name: '일정없는실장', permissions: ['contract.view', 'contract.create', 'contract.edit'], dataScope: 'all' });
+  const mgr = client();
+  await mgr.ok('auth', 'login', 'nosched', 'nosched123');
+  const step = { date: '2026-12-01', time: '09:00', assignType: 'engineer' };
+  const c = await mgr.ok('contracts', 'create', { ...base, customerName: '일정권한고객', schedules: [step] });
+  assert.equal(c.schedules[0].date, '', '권한 없으면 새 계약 시공일자는 비워 둠');
+  await boss.ok('contracts', 'update', c.id, { ...(await boss.ok('contracts', 'get', c.id)), schedules: [step] });
+  const after = await mgr.ok('contracts', 'get', c.id);
+  assert.equal(after.schedules[0].date, '2026-12-01', '관리자는 시공일자 등록');
+  await mgr.ok('contracts', 'update', c.id, { ...after, memo: '실장 수정', schedules: [{ ...step, date: '2026-12-25' }] });
+  assert.equal((await mgr.ok('contracts', 'get', c.id)).schedules[0].date, '2026-12-01', '권한 없는 실장이 수정해도 일정은 그대로');
+  assert.equal((await mgr('contracts', 'updateSchedule', c.id, 0, { date: '2026-12-25' })).status, 403, '일정관리에서도 불가');
+
+  // 업체 기능 스위치(scheduleLock)를 끄면 예전처럼 계약 수정 권한으로 일정도 입력
+  const sup = client();
+  await sup.ok('auth', 'login', 'super', 'super-test-1234');
+  const good = (await sup.ok('companies', 'list')).find((x) => x.code === 'thegood');
+  await sup.ok('companies', 'update', good.id, { features: { scheduleLock: false } });
+  await mgr.ok('contracts', 'update', c.id, { ...(await mgr.ok('contracts', 'get', c.id)), schedules: [{ ...step, date: '2026-12-25' }] });
+  assert.equal((await mgr.ok('contracts', 'get', c.id)).schedules[0].date, '2026-12-25', '스위치를 끄면 실장도 시공일자 입력');
+  await sup.ok('companies', 'update', good.id, { features: {} });
+
+  await boss.ok('users', 'create', { role: 'MANAGER', loginId: 'leader1', password: 'leader123', name: '팀장', permissions: ['contract.view', 'contract.create', 'contract.edit', 'schedule.edit'], dataScope: 'all' });
+  const leader = client();
+  await leader.ok('auth', 'login', 'leader1', 'leader123');
+  const c2 = await leader.ok('contracts', 'create', { ...base, customerName: '팀장고객', schedules: [step] });
+  assert.equal(c2.schedules[0].date, '2026-12-01', '권한을 받은 팀장은 시공일자 등록 가능');
+});

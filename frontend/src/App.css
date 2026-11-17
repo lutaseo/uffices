@@ -5659,3 +5659,96 @@ button.paper-add { font: inherit; }
 .as-step { padding: 1px 8px; border: 1px solid #17a2b8; border-radius: 6px; color: #0e7c8c; font-size: 12px; font-weight: 700; }
 .engineer-card.as-schedule-card { border-color: #f1c4c4; }
 .as-visit-form .as-mode { flex: 0 1 130px; font-weight: 700; }
+
+/* 상담내역: 전화번호 검색 → 통화내역 입력 → (줄) → 작성된 상담내역 */
+.call-search {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 8px 0 16px;
+}
+
+.call-search .input-text {
+  flex: 1;
+  height: 42px;
+  font-size: 15px;
+}
+
+.call-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #dce1e8;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.call-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.call-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+}
+
+.call-form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.call-divider {
+  margin: 22px 0 12px;
+  border: 0;
+  border-top: 2px dashed #94a3b8;
+}
+
+.call-list-head {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.call-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.call-list li {
+  padding: 10px 4px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.call-list li.editing {
+  background: #eff6ff;
+}
+
+.call-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  font-size: 14px;
+}
+
+.call-item-btns {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.call-item-memo {
+  margin-top: 4px;
+  white-space: pre-wrap;
+  font-size: 14px;
+  color: #1f2937;
+}

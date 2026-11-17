@@ -206,7 +206,7 @@ export const auth = {
 // ============================================================
 
 // 업체 주소 코드: veritybase.vercel.app/{코드}  (영문 소문자로 시작, 영문 소문자·숫자·-, 2~20자)
-export const RESERVED_CODES = ['admin', 'api', 'sign', 'contracts', 'customers', 'schedule', 'progress', 'stats', 'settings', 'me', 'engineer', 'assets', 'login', 'uffice', 'www', 'c', 'e', 'm'];
+export const RESERVED_CODES = ['admin', 'api', 'sign', 'contracts', 'customers', 'schedule', 'calls', 'progress', 'stats', 'settings', 'me', 'engineer', 'assets', 'login', 'uffice', 'www', 'c', 'e', 'm'];
 function normalizeCode(db, code, exceptId) {
   const v = String(code || '').trim().toLowerCase();
   if (!/^[a-z][a-z0-9-]{1,19}$/.test(v)) throw new ApiError('업체 주소 코드는 영문 소문자로 시작하는 영문·숫자·- 2~20자로 입력해 주세요. (예: thegood)');
@@ -634,6 +634,65 @@ export const apartments = {
     }
     saveDb(db);
     return result;
+  },
+};
+
+// ============================================================
+// 상담내역 (상단 [상담내역]): 전화번호별 통화 메모 — 계약 전 문의 전화도 적어 두고 번호로 찾기
+//   조회·작성·수정·삭제 모두 calllog.manage 권한 (관리자는 항상)
+//   검색: 숫자는 전화번호 어느 자리든 (가운데 4자리·뒷자리), 글자는 이름·메모에서
+// ============================================================
+function findCallLog(db, user, id) {
+  const row = db.callLogs.find((r) => r.id === Number(id) && r.companyId === user.companyId);
+  if (!row) throw new ApiError('상담내역을 찾을 수 없습니다.', 'NOT_FOUND');
+  return row;
+}
+
+export const callLogs = {
+  async list({ q = '' } = {}) {
+    const { db, user } = await authorize('calllog.manage');
+    requireFeature(db, user, 'callLog');
+    const text = String(q || '').trim();
+    const digits = digitsOnly(text);
+    const words = text.replace(/[\d\s-]+/g, ' ').trim().toLowerCase();
+    const names = new Map(db.users.filter((u) => u.companyId === user.companyId).map((u) => [u.id, u.name]));
+    return db.callLogs
+      .filter((r) => r.companyId === user.companyId)
+      .filter((r) => !digits || digitsOnly(r.phone).includes(digits))
+      .filter((r) => !words || `${r.name || ''} ${r.memo || ''}`.toLowerCase().includes(words))
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || b.id - a.id) // 최근 것부터
+      .slice(0, 500)
+      .map((r) => ({ ...clone(r), writerName: names.get(r.createdBy) || '' }));
+  },
+
+  async save(d = {}) {
+    const { db, user } = await authorize('calllog.manage');
+    requireFeature(db, user, 'callLog');
+    const phone = formatPhone(d.phone || '');
+    if (digitsOnly(phone).length < 9) throw new ApiError('전화번호를 끝까지 입력해 주세요.');
+    const fields = {
+      phone,
+      name: String(d.name || '').trim().slice(0, 50),
+      memo: required(String(d.memo || '').slice(0, 3000), '통화 내용(메모)을 입력해 주세요.'),
+    };
+    let row;
+    if (d.id) {
+      row = findCallLog(db, user, d.id);
+      Object.assign(row, fields, { updatedAt: nowIso(), updatedBy: user.id });
+    } else {
+      row = { id: nextId(db, 'callLogs'), companyId: user.companyId, ...fields, createdBy: user.id, createdAt: nowIso() };
+      db.callLogs.push(row);
+    }
+    saveDb(db);
+    return clone(row);
+  },
+
+  async remove(id) {
+    const { db, user } = await authorize('calllog.manage');
+    requireFeature(db, user, 'callLog');
+    const row = findCallLog(db, user, id);
+    db.callLogs = db.callLogs.filter((r) => r !== row);
+    saveDb(db);
   },
 };
 

@@ -3,7 +3,7 @@
 //   화면 프로그램이 돌기 전의 HTML·앱 정보(manifest)만 읽기 때문 (브라우저 탭 이름은 화면이 따로 바꿈)
 
 // 업체 주소가 아닌 첫 단어 (화면 이름 — frontend/src/router.js 의 PAGES 와 같게)
-const PAGES = new Set(['c', 'e', 'm', 't', 'consult', 'contracts', 'customers', 'schedule', 'progress', 'stats', 'admin', 'settings', 'me', 'engineer', 'sign', 'api', 'assets']);
+const PAGES = new Set(['c', 'e', 'm', 't', 'consult', 'contracts', 'customers', 'schedule', 'calls', 'progress', 'stats', 'admin', 'settings', 'me', 'engineer', 'sign', 'api', 'assets']);
 const KINDS = {
   '': { label: '일반화면', desc: '전자계약 · 시공일정 관리', short: (n) => n },
   t: { label: '상담실장', desc: '상담실장 전용 · 계약 등록과 상담 관리', short: (n) => `${n} 상담` },
