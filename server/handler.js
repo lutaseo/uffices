@@ -123,6 +123,7 @@ const READ_ONLY = new Set([
   'engineerApp.contract',
   'engineerApp.paperPhotos',
   'engineerApp.myAs',
+  'engineerApp.colleagues',
   'engineerApp.asPhotos',
   'contracts.receipt',
   'companies.publicInfo',
@@ -155,6 +156,7 @@ const LIGHT_TABLES = {
   'fairs.save': [],
   'fairs.remove': [],
   'engineerApp.myFairs': [],
+  'engineerApp.colleagues': [], // 기사 목록만
   'notifications.gatewayStatus': [],
   'notifications.testSend': [],
   'notifications.testResult': [],

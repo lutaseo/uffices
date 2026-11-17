@@ -1985,6 +1985,17 @@ test('AS 담당 기사: 시공등록① 기사가 자동 담당, 다른 기사�
   got = await admin.ok('contracts', 'get', c.id);
   assert.deepEqual([got.asLogs.at(-1).visitDate, got.asLogs.at(-1).visitTime], ['2026-12-24', '14:30'], '사무실에 방문일 표시');
   assert.equal(got.history.at(-1).action, 'AS 방문일 등록');
+  // 방문일을 등록하면 내 일정에 'AS' 로
+  const sch = (await eng.ok('engineerApp', 'mySchedules', { from: '2026-12-24', to: '2026-12-24' })).find((x) => x.isAs && x.contractId === c.id);
+  assert.ok(sch && sch.time === '14:30' && sch.workType === 'AS', '일정에 AS 로 표시');
+  // 기사가 다른 기사에게 넘기기: 방문일은 새 기사가 다시 정함
+  const mates = await eng.ok('engineerApp', 'colleagues');
+  assert.ok(mates.some((m) => m.id === other.id) && !mates.some((m) => m.id === gong.id), '다른 기사 목록 (나 제외)');
+  await eng.ok('engineerApp', 'transferAs', c.id, mine.asIndex, other.id);
+  got = await admin.ok('contracts', 'get', c.id);
+  assert.deepEqual([got.asLogs.at(-1).engineerId, got.asLogs.at(-1).visitDate], [other.id, ''], '넘긴 기사가 담당, 방문일 다시');
+  assert.ok(!(await eng.ok('engineerApp', 'myAs')).some((a) => a.contractId === c.id), '넘기면 내 목록에서 빠짐');
+  assert.equal((await eng('engineerApp', 'transferAs', c.id, mine.asIndex, gong.id)).status, 403, '이제 남의 AS');
   // 다른 기사에게 맡기기 (퇴사 등): 새 회차는 고른 기사, 원래 기사 목록에서는 빠짐
   await admin.ok('contracts', 'setAs', [c.id], false);
   await admin.ok('contracts', 'setAs', [c.id], true, { request: '재발', engineerId: other.id });

@@ -98,15 +98,29 @@ function MyAsList({ items, onSaved }) {
   const { handleError } = useAuth();
   const [draft, setDraft] = useState({});
   const [photos, setPhotos] = useState(null);
+  const [mates, setMates] = useState([]); // 넘길 수 있는 다른 기사님
+  useEffect(() => {
+    engineerApp.colleagues().then(setMates).catch(() => {});
+  }, []);
   if (!items.length) return <p className="no-data">맡겨진 AS 가 없습니다.</p>;
   const key = (a) => `${a.contractId}-${a.asIndex}`;
-  const val = (a) => draft[key(a)] || { date: a.visitDate || '', time: a.visitTime || '' };
+  const val = (a) => ({ mode: 'visit', date: a.visitDate || '', time: a.visitTime || '', engineerId: '', ...(draft[key(a)] || {}) });
+  const put = (a, patch) => setDraft({ ...draft, [key(a)]: { ...val(a), ...patch } });
   const save = async (a) => {
     const v = val(a);
-    if (!v.date) return alert('방문 날짜를 골라 주세요.');
     try {
-      await engineerApp.setAsVisit(a.contractId, a.asIndex, v);
-      alert('AS 방문일을 등록했습니다. 사무실에 바로 표시됩니다.');
+      if (v.mode === 'visit') {
+        if (!v.date) return alert('방문 날짜를 골라 주세요.');
+        await engineerApp.setAsVisit(a.contractId, a.asIndex, { date: v.date, time: v.time });
+        alert('AS 방문일을 등록했습니다. 내 일정과 사무실에 바로 표시됩니다.');
+      } else {
+        if (!v.engineerId) return alert('넘길 기사님을 골라 주세요.');
+        const name = mates.find((m) => String(m.id) === String(v.engineerId))?.name || '';
+        if (!window.confirm(`이 AS 를 ${name} 기사님에게 넘길까요? 넘기면 내 목록에서 빠집니다.`)) return;
+        await engineerApp.transferAs(a.contractId, a.asIndex, Number(v.engineerId));
+        alert(`${name} 기사님에게 넘겼습니다.`);
+      }
+      setDraft({ ...draft, [key(a)]: undefined });
       onSaved();
     } catch (e) {
       handleError(e);
@@ -141,12 +155,25 @@ function MyAsList({ items, onSaved }) {
             <button type="button" className="btn-receipt" onClick={() => showPhotos(a)}>📷 사진 {a.photoCount}장 보기</button>
           )}
           <div className="as-visit-form">
-            <input type="date" className="input-text" value={val(a).date} onChange={(e) => setDraft({ ...draft, [key(a)]: { ...val(a), date: e.target.value } })} />
-            <select className="input-text" value={val(a).time} onChange={(e) => setDraft({ ...draft, [key(a)]: { ...val(a), time: e.target.value } })}>
-              <option value="">시간 무관</option>
-              {AS_TIMES.map((t) => <option key={t} value={t}>{t}</option>)}
+            <select className="input-text as-mode" value={val(a).mode} onChange={(e) => put(a, { mode: e.target.value })}>
+              <option value="visit">{a.visitDate ? '방문일 변경' : '방문일 등록'}</option>
+              <option value="transfer">시공기사 변경</option>
             </select>
-            <button type="button" className="btn-confirm" onClick={() => save(a)}>{a.visitDate ? '방문일 변경' : '방문일 등록'}</button>
+            {val(a).mode === 'visit' ? (
+              <>
+                <input type="date" className="input-text" value={val(a).date} onChange={(e) => put(a, { date: e.target.value })} />
+                <select className="input-text" value={val(a).time} onChange={(e) => put(a, { time: e.target.value })}>
+                  <option value="">시간 무관</option>
+                  {AS_TIMES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </>
+            ) : (
+              <select className="input-text" value={val(a).engineerId} onChange={(e) => put(a, { engineerId: e.target.value })}>
+                <option value="">넘길 기사님 고르기</option>
+                {mates.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            )}
+            <button type="button" className="btn-confirm" onClick={() => save(a)}>작성</button>
           </div>
         </div>
       ))}
@@ -311,7 +338,7 @@ function MySchedules() {
             <div className="engineer-card empty">{date === today() ? '오늘' : '이 날'} 배정된 일정이 없습니다.</div>
           )}
           {rows.map((s) => (
-            <ScheduleCard key={`${s.contractId}-${s.stepIndex}`} s={s} onReported={load} />
+            <ScheduleCard key={s.isAs ? `as-${s.contractId}-${s.asIndex}` : `${s.contractId}-${s.stepIndex}`} s={s} onReported={load} />
           ))}
         </section>
       ))}
@@ -320,7 +347,28 @@ function MySchedules() {
 }
 
 // 일정 카드: 위쪽(현장·고객·내용)을 누르면 계약 상세로, 아래는 현장 보고
+// 방문일을 등록한 AS: 일정 카드에 'AS' 로 표시 (시공 보고 대신 요청 내용)
+function AsScheduleCard({ s }) {
+  return (
+    <div className="engineer-card as-schedule-card">
+      <div className="engineer-card-top">
+        <strong>{s.time || '시간 무관'}</strong>
+        <span className="status-chip st-red">AS · {s.category}</span>
+        <span className="as-step">AS</span>
+      </div>
+      <div className="bold-text">
+        {s.address} <MapLink name={s.aptName} />
+      </div>
+      <div>
+        {s.customerName} · <a href={`tel:${s.customerPhone}`}>{s.customerPhone}</a>
+      </div>
+      <div className="as-request-text">요청: {s.request}</div>
+    </div>
+  );
+}
+
 function ScheduleCard({ s, onReported }) {
+  if (s.isAs) return <AsScheduleCard s={s} />;
   const open = () => navigateForward(`/m/contract/${s.contractId}?step=${s.stepIndex}`);
   return (
     <div className="engineer-card">
