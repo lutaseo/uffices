@@ -45,6 +45,10 @@ export function setAppManifest(code, app) {
   if (!link) return;
   const href = `/api/page?manifest=1&code=${encodeURIComponent(code)}&kind=${KIND[app] ?? ''}${webMode() ? '&web=1' : ''}`;
   if (link.getAttribute('href') !== href) link.setAttribute('href', href);
+  // 아이폰 홈 화면 아이콘도 화면별로 (상담실장 초록 · 기사모바일 주황)
+  const apple = document.querySelector('link[rel="apple-touch-icon"]');
+  const kind = KIND[app] ?? '';
+  if (apple) apple.setAttribute('href', `/apple-touch-icon${kind ? `-${kind}` : ''}.png`);
 }
 
 // 이 화면의 주소 (브라우저처럼 열리는 바로가기용은 ?web=1)

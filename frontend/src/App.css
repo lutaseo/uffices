@@ -5616,3 +5616,17 @@ button.paper-add { font: inherit; }
   color: #1a5fd0;
   font-weight: 700;
 }
+
+/* 다른 화면 앱 설치 (내 정보) · 설치 전용 화면 */
+.install-card .install-others { margin-top: 14px; padding-top: 12px; border-top: 1px dashed #d6e4fb; }
+.install-card .install-other-row { display: flex; align-items: center; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+.install-card .install-other-row > b { min-width: 110px; }
+.install-card .btn-install.sm, .install-screen .btn-install { display: inline-block; text-decoration: none; }
+.install-card .btn-install.sm { padding: 8px 14px; font-size: 14px; }
+.install-screen { background: #fff; border-radius: 16px; padding: 32px 28px; max-width: 460px; width: calc(100% - 32px); display: flex; flex-direction: column; gap: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+.install-screen h1 { margin: 0; font-size: 24px; color: #172033; }
+.install-screen p { margin: 0; line-height: 1.6; color: #333; }
+.install-screen .btn-install { background: #1a6fe0; color: #fff; border: none; border-radius: 10px; padding: 16px 20px; font-size: 18px; font-weight: bold; cursor: pointer; }
+.install-screen .install-ok { color: #157347; font-weight: bold; }
+.install-screen .install-howto { background: #f4f8ff; border: 1px solid #d6e4fb; border-radius: 8px; padding: 10px 12px; line-height: 1.6; }
+.install-screen-go { color: #1a5fd0; font-size: 15px; }

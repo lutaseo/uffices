@@ -26,9 +26,14 @@ export function pageMeta(code, kind = '', companyName = '', web = false) {
     short: k.short(name),
     desc: `${name} ${k.desc}`,
     start: `/${c}${kind ? `/${kind}` : ''}`,
+    kind: kind || '',
     web: !!web,
   };
 }
+
+// 화면마다 다른 앱 아이콘 (바탕화면에서 구분되게): 일반 파랑 VB · 상담실장 초록 '상담' · 기사모바일 주황 '기사'
+const ICON_KINDS = new Set(['t', 'm']);
+export const iconSuffix = (kind) => (ICON_KINDS.has(kind) ? `-${kind}` : '');
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -39,7 +44,8 @@ export function injectMeta(html, meta) {
   let out = String(html)
     .replace(/<title>[^<]*<\/title>/, `<title>${esc(meta.title)}</title>`)
     .replace(/(<meta name="apple-mobile-web-app-title" content=")[^"]*(")/, `$1${esc(meta.short)}$2`)
-    .replace(/(<link rel="manifest" href=")[^"]*(")/, `$1${esc(manifest)}$2`);
+    .replace(/(<link rel="manifest" href=")[^"]*(")/, `$1${esc(manifest)}$2`)
+    .replace(/(<link rel="apple-touch-icon" href=")[^"]*(")/, `$1/apple-touch-icon${iconSuffix(meta.kind)}.png$2`);
   const og = [
     `<meta property="og:title" content="${esc(meta.title)}" />`,
     `<meta property="og:description" content="${esc(meta.desc)}" />`,
@@ -65,9 +71,9 @@ export function manifestFor(meta) {
     start_url: start,
     scope: '/',
     icons: [
-      { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-      { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-      { src: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+      { src: `/icon-192${iconSuffix(meta?.kind)}.png`, sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: `/icon-512${iconSuffix(meta?.kind)}.png`, sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: `/apple-touch-icon${iconSuffix(meta?.kind)}.png`, sizes: '180x180', type: 'image/png' },
     ],
     theme_color: '#1a6fe0',
     background_color: '#ffffff',
