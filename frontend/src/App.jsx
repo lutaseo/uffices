@@ -18,6 +18,7 @@ import ConsultHome from './pages/ConsultHome.jsx';
 import CustomerManagement from './components/CustomerManagement.jsx';
 import ScheduleManagement from './components/ScheduleManagement.jsx';
 import FairModal from './components/FairModal.jsx';
+import { InstallScreen } from './components/InstallCard.jsx';
 import ProgressStatus from './components/ProgressStatus.jsx';
 import StatsPage from './pages/StatsPage.jsx';
 import AccountManagement from './pages/AccountManagement.jsx';
@@ -105,6 +106,11 @@ export default function App() {
   //   /{업체}/c/?q=고유값 도 같음 (알림톡 버튼 링크 모양)
   const cust = route.base && (route.path === '/c' ? { token: route.query.get('q') || undefined } : match('/c/:token', route.path));
   if (cust) return <CustomerApp companyCode={route.base} token={cust.token} />;
+  // 앱 설치 전용 화면 (/업체?install=1 · /업체/t?install=1 · /업체/m?install=1) — 로그인 없이 그 화면 앱 설치
+  if (route.base && route.query.get('install') === '1') {
+    const app = route.path === '/m' ? 'engineer' : route.path === '/t' ? 'manager' : 'staff';
+    return <InstallScreen code={route.base} app={app} />;
+  }
 
   if (loading) return <div className="page-loading">불러오는 중...</div>;
   if (!user) {

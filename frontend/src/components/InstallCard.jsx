@@ -1,9 +1,79 @@
 import React, { useState } from 'react';
 import { appUrl, deviceType, useInstall } from '../utils/install.js';
+import { currentHasFeature } from '../constants.js';
 
 // 내 정보(일반 화면·상담실장)·기사모바일 휴무 설정 탭 아래: 이 화면을 앱으로 설치 / 브라우저처럼 열리는 바로가기 주소
 //   app: 'staff' | 'manager' | 'engineer' — 그 화면만 설치됨 (다른 화면 주소는 보여 주지 않음)
 const LABEL = { staff: '일반 화면', manager: '상담실장 화면', engineer: '기사모바일' };
+
+// 설치 방법 (설치 버튼이 안 뜨는 브라우저)
+function HowTo({ device }) {
+  return (
+    <div className="install-howto">
+      {device === 'ios' && <>사파리 아래쪽 <b>공유 버튼</b>(네모에 위쪽 화살표) → <b>홈 화면에 추가</b>를 누르세요.</>}
+      {device === 'samsung' && <>아래쪽 <b>메뉴(≡)</b> → <b>현재 페이지 추가</b> → <b>홈 화면</b>을 누르세요.</>}
+      {device === 'android' && <>오른쪽 위 <b>메뉴(⋮)</b> → <b>앱 설치</b>(또는 홈 화면에 추가)를 누르세요.</>}
+      {device === 'pc' && <>크롬·엣지 주소창 오른쪽의 <b>설치 아이콘</b>(⊕ 또는 화면 모양)이나, 오른쪽 위 메뉴(⋮) → <b>앱 설치</b>(엣지: 앱 → 이 사이트를 앱으로 설치)를 누르세요.</>}
+    </div>
+  );
+}
+
+// 다른 화면(상담실장·기사모바일) 앱 설치 — 설치 화면을 새 창으로 열거나, 그 주소를 복사해 휴대폰으로 보냄
+//   한 화면에서는 그 화면 앱만 설치할 수 있어서(브라우저 규칙), 설치 전용 화면(?install=1)을 따로 엶
+function OtherApps({ code, app }) {
+  const [copied, setCopied] = useState('');
+  const others = ['staff', 'manager', 'engineer'].filter((a) => a !== app && (a !== 'manager' || currentHasFeature('manager')));
+  if (!currentHasFeature('installOthers') || !others.length) return null;
+  const copy = async (a) => {
+    const url = `${appUrl(code, a)}?install=1`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(a);
+      setTimeout(() => setCopied(''), 2000);
+    } catch {
+      window.prompt('아래 주소를 복사해 주세요.', url);
+    }
+  };
+  return (
+    <div className="install-others">
+      <p className="sub-text">다른 화면도 앱으로 설치할 수 있습니다. <b>[설치 화면 열기]</b>를 누르면 새 창에서 설치 버튼이 나옵니다. 기사님 휴대폰처럼 다른 기기라면 <b>주소를 복사해 카톡으로 보내</b> 그 기기에서 여세요.</p>
+      {others.map((a) => (
+        <div key={a} className="install-other-row">
+          <b>{LABEL[a]}</b>
+          <a className="btn-install sm" href={`${appUrl(code, a)}?install=1`} target="_blank" rel="noreferrer">설치 화면 열기</a>
+          <button type="button" className="btn-link" onClick={() => copy(a)}>{copied === a ? '복사됨' : '주소 복사'}</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// 설치 전용 화면: /업체/t?install=1 · /업체/m?install=1 · /업체?install=1 — 로그인 없이 그 화면 앱 설치
+export function InstallScreen({ code, app }) {
+  const { canPrompt, installed, standalone, prompt } = useInstall();
+  const device = deviceType();
+  return (
+    <div className="login-bg">
+      <div className="install-screen">
+        <h1>VerityBase {LABEL[app]}</h1>
+        {standalone || installed ? (
+          <p className="install-ok">✔ 설치되었습니다. 바탕화면(홈 화면)의 VerityBase 아이콘으로 여세요.</p>
+        ) : canPrompt ? (
+          <>
+            <p>아래 버튼을 누르면 바탕화면(휴대폰은 홈 화면)에 아이콘이 생깁니다.</p>
+            <button type="button" className="btn-install" onClick={prompt}>📲 {LABEL[app]} 앱으로 설치하기</button>
+          </>
+        ) : (
+          <>
+            <p>이 브라우저에서는 아래 순서로 설치해 주세요. (설치 버튼이 잠시 뒤에 나타날 수도 있습니다)</p>
+            <HowTo device={device} />
+          </>
+        )}
+        <a className="install-screen-go" href={appUrl(code, app)}>설치하지 않고 바로 열기 →</a>
+      </div>
+    </div>
+  );
+}
 
 export default function InstallCard({ code, app }) {
   const { canPrompt, installed, standalone, prompt } = useInstall();
@@ -37,15 +107,11 @@ export default function InstallCard({ code, app }) {
               📲 {LABEL[app]} 앱으로 설치하기
             </button>
           ) : (
-            <div className="install-howto">
-              {device === 'ios' && <>사파리 아래쪽 <b>공유 버튼</b>(네모에 위쪽 화살표) → <b>홈 화면에 추가</b>를 누르세요.</>}
-              {device === 'samsung' && <>아래쪽 <b>메뉴(≡)</b> → <b>현재 페이지 추가</b> → <b>홈 화면</b>을 누르세요.</>}
-              {device === 'android' && <>오른쪽 위 <b>메뉴(⋮)</b> → <b>앱 설치</b>(또는 홈 화면에 추가)를 누르세요.</>}
-              {device === 'pc' && <>크롬·엣지 주소창 오른쪽의 <b>설치 아이콘</b>(⊕ 또는 화면 모양)이나, 오른쪽 위 메뉴(⋮) → <b>앱 설치</b>(엣지: 앱 → 이 사이트를 앱으로 설치)를 누르세요.</>}
-            </div>
+            <HowTo device={device} />
           )}
         </>
       )}
+      {app !== 'engineer' && <OtherApps code={code} app={app} />}
       <details className="install-web">
         <summary>앱 창 말고 <b>브라우저처럼</b> 열리는 바로가기를 원하시면</summary>
         <ol>
