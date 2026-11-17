@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { appUrl, deviceType, useInstall } from '../utils/install.js';
+import { appUrl, deviceType, isStandalone, useInstall } from '../utils/install.js';
 import { currentHasFeature } from '../constants.js';
 
 // 내 정보(일반 화면·상담실장)·기사모바일 휴무 설정 탭 아래: 이 화면을 앱으로 설치 / 브라우저처럼 열리는 바로가기 주소
@@ -24,6 +24,7 @@ function OtherApps({ code, app }) {
   const [copied, setCopied] = useState('');
   const others = ['staff', 'manager', 'engineer'].filter((a) => a !== app && (a !== 'manager' || currentHasFeature('manager')));
   if (!currentHasFeature('installOthers') || !others.length) return null;
+  const inApp = isStandalone(); // 설치한 앱 창 안: 새 창을 열어도 그 앱 창으로 열려 다른 앱을 설치할 수 없음
   const copy = async (a) => {
     const url = `${appUrl(code, a)}?install=1`;
     try {
@@ -36,11 +37,15 @@ function OtherApps({ code, app }) {
   };
   return (
     <div className="install-others">
-      <p className="sub-text">다른 화면도 앱으로 설치할 수 있습니다. <b>[설치 화면 열기]</b>를 누르면 새 창에서 설치 버튼이 나옵니다. 기사님 휴대폰처럼 다른 기기라면 <b>주소를 복사해 카톡으로 보내</b> 그 기기에서 여세요.</p>
+      {inApp ? (
+        <p className="sub-text">지금은 <b>앱 창</b>이라 여기서는 다른 앱을 설치할 수 없습니다. <b>[주소 복사]</b> 후 크롬(아이폰은 사파리) 주소창에 붙여 넣어 열면 설치 버튼이 나옵니다.</p>
+      ) : (
+        <p className="sub-text">다른 화면도 앱으로 설치할 수 있습니다. <b>[설치 화면 열기]</b>를 누르면 새 창에서 설치 버튼이 나옵니다. 기사님 휴대폰처럼 다른 기기라면 <b>주소를 복사해 카톡으로 보내</b> 그 기기에서 여세요.</p>
+      )}
       {others.map((a) => (
         <div key={a} className="install-other-row">
           <b>{LABEL[a]}</b>
-          <a className="btn-install sm" href={`${appUrl(code, a)}?install=1`} target="_blank" rel="noreferrer">설치 화면 열기</a>
+          {!inApp && <a className="btn-install sm" href={`${appUrl(code, a)}?install=1`} target="_blank" rel="noreferrer">설치 화면 열기</a>}
           <button type="button" className="btn-link" onClick={() => copy(a)}>{copied === a ? '복사됨' : '주소 복사'}</button>
         </div>
       ))}
@@ -52,12 +57,30 @@ function OtherApps({ code, app }) {
 export function InstallScreen({ code, app }) {
   const { canPrompt, installed, standalone, prompt } = useInstall();
   const device = deviceType();
+  const [copied, setCopied] = useState(false);
+  const url = `${appUrl(code, app)}?install=1`;
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt('아래 주소를 복사해 주세요.', url);
+    }
+  };
   return (
     <div className="login-bg">
       <div className="install-screen">
         <h1>VerityBase {LABEL[app]}</h1>
-        {standalone || installed ? (
-          <p className="install-ok">✔ 설치되었습니다. 바탕화면(홈 화면)의 VerityBase 아이콘으로 여세요.</p>
+        {installed ? (
+          <p className="install-ok">✔ 설치되었습니다. 바탕화면(홈 화면)의 VerityBase {LABEL[app]} 아이콘으로 여세요.</p>
+        ) : standalone ? (
+          // 이미 설치한 다른 VerityBase 앱 창 안에서 열림 → 여기서는 설치할 수 없음 (설치된 것처럼 보이던 문제)
+          <>
+            <p>지금 <b>이미 설치된 다른 VerityBase 앱 창</b> 안에서 열렸습니다. 여기서는 {LABEL[app]} 앱을 설치할 수 없어요.</p>
+            <p>아래 주소를 복사해 <b>크롬(아이폰은 사파리) 주소창</b>에 붙여 넣어 열면 설치 버튼이 나옵니다.</p>
+            <button type="button" className="btn-install" onClick={copy}>{copied ? '복사됨 ✔' : '설치 주소 복사'}</button>
+          </>
         ) : canPrompt ? (
           <>
             <p>아래 버튼을 누르면 바탕화면(휴대폰은 홈 화면)에 아이콘이 생깁니다.</p>
