@@ -14,6 +14,7 @@ import PhotoViewer from '../components/PhotoViewer.jsx';
 import WorkRecord from '../components/WorkRecord.jsx';
 import LineItems from '../components/LineItems.jsx';
 import InstallCard from '../components/InstallCard.jsx';
+import MapLink from '../components/MapLink.jsx';
 
 // 기사모바일: 기사 계정으로 로그인하면 이 화면만 보입니다 (휴대폰 화면 기준).
 export default function EngineerApp({ route }) {
@@ -75,8 +76,92 @@ function monthCells(year, month) {
   return cells;
 }
 
+// 달력 위 빨간 알림: 방문일을 아직 안 정한 AS 가 있으면
+function AsAlert({ count, onOpen }) {
+  return (
+    <div className="as-alert" role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => e.key === 'Enter' && onOpen()}>
+      🔔 AS 시공이 발생했습니다. 고객에게 연락해 주세요. <b>({count}건)</b> <span className="as-alert-go">AS관리 ›</span>
+    </div>
+  );
+}
+
+// AS 시간 고르기 (30분 단위)
+const AS_TIMES = Array.from({ length: 27 }, (_, i) => `${String(7 + Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`);
+
+// 기사모바일 AS관리: 나에게 맡겨진 AS 목록 · 방문일 등록 · 사진 보기
+function MyAsList({ items, onSaved }) {
+  const { handleError } = useAuth();
+  const [draft, setDraft] = useState({});
+  const [photos, setPhotos] = useState(null);
+  if (!items.length) return <p className="no-data">맡겨진 AS 가 없습니다.</p>;
+  const key = (a) => `${a.contractId}-${a.asIndex}`;
+  const val = (a) => draft[key(a)] || { date: a.visitDate || '', time: a.visitTime || '' };
+  const save = async (a) => {
+    const v = val(a);
+    if (!v.date) return alert('방문 날짜를 골라 주세요.');
+    try {
+      await engineerApp.setAsVisit(a.contractId, a.asIndex, v);
+      alert('AS 방문일을 등록했습니다. 사무실에 바로 표시됩니다.');
+      onSaved();
+    } catch (e) {
+      handleError(e);
+    }
+  };
+  const showPhotos = async (a) => {
+    try {
+      const list = await engineerApp.asPhotos(a.contractId, a.asIndex);
+      if (list.length) setPhotos({ images: list.map((r) => r.image), title: `${a.customerName} AS 사진` });
+    } catch (e) {
+      handleError(e);
+    }
+  };
+  return (
+    <div className="my-as-list">
+      {items.map((a) => (
+        <div key={key(a)} className={`engineer-card as-card ${a.visitDate ? '' : 'pending'}`}>
+          <div className="engineer-card-top">
+            <strong>{a.visitDate ? `방문 ${a.visitDate}${a.visitTime ? ` ${a.visitTime}` : ''}` : '방문일 미정'}</strong>
+            <span className="status-chip st-red">AS · {a.category}</span>
+            <span className="sub-text">접수 {a.date}</span>
+          </div>
+          <div className="bold-text">
+            {a.address} <MapLink name={a.aptName} />
+          </div>
+          <div>
+            {a.customerName} · <a href={`tel:${a.customerPhone}`}>{a.customerPhone}</a>
+            {a.customerPhone2 && <> · <a href={`tel:${a.customerPhone2}`}>{a.customerPhone2}</a></>}
+          </div>
+          <div className="as-request-text">요청: {a.request}</div>
+          {a.photoCount > 0 && (
+            <button type="button" className="btn-receipt" onClick={() => showPhotos(a)}>📷 사진 {a.photoCount}장 보기</button>
+          )}
+          <div className="as-visit-form">
+            <input type="date" className="input-text" value={val(a).date} onChange={(e) => setDraft({ ...draft, [key(a)]: { ...val(a), date: e.target.value } })} />
+            <select className="input-text" value={val(a).time} onChange={(e) => setDraft({ ...draft, [key(a)]: { ...val(a), time: e.target.value } })}>
+              <option value="">시간 무관</option>
+              {AS_TIMES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <button type="button" className="btn-confirm" onClick={() => save(a)}>{a.visitDate ? '방문일 변경' : '방문일 등록'}</button>
+          </div>
+        </div>
+      ))}
+      {photos && <PhotoViewer images={photos.images} start={0} title={photos.title} onClose={() => setPhotos(null)} />}
+    </div>
+  );
+}
+
 function MySchedules() {
   const { handleError } = useAuth();
+  const asOn = currentHasFeature('asEngineer') && currentHasFeature('as');
+  const [asItems, setAsItems] = useState([]);
+  const loadAs = useCallback(() => {
+    if (asOn) engineerApp.myAs().then(setAsItems).catch(() => {});
+  }, [asOn]);
+  useEffect(() => {
+    loadAs();
+  }, [loadAs]);
+  useRefreshOnReturn(loadAs);
+  const asPending = asItems.filter((a) => !a.visitDate).length;
   const [view, setView] = useState(memo.view); // calendar | upcoming | past
   const [ym, setYm] = useState(memo.ym || [new Date().getFullYear(), new Date().getMonth() + 1]);
   const [picked, setPicked] = useState(memo.date || today());
@@ -152,7 +237,14 @@ function MySchedules() {
         {tag('calendar', '달력')}
         {tag('upcoming', '오늘 이후 30일')}
         {tag('past', '지난 30일')}
+        {asOn && (
+          <label className={`radio-tag as-tag ${view === 'as' ? 'selected' : ''}`}>
+            <input type="radio" checked={view === 'as'} onChange={() => setView('as')} /> AS관리{asItems.length > 0 && <b className="as-count">{asItems.length}</b>}
+          </label>
+        )}
       </div>
+      {asPending > 0 && view !== 'calendar' && view !== 'as' && <AsAlert count={asPending} onOpen={() => setView('as')} />}
+      {view === 'as' && <MyAsList items={asItems} onSaved={loadAs} />}
 
       {view === 'calendar' && (
         <>
@@ -162,6 +254,7 @@ function MySchedules() {
             <button type="button" className="btn-month-nav" onClick={() => move(1)} aria-label="다음 달">&gt;</button>
             <button type="button" className="btn-today-sm" onClick={goToday}>오늘</button>
           </div>
+          {asPending > 0 && <AsAlert count={asPending} onOpen={() => setView('as')} />}
           <div className="calendar-grid-wrapper">
             <div className="calendar-weekdays">
               {WEEKDAYS.map((w, i) => (
@@ -192,8 +285,8 @@ function MySchedules() {
         </>
       )}
 
-      {grouped.length === 0 && <p className="no-data">배정된 일정이 없습니다.</p>}
-      {grouped.map(([date, rows]) => (
+      {view !== 'as' && grouped.length === 0 && <p className="no-data">배정된 일정이 없습니다.</p>}
+      {view !== 'as' && grouped.map(([date, rows]) => (
         <section key={date}>
           <h4 className={`engineer-date ${date === today() ? 'is-today' : ''}`}>
             {formatKoreanDate(date)}
@@ -233,7 +326,12 @@ function ScheduleCard({ s, onReported }) {
           <span className="sub-text">{s.stepIndex + 1}차{s.viaTeam ? ` · ${s.teamName}` : ''}</span>
           <span className="engineer-card-more">상세 ›</span>
         </div>
-        <div className="bold-text">{s.address}</div>
+        <div className="bold-text">
+          {s.address}{' '}
+          <span onClick={(e) => e.stopPropagation()}>
+            <MapLink name={s.aptName} />
+          </span>
+        </div>
         <div>
           {s.customerName} ·{' '}
           <a href={`tel:${s.customerPhone}`} onClick={(e) => e.stopPropagation()}>
@@ -440,7 +538,9 @@ function ContractView({ id, step }) {
             <th>계약담당</th>
             <td>{c.ownerName}</td>
             <th>현장</th>
-            <td>{siteText(c)}</td>
+            <td>
+              {siteText(c)} <MapLink name={c.aptName} />
+            </td>
           </tr>
           <tr>
             <th>입주예정일</th>

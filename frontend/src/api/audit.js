@@ -70,6 +70,9 @@ const ACTIONS = {
   'imports.products': '상품 가져오기',
   'notifications.send': '알림톡 발송',
   'auditLogs.undo': '되돌리기',
+  'contracts.addAsPhotos': 'AS 사진 추가',
+  'contracts.bulkFix': '데이터 일괄 정리',
+  'engineerApp.setAsVisit': 'AS 방문일 등록',
 };
 
 // 표별 대상 이름

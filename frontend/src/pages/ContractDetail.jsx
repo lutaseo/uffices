@@ -7,7 +7,7 @@ import { BRANDS, currentHasFeature, currentWorkCategories } from '../constants.j
 const TALK_BRAND_ORDER = ['더좋은집', '더스타트']; // 상세시공 알림톡 버튼: 더좋은집이 위 (PC·태블릿·모바일 공통)
 import { calcAmounts, isRefund, kindBreakdown, sumAmounts, timeLabel } from '../utils/contract.js';
 import { formatAddress, won } from '../utils/format.js';
-import AsModal from '../components/AsModal.jsx';
+import AsModal, { sendAs } from '../components/AsModal.jsx';
 import KakaoModal from '../components/KakaoModal.jsx';
 import PaymentModal from '../components/PaymentModal.jsx';
 import DiscountModal from '../components/DiscountModal.jsx';
@@ -16,6 +16,7 @@ import ContractViewModal from '../components/ContractViewModal.jsx';
 import { PAPER_MAX } from '../components/PaperPhotos.jsx';
 import PhotoViewer from '../components/PhotoViewer.jsx';
 import LineItems from '../components/LineItems.jsx';
+import MapLink from '../components/MapLink.jsx';
 import WorkRecord from '../components/WorkRecord.jsx';
 import { compressImage } from '../utils/image.js';
 
@@ -38,7 +39,7 @@ const scheduleLine = (s) => (s?.date ? `${s.date}(${timeLabel(s) || '무관'})` 
 //   onOpenGroup(contractId)   다른 현장 계약으로 이동 (계약자 탭)
 //   initialTab                처음 열 탭 (상담홈의 [상담내역] → '상담내역')
 //   focus                     'progress' 면 진행상황(기사 시공 기록)으로 바로 스크롤 (시공 기록 [자세히 보기])
-export default function ContractDetail({ contractId, initialTab, focus, onBack, onEdit, onNewWork, onOpenGroup }) {
+export default function ContractDetail({ contractId, initialTab, focus, onBack, onEdit, onNewWork, onOpenGroup, engineers = [] }) {
   const { company, can, handleError } = useAuth();
   // 다른 사람 계약('본인 계약만' 실장): 보기만 — 서버가 readOnly 로 알려 줌
   const canDo = (perm, c = selected) => can(perm) && !c?.readOnly;
@@ -189,7 +190,9 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
             <th>계약담당</th>
             <td>{head.ownerName}</td>
             <th>현장</th>
-            <td>{siteText(head)}</td>
+            <td>
+              {siteText(head)} <MapLink name={head.aptName} />
+            </td>
           </tr>
           <tr>
             <th>입주예정일</th>
@@ -341,6 +344,8 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
                     <div key={i} className={`sub-text as-request ${l.doneAt ? 'done' : ''}`}>
                       AS {i + 1}회 {l.date} · {l.request}
                       {l.doneAt && ` (완료 ${l.doneAt})`}
+                      {l.engineerName && ` · 담당 ${l.engineerName}`}
+                      {!l.doneAt && l.engineerName && (l.visitDate ? ` · 방문 ${l.visitDate}${l.visitTime ? ` ${l.visitTime}` : ''}` : ' · 방문일 미정')}
                       {l.photoCount > 0 && (
                         <button
                           type="button"
@@ -850,9 +855,11 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
       {asTarget && (
         <AsModal
           title={`${asTarget.category} · ${asTarget.customerName} (No.${asTarget.no}) — ${asLogsOf(asTarget).length + 1}회차`}
+          engineers={engineers}
+          defaultEngineerId={asTarget.schedules?.[0]?.assignType !== 'team' ? asTarget.schedules?.[0]?.engineerId : undefined}
           onClose={() => setAsTarget(null)}
           onSave={async (info) => {
-            await contractApi.setAs([asTarget.id], true, info);
+            await sendAs(contractApi, [asTarget.id], info);
             setAsTarget(null);
             alert(asTarget.asAt ? 'AS를 추가 접수했습니다.' : 'AS관리로 옮겼습니다. (계약관리 > AS관리)');
             await load();

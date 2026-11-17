@@ -12,6 +12,7 @@ import { can, ROLES, DATA_SCOPES, DEFAULT_MANAGER_PERMISSIONS, isOwnScopeOnly } 
 import {
   ASSIGN_TYPES,
   companyCategories,
+  hasFeature,
   ESIGN_STATUS,
   MAX_SCHEDULE_STEPS,
   ISSUE_STATUS,
@@ -350,6 +351,24 @@ function usedPaymentId(db, c) {
   return Math.max(0, ...(c.payments || []).map((p) => Number(p.id) || 0), ...photoIds);
 }
 
+// 시공일: 일정 중 가장 늦은 날, 없으면 계약일
+const workDateOf = (c) => (c.schedules || []).map((x) => x.date).filter(Boolean).sort().at(-1) || c.contractDate || '';
+
+// 일괄 정리 대상
+function bulkTargets(db, user, opts) {
+  const mine = db.contracts.filter((c) => c.companyId === user.companyId && !c.deletedAt);
+  if (opts.kind === 'done') {
+    if (!isDateKey(opts.until)) throw new ApiError('기준 날짜를 골라 주세요.');
+    return mine.filter((c) => c.status !== '취소' && c.status !== '시공완료' && workDateOf(c) && workDateOf(c) <= opts.until);
+  }
+  if (opts.kind === 'signed') {
+    const n = Math.floor(Number(opts.untilNo));
+    if (!(n > 0)) throw new ApiError('계약번호를 적어 주세요.');
+    return mine.filter((c) => (c.esign?.status || ESIGN_STATUS.NONE) === ESIGN_STATUS.NONE && (numberOf(db, c) || Infinity) <= n);
+  }
+  throw new ApiError('정리할 종류를 골라 주세요.');
+}
+
 // 계약의 입금 내역에서 사라진 입금의 사진 정리
 function cleanReceipts(db, c) {
   if (!db.paymentReceipts) return;
@@ -371,7 +390,8 @@ const paperPhotosOf = (db, c) => (db.paymentReceipts || []).filter((r) => r.cont
 //   AS 접수 때 함께 올린 사진 (하자 부위 등). 같은 표(paymentReceipts)에 kind 'asPhoto', asIndex(몇 번째 AS 회차, 0부터)로 저장
 //   회차에는 사진 장수만(photoCount) 남기고, 사진은 볼 때만 읽음
 const AS_KIND = 'asPhoto';
-export const AS_PHOTOS_MAX = 5;
+export const AS_PHOTOS_MAX = 10; // AS 한 회차 사진 최대 (한 번에 보내는 건 AS_PHOTOS_PER_SEND 장씩 — 요청 용량 한도)
+export const AS_PHOTOS_PER_SEND = 5;
 const asPhotosOf = (db, c) => (db.paymentReceipts || []).filter((r) => r.contractId === c.id && r.kind === AS_KIND);
 
 // 같은 계약 묶음: 같은 계약자 + 같은 현장(아파트/동/호)의 시공들
@@ -723,8 +743,12 @@ export const contracts = {
     const request = String(info.request || '').trim().slice(0, 500);
     if (on && !request) throw new ApiError('AS 요청 내용을 적어 주세요.');
     const photos = on && Array.isArray(info.photos) ? info.photos.filter(Boolean) : [];
-    if (photos.length > AS_PHOTOS_MAX) throw new ApiError(`AS 사진은 한 번에 ${AS_PHOTOS_MAX}장까지 올릴 수 있습니다.`);
+    if (photos.length > AS_PHOTOS_PER_SEND) throw new ApiError(`AS 사진은 한 번에 ${AS_PHOTOS_PER_SEND}장씩 보내 주세요. (나머지는 이어서 올라갑니다)`);
     photos.forEach(checkReceiptImage);
+    // AS 담당 기사 (기능 켜진 업체): 고르지 않았으면 그 계약 시공등록①의 기사, '' 이면 담당 없음
+    const pickEngineer = hasFeature(companyOf(db, user), 'asEngineer');
+    const chosen = info.engineerId === undefined ? undefined : info.engineerId ? Number(info.engineerId) : null;
+    if (pickEngineer && chosen && !db.engineers.some((e) => e.id === chosen && e.companyId === user.companyId)) throw new ApiError('AS 담당 기사를 다시 골라 주세요.');
     if (photos.length) db.paymentReceipts = db.paymentReceipts || [];
     ids.forEach((id) => {
       const c = findContract(db, user, id);
@@ -732,6 +756,12 @@ export const contracts = {
       const logs = c.asLogs || (c.asInfo ? [{ ...c.asInfo, doneAt: null }] : []);
       if (on) {
         const entry = { date: isDateKey(info.date) ? info.date : today(), request, byName: user.name, doneAt: null, ...(photos.length ? { photoCount: photos.length } : {}) };
+        if (pickEngineer) {
+          const first = (c.schedules || [])[0];
+          const engId = chosen === undefined ? (first && first.assignType !== 'team' ? first.engineerId || null : null) : chosen;
+          const eng = engId ? db.engineers.find((e) => e.id === engId && e.companyId === user.companyId) : null;
+          if (eng) Object.assign(entry, { engineerId: eng.id, engineerName: eng.name });
+        }
         photos.forEach((img) => {
           db.paymentReceipts.push({ id: nextId(db, 'paymentReceipts'), companyId: user.companyId, contractId: c.id, paymentId: null, kind: AS_KIND, asIndex: logs.length, image: img, createdAt: nowIso() });
         });
@@ -748,6 +778,59 @@ export const contracts = {
       }
     });
     saveDb(db);
+  },
+
+  // ---------------- 데이터 일괄 정리 (업체 관리자, 기능 bulkFix) ----------------
+  //   kind 'done'   : 시공일(일정 중 가장 늦은 날, 없으면 계약일)이 until 이하이고 취소·시공완료가 아닌 계약 → 시공완료
+  //   kind 'signed' : 계약번호 untilNo 이하이고 전자서명 '미발송' 인 계약 → 서명완료 (종이 계약서로 받은 예전 계약)
+  async bulkFixPreview(opts = {}) {
+    const { db, user } = await authorize('contract.view');
+    if (user.role !== ROLES.ADMIN) throw new ApiError('업체 관리자만 쓸 수 있습니다.', 'FORBIDDEN');
+    requireFeature(db, user, 'bulkFix');
+    const list = bulkTargets(db, user, opts);
+    return { count: list.length, sample: list.slice(0, 5).map((c) => ({ no: numberOf(db, c), customerName: c.customerName, category: c.category, status: c.status, esign: c.esign?.status || ESIGN_STATUS.NONE, date: workDateOf(c) })) };
+  },
+
+  async bulkFix(opts = {}) {
+    const { db, user } = await authorize('contract.edit');
+    if (user.role !== ROLES.ADMIN) throw new ApiError('업체 관리자만 쓸 수 있습니다.', 'FORBIDDEN');
+    requireFeature(db, user, 'bulkFix');
+    const list = bulkTargets(db, user, opts);
+    list.forEach((c) => {
+      if (opts.kind === 'done') {
+        addHistory(c, user, '일괄 시공완료', [{ label: '시공상태', from: c.status || '', to: '시공완료' }]);
+        c.status = '시공완료';
+      } else {
+        addHistory(c, user, '일괄 서명완료 표시', [{ label: '전자서명', from: c.esign?.status || ESIGN_STATUS.NONE, to: `${ESIGN_STATUS.SIGNED} (종이 계약서)` }]);
+        c.esign = { ...(c.esign || {}), status: ESIGN_STATUS.SIGNED, token: null, paperMarked: true };
+      }
+    });
+    if (list.length) saveDb(db);
+    return { count: list.length };
+  },
+
+  // AS 사진 이어서 올리기 (한 회차 최대 AS_PHOTOS_MAX 장 — 접수 때 5장 넘는 사진은 이걸로 나눠 보냄)
+  async addAsPhotos(id, asIndex, photos = []) {
+    const { db, user } = await authorize('contract.edit');
+    requireFeature(db, user, 'as');
+    const c = findContract(db, user, id);
+    const logs = c.asLogs || [];
+    const idx = asIndex === undefined || asIndex === null ? logs.length - 1 : Number(asIndex);
+    const entry = logs[idx];
+    if (!entry) throw new ApiError('AS 접수 내역을 찾을 수 없습니다.', 'NOT_FOUND');
+    const list = (Array.isArray(photos) ? photos : []).filter(Boolean);
+    if (!list.length) return { photoCount: entry.photoCount || 0 };
+    if (list.length > AS_PHOTOS_PER_SEND) throw new ApiError(`AS 사진은 한 번에 ${AS_PHOTOS_PER_SEND}장씩 보내 주세요.`);
+    list.forEach(checkReceiptImage);
+    db.paymentReceipts = db.paymentReceipts || [];
+    const now = db.paymentReceipts.filter((r) => r.contractId === c.id && r.kind === AS_KIND && r.asIndex === idx).length;
+    if (now + list.length > AS_PHOTOS_MAX) throw new ApiError(`AS 사진은 한 회차에 ${AS_PHOTOS_MAX}장까지 올릴 수 있습니다.`);
+    list.forEach((img) => db.paymentReceipts.push({ id: nextId(db, 'paymentReceipts'), companyId: user.companyId, contractId: c.id, paymentId: null, kind: AS_KIND, asIndex: idx, image: img, createdAt: nowIso() }));
+    entry.photoCount = now + list.length;
+    if (c.asInfo && idx === logs.length - 1) c.asInfo = { ...entry };
+    c.updatedAt = nowIso();
+    saveDb(db);
+    return { photoCount: entry.photoCount };
   },
 
   async moveToTrash(ids) {

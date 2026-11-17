@@ -116,7 +116,7 @@ export default function ContractDocument({ contract, contracts, company, showAmo
         {esign.signature ? (
           <img src={esign.signature} alt="서명" className="doc-signature" />
         ) : (
-          <div className="doc-signature empty">{esign.status === '서명완료' ? '(서명 이미지 없음)' : '(서명 전)'}</div>
+          <div className="doc-signature empty">{esign.status === '서명완료' ? (esign.paperMarked ? '(종이 계약서로 서명 완료)' : '(서명 이미지 없음)') : '(서명 전)'}</div>
         )}
       </div>
     </div>

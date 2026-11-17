@@ -389,6 +389,7 @@ function mySchedule(db, me, c, s, stepIndex) {
     customerName: c.customerName,
     customerPhone: c.customerPhone,
     address: formatAddress(c),
+    aptName: c.aptName || '', // [지도] 검색용 (동·호 없이)
     items: [...(c.lineItems || []).map((l) => `${l.name}${l.qty > 1 ? ` x${l.qty}` : ''}`), c.items].filter(Boolean).join('\n'),
     balance: a.balance, // 현장 잔금 수령용
   };
@@ -419,6 +420,7 @@ function engineerContractView(db, me, c) {
     aptType: c.aptType || '',
     area: c.area || '',
     address: formatAddress(c),
+    aptName: c.aptName || '', // [지도] 검색용 (동·호 없이)
     moveInDate: c.moveInDate || '',
     lineItems: (c.lineItems || []).map((l) => ({ name: l.name, detail: l.detail || '', qty: l.qty, ...(l.kind ? { kind: l.kind } : {}) })),
     items: c.items || '',
@@ -482,6 +484,68 @@ export const engineerApp = {
     }
     return (db.paymentReceipts || [])
       .filter((r) => r.contractId === c.id && r.kind === 'contractPaper')
+      .sort((x, y) => x.id - y.id)
+      .map((r) => ({ id: r.id, image: r.image }));
+  },
+
+  // ---------------- AS (기능 asEngineer) ----------------
+  // 나에게 맡겨진 처리 중인 AS (사무실이 AS 접수 때 담당 기사로 고른 것)
+  async myAs() {
+    const { db, user } = await authorizeEngineer();
+    if (!hasFeature(companyOf(db, user), 'asEngineer') || !hasFeature(companyOf(db, user), 'as')) return [];
+    const out = [];
+    db.contracts.forEach((c) => {
+      if (c.companyId !== user.companyId || c.deletedAt) return;
+      (c.asLogs || []).forEach((l, asIndex) => {
+        if (l.doneAt || l.engineerId !== user.engineerId) return;
+        out.push({
+          contractId: c.id,
+          asIndex,
+          date: l.date,
+          request: l.request,
+          photoCount: l.photoCount || 0,
+          visitDate: l.visitDate || '',
+          visitTime: l.visitTime || '',
+          category: c.category,
+          brand: c.brand,
+          customerName: c.customerName,
+          customerPhone: c.customerPhone,
+          customerPhone2: c.customerPhone2 || '',
+          address: formatAddress(c),
+          aptName: c.aptName || '',
+        });
+      });
+    });
+    return out.sort((a, b) => (a.visitDate ? 1 : 0) - (b.visitDate ? 1 : 0) || a.date.localeCompare(b.date));
+  },
+
+  // AS 방문일 등록 (담당 기사 본인만) — 사무실 AS관리 목록·변경이력에 표시
+  async setAsVisit(contractId, asIndex, { date, time } = {}) {
+    const { db, user } = await authorizeEngineer();
+    requireFeature(db, user, 'asEngineer');
+    const c = db.contracts.find((x) => x.id === Number(contractId) && x.companyId === user.companyId && !x.deletedAt);
+    const entry = c?.asLogs?.[Number(asIndex)];
+    if (!entry || entry.engineerId !== user.engineerId) throw new ApiError('나에게 맡겨진 AS 가 아닙니다.', 'FORBIDDEN');
+    if (entry.doneAt) throw new ApiError('이미 완료된 AS 입니다.');
+    if (!isDateKey(date)) throw new ApiError('방문 날짜를 골라 주세요.');
+    const t = /^\d{2}:\d{2}$/.test(String(time || '')) ? String(time) : '';
+    const before = [entry.visitDate, entry.visitTime].filter(Boolean).join(' ');
+    entry.visitDate = date;
+    entry.visitTime = t;
+    if (c.asInfo && Number(asIndex) === c.asLogs.length - 1) c.asInfo = { ...entry };
+    addHistory(c, user, 'AS 방문일 등록', [{ label: `AS ${Number(asIndex) + 1}회 방문`, from: before, to: [date, t].filter(Boolean).join(' ') }]);
+    saveDb(db);
+    return { visitDate: entry.visitDate, visitTime: entry.visitTime };
+  },
+
+  // AS 사진 (나에게 맡겨진 AS 회차만)
+  async asPhotos(contractId, asIndex) {
+    const { db, user } = await authorizeEngineer();
+    const c = db.contracts.find((x) => x.id === Number(contractId) && x.companyId === user.companyId && !x.deletedAt);
+    const entry = c?.asLogs?.[Number(asIndex)];
+    if (!entry || entry.engineerId !== user.engineerId) throw new ApiError('나에게 맡겨진 AS 가 아닙니다.', 'FORBIDDEN');
+    return (db.paymentReceipts || [])
+      .filter((r) => r.contractId === c.id && r.kind === 'asPhoto' && Number(r.asIndex) === Number(asIndex))
       .sort((x, y) => x.id - y.id)
       .map((r) => ({ id: r.id, image: r.image }));
   },
