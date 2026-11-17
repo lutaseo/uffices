@@ -25,6 +25,7 @@ export const TABLES = [
   'contracts',
   'notifications',
   'paymentReceipts', // 입금 영수증 사진 (계약과 분리 저장)
+  'callLogs', // 상담내역: 전화번호별 통화 메모 (상단 [상담내역])
 ];
 
 export function emptyDb() {
@@ -66,6 +67,10 @@ export function migrate(db) {
   });
   if (!db.paymentReceipts) {
     db.paymentReceipts = [];
+    changed = true;
+  }
+  if (!db.callLogs) {
+    db.callLogs = [];
     changed = true;
   }
   db.users.forEach((u) => {

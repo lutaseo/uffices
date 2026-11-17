@@ -21,6 +21,7 @@ import FairModal from './components/FairModal.jsx';
 import { InstallScreen } from './components/InstallCard.jsx';
 import ProgressStatus from './components/ProgressStatus.jsx';
 import StatsPage from './pages/StatsPage.jsx';
+import CallLogPage from './pages/CallLogPage.jsx';
 import AccountManagement from './pages/AccountManagement.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 import ImportPage from './pages/settings/ImportPage.jsx';
@@ -45,6 +46,7 @@ const MENUS = [
   },
   { key: 'customer', label: '계약자관리', icon: '👤', perm: 'customer.view', path: '/customers' },
   { key: 'schedule', label: '일정관리', icon: '📅', perm: 'schedule.view', path: '/schedule' },
+  { key: 'calls', label: '상담내역', icon: '📞', perm: 'calllog.manage', path: '/calls', feature: 'callLog' },
   { key: 'progress', label: '진행상황', icon: '📑', perm: 'stats.view', path: '/progress' },
   { key: 'stats', label: '통계정보', icon: '📊', perm: 'stats.view', path: '/stats' },
   // 운영자 전용 (업체 관리자는 설정 > 사용자관리 에서 실장을 관리)
@@ -72,7 +74,7 @@ const MENUS = [
 
 // 상담실장 화면 (/업체주소/t 로 로그인): 상담홈 + 계약·계약자·일정 + 내 정보만 (통계·진행상황·설정은 숨김)
 const CONSULT_MENU = { key: 'consult', label: '상담홈', icon: '🏠', path: '/consult' };
-const CONSULT_KEYS = ['consult', 'contract', 'customer', 'schedule', 'setting'];
+const CONSULT_KEYS = ['consult', 'contract', 'customer', 'schedule', 'calls', 'setting'];
 
 // 설정 하위 화면
 const SETTING_PAGES = {
@@ -336,6 +338,7 @@ function MainLayout({ route }) {
         {current?.key === 'contract' && <ContractPage route={route} />}
         {current?.key === 'customer' && <CustomerManagement route={route} />}
         {current?.key === 'schedule' && <ScheduleManagement />}
+        {current?.key === 'calls' && <CallLogPage />}
         {current?.key === 'progress' && <ProgressStatus />}
         {current?.key === 'stats' && <StatsPage />}
         {current?.key === 'accounts' && <AccountManagement />}
