@@ -348,13 +348,14 @@ function MySchedules() {
 
 // 일정 카드: 위쪽(현장·고객·내용)을 누르면 계약 상세로, 아래는 현장 보고
 // 방문일을 등록한 AS: 일정 카드에 'AS' 로 표시 (시공 보고 대신 요청 내용)
-function AsScheduleCard({ s }) {
+function AsScheduleCard({ s, onReported }) {
   return (
     <div className="engineer-card as-schedule-card">
       <div className="engineer-card-top">
         <strong>{s.time || '시간 무관'}</strong>
         <span className="status-chip st-red">AS · {s.category}</span>
         <span className="as-step">AS</span>
+        {s.doneAt && <span className="status-chip st-green">AS 완료</span>}
       </div>
       <div className="bold-text">
         {s.address} <MapLink name={s.aptName} />
@@ -363,12 +364,46 @@ function AsScheduleCard({ s }) {
         {s.customerName} · <a href={`tel:${s.customerPhone}`}>{s.customerPhone}</a>
       </div>
       <div className="as-request-text">요청: {s.request}</div>
+      {currentHasFeature('asReport') && <AsReportForm s={s} onReported={onReported} />}
     </div>
   );
 }
 
+// AS 현장 보고: 상태 + 메모 → 사무실 AS 내역에 표시, '시공완료'면 AS 완료
+function AsReportForm({ s, onReported }) {
+  const { handleError } = useAuth();
+  const [d, setD] = useState({ mobileStatus: s.mobileStatus || '', memo: s.mobileMemo || '' });
+  useEffect(() => setD({ mobileStatus: s.mobileStatus || '', memo: s.mobileMemo || '' }), [s.mobileStatus, s.mobileMemo]);
+  if (s.doneAt) {
+    return <div className="sub-text">보고: {s.mobileStatus || 'AS 완료'}{s.mobileMemo ? ` · ${s.mobileMemo}` : ''}</div>;
+  }
+  const report = async () => {
+    if (d.mobileStatus === '시공완료' && !window.confirm('시공완료로 보고하면 이 AS 가 완료 처리됩니다. 보고할까요?')) return;
+    try {
+      await engineerApp.reportAs(s.contractId, s.asIndex, d);
+      alert(d.mobileStatus === '시공완료' ? 'AS 완료로 보고되었습니다.' : '보고되었습니다. 사무실에 바로 표시됩니다.');
+      onReported?.();
+    } catch (e) {
+      handleError(e);
+    }
+  };
+  return (
+    <>
+      <div className="engineer-report">
+        <select className="input-text" value={d.mobileStatus} onChange={(e) => setD({ ...d, mobileStatus: e.target.value })}>
+          <option value="">입력 전</option>
+          {MOBILE_STATUS.map((m) => <option key={m} value={m}>{m}</option>)}
+        </select>
+        <input className="input-text" placeholder="보고 메모 (선택)" value={d.memo} onChange={(e) => setD({ ...d, memo: e.target.value })} maxLength={500} />
+        <button type="button" className="btn-confirm" onClick={report}>보고</button>
+      </div>
+      {s.reportedAt && <div className="sub-text">마지막 보고: {new Date(s.reportedAt).toLocaleString('ko-KR')}</div>}
+    </>
+  );
+}
+
 function ScheduleCard({ s, onReported }) {
-  if (s.isAs) return <AsScheduleCard s={s} />;
+  if (s.isAs) return <AsScheduleCard s={s} onReported={onReported} />;
   const open = () => navigateForward(`/m/contract/${s.contractId}?step=${s.stepIndex}`);
   return (
     <div className="engineer-card">

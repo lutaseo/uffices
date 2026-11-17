@@ -34,6 +34,7 @@ export const FEATURES = [
   { key: 'installOthers', label: '내 정보에서 상담실장·기사모바일 앱도 설치 (설치 화면 열기·주소 복사)', on: true },
   { key: 'addressMap', label: '현장 주소 검색(우편번호) · 지도 보기 버튼', on: true },
   { key: 'asEngineer', label: 'AS 담당 기사 지정 · 기사모바일 AS관리(알림 · 방문일 등록)', on: true },
+  { key: 'asReport', label: '기사모바일 AS 보고 (상태 · 메모, 시공완료면 AS 완료)', on: true },
   { key: 'photoStorage', label: '사진 전용 저장소 (새 사진을 DB 대신 사진 저장소에)', on: true },
 ];
 export function hasFeature(company, key) {

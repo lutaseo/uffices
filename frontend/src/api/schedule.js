@@ -461,7 +461,8 @@ export const engineerApp = {
     if (hasFeature(companyOf(db, user), 'asEngineer')) {
       activeContracts(db, user.companyId).forEach((c) =>
         (c.asLogs || []).forEach((l, asIndex) => {
-          if (l.doneAt || l.engineerId !== user.engineerId || !l.visitDate || !inRange(l.visitDate, from, to)) return;
+          // 완료된 AS 도 그날 일정에 남김 (보고 결과 확인용) — 담당이 바뀐 회차는 빠짐
+          if (l.engineerId !== user.engineerId || !l.visitDate || !inRange(l.visitDate, from, to)) return;
           out.push({
             isAs: true,
             asIndex,
@@ -477,6 +478,10 @@ export const engineerApp = {
             aptName: c.aptName || '',
             request: l.request,
             photoCount: l.photoCount || 0,
+            mobileStatus: l.mobileStatus || '',
+            mobileMemo: l.mobileMemo || '',
+            reportedAt: l.reportedAt || '',
+            doneAt: l.doneAt || '',
           });
         }),
       );
@@ -578,6 +583,36 @@ export const engineerApp = {
     addHistory(c, user, 'AS 담당 기사 변경', [{ label: `AS ${Number(asIndex) + 1}회 담당`, from, to: to.name }]);
     saveDb(db);
     return { engineerName: to.name };
+  },
+
+  // AS 현장 보고 (담당 기사 본인만, 기능 asReport) — 상태 + 메모, '시공완료'면 그 회차 AS 완료
+  async reportAs(contractId, asIndex, { mobileStatus, memo } = {}) {
+    const { db, user } = await authorizeEngineer();
+    requireFeature(db, user, 'asEngineer');
+    requireFeature(db, user, 'asReport');
+    const c = db.contracts.find((x) => x.id === Number(contractId) && x.companyId === user.companyId && !x.deletedAt);
+    const idx = Number(asIndex);
+    const entry = c?.asLogs?.[idx];
+    if (!entry || entry.engineerId !== user.engineerId) throw new ApiError('나에게 맡겨진 AS 가 아닙니다.', 'FORBIDDEN');
+    if (entry.doneAt) throw new ApiError('이미 완료된 AS 입니다.');
+    if (mobileStatus && !MOBILE_STATUS.includes(mobileStatus)) throw new ApiError('상태를 선택해 주세요.');
+    const before = entry.mobileStatus || '입력 전';
+    entry.mobileStatus = mobileStatus || '';
+    entry.mobileMemo = String(memo || '').trim().slice(0, 500);
+    entry.reportedAt = nowIso();
+    entry.reportedBy = user.name;
+    const fields = [{ label: `AS ${idx + 1}회 기사 보고`, from: before, to: entry.mobileStatus || '입력 전' }];
+    if (entry.mobileMemo) fields.push({ label: '메모', from: '', to: entry.mobileMemo });
+    const done = entry.mobileStatus === '시공완료';
+    if (done) {
+      entry.doneAt = today();
+      entry.doneBy = user.name;
+      fields.push({ label: `AS ${idx + 1}회`, from: '처리 중', to: '완료' });
+    }
+    if (c.asInfo && idx === c.asLogs.length - 1) c.asInfo = done ? null : { ...entry };
+    addHistory(c, user, done ? 'AS 완료 (기사 보고)' : 'AS 기사 보고', fields);
+    saveDb(db);
+    return { mobileStatus: entry.mobileStatus, doneAt: entry.doneAt || '' };
   },
 
   // AS 넘길 때 고를 다른 기사님 (이름만)

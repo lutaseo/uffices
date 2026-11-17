@@ -1988,6 +1988,30 @@ test('AS 담당 기사: 시공등록① 기사가 자동 담당, 다른 기사�
   // 방문일을 등록하면 내 일정에 'AS' 로
   const sch = (await eng.ok('engineerApp', 'mySchedules', { from: '2026-12-24', to: '2026-12-24' })).find((x) => x.isAs && x.contractId === c.id);
   assert.ok(sch && sch.time === '14:30' && sch.workType === 'AS', '일정에 AS 로 표시');
+  // AS 현장 보고: 시공연기요청은 상태만, 시공완료면 AS 완료
+  {
+    const sup = client();
+    await sup.ok('auth', 'login', 'super', 'super-test-1234');
+    const good = (await sup.ok('companies', 'list')).find((x) => x.code === 'thegood');
+    await sup.ok('companies', 'update', good.id, { features: { asReport: false } });
+    assert.equal((await eng('engineerApp', 'reportAs', c.id, mine.asIndex, { mobileStatus: '시공완료' })).status, 403, 'AS 보고 기능 꺼지면 막힘');
+    await sup.ok('companies', 'update', good.id, { features: {} });
+  }
+  await eng.ok('engineerApp', 'reportAs', c.id, mine.asIndex, { mobileStatus: '시공연기요청', memo: '고객 부재' });
+  got = await admin.ok('contracts', 'get', c.id);
+  assert.deepEqual([got.asLogs.at(-1).mobileStatus, got.asLogs.at(-1).mobileMemo, got.asLogs.at(-1).doneAt], ['시공연기요청', '고객 부재', null], '보고만, 완료 아님');
+  assert.equal((await eng('engineerApp', 'reportAs', c.id, mine.asIndex, { mobileStatus: '이상한값' })).status, 400);
+  await eng.ok('engineerApp', 'reportAs', c.id, mine.asIndex, { mobileStatus: '시공완료' });
+  got = await admin.ok('contracts', 'get', c.id);
+  assert.ok(got.asLogs.at(-1).doneAt && got.asInfo === null, '시공완료 보고 → AS 완료');
+  assert.equal(got.history.at(-1).action, 'AS 완료 (기사 보고)');
+  assert.ok(!(await eng.ok('engineerApp', 'myAs')).some((a) => a.contractId === c.id), '완료되면 AS관리에서 빠짐');
+  const doneCard = (await eng.ok('engineerApp', 'mySchedules', { from: '2026-12-24', to: '2026-12-24' })).find((x) => x.isAs && x.contractId === c.id);
+  assert.ok(doneCard && doneCard.doneAt, '그날 일정에는 완료로 남음');
+  assert.equal((await eng('engineerApp', 'reportAs', c.id, mine.asIndex, { mobileStatus: '시공완료' })).status, 400, '이미 완료');
+  // 이어지는 넘기기 시험용 새 회차
+  await admin.ok('contracts', 'setAs', [c.id], true, { request: '추가 하자' });
+  mine.asIndex = (await admin.ok('contracts', 'get', c.id)).asLogs.length - 1;
   // 기사가 다른 기사에게 넘기기: 방문일은 새 기사가 다시 정함
   const mates = await eng.ok('engineerApp', 'colleagues');
   assert.ok(mates.some((m) => m.id === other.id) && !mates.some((m) => m.id === gong.id), '다른 기사 목록 (나 제외)');
