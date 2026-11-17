@@ -5638,15 +5638,20 @@ button.paper-add { font: inherit; }
 .btn-map:hover { background: #dfeafd; }
 
 /* 기사모바일 AS: 빨간 알림 · AS관리 탭 · AS 카드 */
-.as-alert { margin: 8px 0 10px; padding: 12px 14px; border: 2px solid #d62828; border-left-width: 8px; border-radius: 8px; background: #fff1f1; color: #b00020; font-weight: 700; cursor: pointer; line-height: 1.5; }
-.as-alert-go { float: right; color: #b00020; }
+.as-alert { display: flex; align-items: center; gap: 12px; margin: 8px 0 12px; padding: 12px 14px; background: #fff; border: 1px solid #f1d4d4; border-radius: 12px; box-shadow: 0 2px 8px rgba(214, 40, 40, 0.08); cursor: pointer; }
+.as-alert:hover { border-color: #e9b4b4; }
+.as-alert-badge { flex: none; width: 28px; height: 28px; border-radius: 50%; background: #e5484d; color: #fff; font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.as-alert-text { flex: 1; display: flex; flex-direction: column; gap: 2px; line-height: 1.35; }
+.as-alert-text b { color: #c62828; font-size: 15px; }
+.as-alert-text small { color: #6b7280; font-size: 13px; }
+.as-alert-go { flex: none; padding: 6px 12px; border-radius: 999px; background: #fdecec; color: #c62828; font-size: 13px; font-weight: 700; }
 .radio-tag.as-tag { border-color: #17a2b8; color: #0e7c8c; }
 .radio-tag.as-tag.selected { background: #e6f7fa; }
 .as-count { display: inline-block; margin-left: 6px; min-width: 20px; padding: 0 6px; border-radius: 10px; background: #d62828; color: #fff; font-size: 12px; text-align: center; }
-.engineer-card.as-card.pending { border-color: #d62828; }
+.my-as-list { margin-top: 16px; display: flex; flex-direction: column; gap: 12px; }
+.engineer-card.as-card { border-radius: 12px; }
+.engineer-card.as-card.pending { border-color: #f1c4c4; box-shadow: 0 2px 8px rgba(214, 40, 40, 0.06); }
 .as-request-text { margin: 6px 0; white-space: pre-wrap; }
 .as-visit-form { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .as-visit-form .input-text { flex: 1 1 120px; }
 .status-chip.st-red { background: #fde2e2; color: #b00020; }
-
-.bulkfix-row { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; padding-bottom: 10px; border-bottom: 1px dashed #e0e6ef; }
