@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import * as XLSX from 'xlsx';
-import { apartments, contracts as contractApi, imports } from '../../api/index.js';
+import { apartments, imports } from '../../api/index.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { categoriesFromName, legacyKeys, mapLegacyRow, parseLegacyHtml } from '../../utils/legacyImport.js';
 import { won } from '../../utils/format.js';
-import { currentCategories, currentHasFeature } from '../../constants.js';
-import { ROLES } from '../../auth/permissions.js';
+import { currentCategories } from '../../constants.js';
 import { parseProductText } from '../../utils/productImport.js';
 import { normalizeSido, parseApartmentText } from '../../utils/apartmentImport.js';
 
@@ -59,7 +58,6 @@ export default function ImportPage() {
       <EngineerImport />
       <ContractImport />
       <UserImport />
-      <BulkFix />
       <ProductImport />
       <ApartmentImport />
     </div>
@@ -605,88 +603,3 @@ function ApartmentImport() {
 }
 
 
-// 데이터 일괄 정리 (업체 관리자): 미리보기로 몇 건인지 확인 → [변경]
-//   ① 지난 시공 일괄 시공완료 (취소 제외)  ② 예전 계약 일괄 서명완료 표시 (종이 계약서로 받은 계약)
-//   건수가 많으면 수정로그 [되돌리기]가 안 되므로 미리보기 건수를 꼭 확인
-function BulkFix() {
-  const { user, handleError } = useAuth();
-  const [until, setUntil] = useState('');
-  const [untilNo, setUntilNo] = useState('');
-  const [preview, setPreview] = useState(null); // { kind, count, sample }
-  const [busy, setBusy] = useState(false);
-  if (user.role !== ROLES.ADMIN || !currentHasFeature('bulkFix')) return null;
-  const opts = (kind) => (kind === 'done' ? { kind, until } : kind === 'asAssign' ? { kind } : { kind, untilNo: Number(untilNo) });
-  const LABEL = { done: '시공완료로', signed: '서명완료로', asAssign: 'AS 담당을 시공등록① 기사로' };
-  const look = async (kind) => {
-    setBusy(true);
-    try {
-      setPreview({ kind, ...(await contractApi.bulkFixPreview(opts(kind))) });
-    } catch (e) {
-      handleError(e);
-    } finally {
-      setBusy(false);
-    }
-  };
-  const apply = async () => {
-    const label = LABEL[preview.kind];
-    if (!window.confirm(`${preview.count}건을 ${label} 바꿉니다. 건수가 많으면 되돌리기가 안 됩니다. 진행할까요?`)) return;
-    setBusy(true);
-    try {
-      const r = await contractApi.bulkFix(opts(preview.kind));
-      alert(`${r.count}건을 바꿨습니다.`);
-      setPreview(null);
-    } catch (e) {
-      handleError(e);
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <section className="import-box">
-      <h3>데이터 일괄 정리</h3>
-      <div className="bulkfix-row">
-        <b>① 지난 시공 → 시공완료</b>
-        <span className="sub-text">시공일(일정 중 가장 늦은 날, 없으면 계약일)이 이 날짜까지인 계약 중 <b>취소 · 시공완료가 아닌</b> 것</span>
-        <span>
-          <input type="date" className="input-text" value={until} onChange={(e) => setUntil(e.target.value)} />{' '}
-          <button type="button" className="btn-dark-sm" disabled={busy || !until} onClick={() => look('done')}>미리보기</button>
-        </span>
-      </div>
-      <div className="bulkfix-row">
-        <b>② 예전 계약 → 서명완료</b>
-        <span className="sub-text">계약번호가 이 번호까지인 계약 중 전자서명 <b>미발송</b>인 것 (종이 계약서로 받은 계약)</span>
-        <span>
-          No.<input type="number" className="input-text" style={{ width: 110 }} value={untilNo} onChange={(e) => setUntilNo(e.target.value)} />까지{' '}
-          <button type="button" className="btn-dark-sm" disabled={busy || !untilNo} onClick={() => look('signed')}>미리보기</button>
-        </span>
-      </div>
-      {currentHasFeature('asEngineer') && (
-        <div className="bulkfix-row">
-          <b>③ 예전 AS → 담당 기사 배정</b>
-          <span className="sub-text">처리 중인 AS 중 담당 기사가 없는 것을 그 계약 <b>시공등록①의 기사</b>에게 배정 (팀 배정·기사 없는 계약은 건너뜀)</span>
-          <span>
-            <button type="button" className="btn-dark-sm" disabled={busy} onClick={() => look('asAssign')}>미리보기</button>
-          </span>
-        </div>
-      )}
-      {preview && (
-        <div className="import-result">
-          <p>
-            대상 <b>{preview.count}건</b> {preview.kind === 'done' ? '→ 시공완료' : preview.kind === 'asAssign' ? '→ AS 담당 배정' : '→ 서명완료'}
-          </p>
-          {preview.sample.length > 0 && (
-            <ul className="sub-text">
-              {preview.sample.map((x) => (
-                <li key={x.no}>No.{x.no} {x.customerName} · {x.category} · {preview.kind === 'done' ? `${x.status} · 시공일 ${x.date}` : preview.kind === 'asAssign' ? `담당 → ${x.engineerName}` : x.esign}</li>
-              ))}
-              {preview.count > preview.sample.length && <li>… 외 {preview.count - preview.sample.length}건</li>}
-            </ul>
-          )}
-          {preview.count > 0 && (
-            <button type="button" className="btn-dark-lg sm" disabled={busy} onClick={apply}>{busy ? '바꾸는 중...' : `${preview.count}건 변경`}</button>
-          )}
-        </div>
-      )}
-    </section>
-  );
-}

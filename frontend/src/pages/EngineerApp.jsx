@@ -80,7 +80,12 @@ function monthCells(year, month) {
 function AsAlert({ count, onOpen }) {
   return (
     <div className="as-alert" role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => e.key === 'Enter' && onOpen()}>
-      🔔 AS 시공이 발생했습니다. 고객에게 연락해 주세요. <b>({count}건)</b> <span className="as-alert-go">AS관리 ›</span>
+      <span className="as-alert-badge">{count}</span>
+      <span className="as-alert-text">
+        <b>AS 시공이 발생했습니다</b>
+        <small>고객에게 연락하고 방문일을 등록해 주세요</small>
+      </span>
+      <span className="as-alert-go">확인 ›</span>
     </div>
   );
 }
