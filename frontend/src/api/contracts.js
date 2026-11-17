@@ -366,7 +366,17 @@ function bulkTargets(db, user, opts) {
     if (!(n > 0)) throw new ApiError('계약번호를 적어 주세요.');
     return mine.filter((c) => (c.esign?.status || ESIGN_STATUS.NONE) === ESIGN_STATUS.NONE && (numberOf(db, c) || Infinity) <= n);
   }
+  if (opts.kind === 'asAssign') {
+    return mine.filter((c) => asAssignTo(db, c) && (c.asLogs || []).some((l) => !l.doneAt && !l.engineerId));
+  }
   throw new ApiError('정리할 종류를 골라 주세요.');
+}
+
+// 예전 AS 담당 배정: 그 계약 시공등록①의 기사 (팀 배정·기사 없음이면 null)
+function asAssignTo(db, c) {
+  const first = (c.schedules || [])[0];
+  if (!first || first.assignType === 'team' || !first.engineerId) return null;
+  return db.engineers.find((e) => e.id === first.engineerId && e.companyId === c.companyId) || null;
 }
 
 // 계약의 입금 내역에서 사라진 입금의 사진 정리
@@ -788,7 +798,10 @@ export const contracts = {
     if (user.role !== ROLES.ADMIN) throw new ApiError('업체 관리자만 쓸 수 있습니다.', 'FORBIDDEN');
     requireFeature(db, user, 'bulkFix');
     const list = bulkTargets(db, user, opts);
-    return { count: list.length, sample: list.slice(0, 5).map((c) => ({ no: numberOf(db, c), customerName: c.customerName, category: c.category, status: c.status, esign: c.esign?.status || ESIGN_STATUS.NONE, date: workDateOf(c) })) };
+    return {
+      count: list.length,
+      sample: list.slice(0, 5).map((c) => ({ no: numberOf(db, c), customerName: c.customerName, category: c.category, status: c.status, esign: c.esign?.status || ESIGN_STATUS.NONE, date: workDateOf(c), engineerName: asAssignTo(db, c)?.name || '' })),
+    };
   },
 
   async bulkFix(opts = {}) {
@@ -800,6 +813,11 @@ export const contracts = {
       if (opts.kind === 'done') {
         addHistory(c, user, '일괄 시공완료', [{ label: '시공상태', from: c.status || '', to: '시공완료' }]);
         c.status = '시공완료';
+      } else if (opts.kind === 'asAssign') {
+        const eng = asAssignTo(db, c);
+        c.asLogs = c.asLogs.map((l) => (!l.doneAt && !l.engineerId ? { ...l, engineerId: eng.id, engineerName: eng.name } : l));
+        if (c.asInfo && !c.asInfo.doneAt) c.asInfo = { ...c.asLogs.at(-1) };
+        addHistory(c, user, '예전 AS 담당 배정', [{ label: 'AS 담당', from: '', to: eng.name }]);
       } else {
         addHistory(c, user, '일괄 서명완료 표시', [{ label: '전자서명', from: c.esign?.status || ESIGN_STATUS.NONE, to: `${ESIGN_STATUS.SIGNED} (종이 계약서)` }]);
         c.esign = { ...(c.esign || {}), status: ESIGN_STATUS.SIGNED, token: null, paperMarked: true };

@@ -2017,4 +2017,21 @@ test('데이터 일괄 정리: 관리자만, 미리보기 건수 = 바뀐 건수
   assert.equal(g.esign.status, '서명완료');
   assert.equal(g.esign.paperMarked, true);
   assert.equal((await admin.ok('contracts', 'get', newer.id)).esign.status, '미발송', '번호 뒤는 그대로');
+  // 예전 AS 담당 배정: 처리 중이고 담당 없는 AS → 시공등록① 기사
+  const sup = client();
+  await sup.ok('auth', 'login', 'super', 'super-test-1234');
+  const good = (await sup.ok('companies', 'list')).find((x) => x.code === 'thegood');
+  const gong = (await admin.ok('engineers', 'list')).find((e) => e.loginId === 'gong');
+  const asOld = await mk('예전AS', { schedules: [{ date: '2026-12-28', time: '09:00', engineerId: gong.id }] });
+  await sup.ok('companies', 'update', good.id, { features: { asEngineer: false } }); // 예전처럼 담당 없이 접수
+  await admin.ok('contracts', 'setAs', [asOld.id], true, { request: '예전 AS' });
+  await sup.ok('companies', 'update', good.id, { features: {} });
+  assert.equal((await admin.ok('contracts', 'get', asOld.id)).asLogs.at(-1).engineerId, undefined);
+  const pa = await admin.ok('contracts', 'bulkFixPreview', { kind: 'asAssign' });
+  assert.ok(pa.count >= 1 && pa.sample.some((x) => x.customerName === '예전AS' && x.engineerName === gong.name));
+  await admin.ok('contracts', 'bulkFix', { kind: 'asAssign' });
+  const ga = await admin.ok('contracts', 'get', asOld.id);
+  assert.equal(ga.asLogs.at(-1).engineerId, gong.id, '시공등록① 기사에게 배정');
+  assert.equal(ga.asInfo.engineerId, gong.id);
+  assert.equal((await admin.ok('contracts', 'bulkFixPreview', { kind: 'asAssign' })).sample.some((x) => x.customerName === '예전AS'), false, '다시 하면 대상 아님');
 });
