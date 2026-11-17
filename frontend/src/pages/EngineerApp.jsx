@@ -265,7 +265,7 @@ function MySchedules() {
 
   return (
     <div className="engineer-body">
-      <div className="radio-btn-group">
+      <div className="radio-btn-group engineer-view-tags">
         {tag('calendar', '달력')}
         {tag('upcoming', '오늘 이후 30일')}
         {tag('past', '지난 30일')}

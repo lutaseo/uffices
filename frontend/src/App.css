@@ -5768,3 +5768,4 @@ button.paper-add { font: inherit; }
   font-size: 14px;
   color: #1f2937;
 }
+.engineer-view-tags { margin-bottom: 14px; } /* 기사모바일: 위 버튼 줄과 날짜(2026. 11) 사이 */
