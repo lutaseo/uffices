@@ -12,6 +12,27 @@
   - **새 기능은 반드시 업체별 기능 스위치를 함께 만듭니다.** `frontend/src/constants.js` 의 `FEATURES` 에 한 줄 추가(`on`: 기본 켜짐 여부 — 특정 업체 전용·시험 기능은 `false`), 화면은 `currentHasFeature(key)`(또는 `hasFeature(company, key)`)로 숨기고, 서버 함수는 `requireFeature(db, user, key)` 로 막습니다. 운영자(super)가 업체/계정관리 > [수정/연장] > '기능 켜기/끄기'에서 업체마다 켭니다. 서버 시험도 추가.
 - 서버: `server/` (PostgreSQL, 쿠키 세션, scrypt), Vercel 입구 `api/rpc.js`
 
+## 파일 지도 (찾을 때 여기부터)
+업무 로직 `frontend/src/api/`
+- `contracts.js` 계약 전체(등록·수정·입금·사진·AS·서명·알림톡 `notifications`·가져오기 `imports`·고객확인 `customerApp`) — 큰 파일이라 함수 이름으로 grep
+- `services.js` 로그인 `auth`·업체 `companies`·직원 `users`·기사 `engineers`·팀·상품·아파트·수정로그 `auditLogs`(되돌리기)
+- `schedule.js` 일정·휴무·박람회 `fairs`·기사모바일 `engineerApp` / `core.js` 세션·권한·`requireFeature` / `views.js` 화면용 계약 모양·변경이력
+- `audit.js` 수정로그 문구·되돌리기 자료 / `numbering.js` 계약번호(계약일 순) / `seed.js` 데모 자료·`migrate()` / `sessionSlots.js` 탭별 로그인 칸
+- `constants.js`(src 바로 아래) 브랜드·시공 구분·`FEATURES` 기능 스위치
+
+서버 `server/`
+- `handler.js` 요청 처리(호출 목록 `SERVICES`·`READ_ONLY`·`LIGHT_TABLES`·`FOCUS_CALLS`, 잠금·BUSY)
+- `pg.js` DB 읽기/쓰기(`loadSnapshot`·`persistChanges`) / `photoStore.js` 사진 저장소 / `page.js` 업체 주소별 첫 화면·앱 정보(manifest·아이콘)
+- `session.js` 쿠키 / `health.js` `/api/rpc` 점검 / `bizgo.js` 알림톡 발송
+
+화면 `frontend/src/`
+- `App.jsx` 메뉴·주소 연결 / `pages/ContractPage.jsx` 계약 목록 / `ContractDetail.jsx` 계약 상세 / `ContractEditor.jsx` 계약 등록·수정
+- `pages/EngineerApp.jsx` 기사모바일 / `ConsultHome.jsx` 상담실장 / `CustomerApp.jsx` 고객확인 / `SignPage.jsx` 서명 / `AccountManagement.jsx` 운영자 업체·계정
+- `pages/settings/` 설정 화면들(가져오기·알림톡·계약조건·수정로그·기사/팀/상품/아파트) / `components/ScheduleManagement.jsx` 일정 달력
+- `components/InstallCard.jsx` + `utils/install.js` 앱 설치 / `auth/AuthContext.jsx` 로그인 상태
+
+시험 `tests/server.test.js`(서버 시험, `VB_VERIFY_FAST=1` 로 빠른 불러오기 비교) · `tests/load/run.mjs`(부하 시험)
+
 ## 확인 명령
 ```bash
 npm run build                       # 화면 빌드
