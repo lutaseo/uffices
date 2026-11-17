@@ -346,6 +346,7 @@ export default function ContractDetail({ contractId, initialTab, focus, onBack, 
                       {l.doneAt && ` (완료 ${l.doneAt})`}
                       {l.engineerName && ` · 담당 ${l.engineerName}`}
                       {!l.doneAt && l.engineerName && (l.visitDate ? ` · 방문 ${l.visitDate}${l.visitTime ? ` ${l.visitTime}` : ''}` : ' · 방문일 미정')}
+                      {l.mobileStatus && ` · 기사 보고: ${l.mobileStatus}${l.mobileMemo ? ` (${l.mobileMemo})` : ''}`}
                       {l.photoCount > 0 && (
                         <button
                           type="button"

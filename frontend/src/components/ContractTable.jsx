@@ -167,6 +167,7 @@ function FullTable({ contracts, selectedIds, onToggle, onToggleAll, showAmount, 
                       {!asLast(item).doneAt && asLast(item).engineerName && (
                         <div className="sub-text">
                           담당 {asLast(item).engineerName} · {asLast(item).visitDate ? `방문 ${asLast(item).visitDate}${asLast(item).visitTime ? ` ${asLast(item).visitTime}` : ''}` : <span className="text-red">방문일 미정</span>}
+                          {asLast(item).mobileStatus && ` · 기사 보고: ${asLast(item).mobileStatus}`}
                         </div>
                       )}
                     </div>

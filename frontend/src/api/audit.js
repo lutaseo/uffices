@@ -74,6 +74,7 @@ const ACTIONS = {
   'contracts.bulkFix': '데이터 일괄 정리',
   'engineerApp.setAsVisit': 'AS 방문일 등록',
   'engineerApp.transferAs': 'AS 담당 기사 변경',
+  'engineerApp.reportAs': 'AS 기사 보고',
 };
 
 // 표별 대상 이름
