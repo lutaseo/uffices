@@ -21,6 +21,7 @@ import {
   ASSIGN_TYPES,
   BRANDS,
   currentCategories,
+  currentHasFeature,
   DEFAULT_SCHEDULE_SETTINGS,
   MAX_SCHEDULE_STEPS,
   OFF_LABEL,
@@ -41,6 +42,7 @@ import {
   timeValueOf,
 } from '../utils/contract.js';
 import { today } from '../utils/date.js';
+import { openPostcode } from '../utils/postcode.js';
 import { won } from '../utils/format.js';
 import ContractViewModal from '../components/ContractViewModal.jsx';
 import OnSiteSign from '../components/OnSiteSign.jsx';
@@ -468,6 +470,17 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
               <td className="label-col">현장<span className="star">*</span></td>
               <td className="input-col inline-fields">
                 <AptSearchInput value={form.aptName} onChange={(v) => set('aptName', v)} required />
+                {currentHasFeature('addressMap') && (
+                  // 아파트 목록에 없는 주택·빌라·상가: 우편번호(도로명 주소) 검색으로 현장 이름 채우기
+                  <button
+                    type="button"
+                    className="btn-postcode"
+                    title="아파트 목록에 없는 주택·빌라·상가는 주소로 검색"
+                    onClick={() => openPostcode(({ address }) => set('aptName', address)).catch((e) => alert(e.message))}
+                  >
+                    주소 검색
+                  </button>
+                )}
                 {/* 이름표와 칸을 한 묶음으로 (줄이 바뀌어도 '호 타입'처럼 붙어 보이지 않게) */}
                 <span className="field-pair">
                   <input className="input-text" name="dong" value={form.dong} onChange={onField} style={{ width: 70 }} /> 동

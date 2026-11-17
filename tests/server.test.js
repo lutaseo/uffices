@@ -1957,3 +1957,64 @@ test('바쁠 때 자동 다시 시도: 서버는 잠금 대기 초과를 BUSY(�
     setCurrentCompany(null);
   }
 });
+
+test('AS 담당 기사: 시공등록① 기사가 자동 담당, 다른 기사로 바꿀 수 있음, 사진 10장, 기사모바일 AS관리·방문일 등록', async () => {
+  const engs = await admin.ok('engineers', 'list');
+  const gong = engs.find((e) => e.loginId === 'gong');
+  const other = engs.find((e) => e.id !== gong.id);
+  const c = await admin.ok('contracts', 'create', { ...base, customerName: 'AS담당고객', customerPhone: '010-8282-9393', schedules: [{ date: '2026-12-21', time: '10:00', engineerId: gong.id }] });
+  // 사진 10장: 5장 + 이어서 5장, 11장째는 막힘
+  const img = (n) => 'data:image/jpeg;base64,' + Buffer.from(`as-photo-${n}`).toString('base64');
+  const five = (k) => Array.from({ length: 5 }, (_, i) => img(k + i));
+  assert.equal((await admin('contracts', 'setAs', [c.id], true, { request: 'x', photos: [...five(0), img(9)] })).status, 400, '한 번에 5장까지');
+  await admin.ok('contracts', 'setAs', [c.id], true, { date: '2026-12-22', request: '현관 줄눈 들뜸', photos: five(0) });
+  const r = await admin.ok('contracts', 'addAsPhotos', c.id, null, five(5));
+  assert.equal(r.photoCount, 10, '한 회차 10장');
+  assert.equal((await admin('contracts', 'addAsPhotos', c.id, null, [img(99)])).status, 400, '11장째는 막힘');
+  let got = await admin.ok('contracts', 'get', c.id);
+  assert.equal(got.asLogs.at(-1).engineerId, gong.id, '시공등록① 기사가 자동 담당');
+  assert.equal(got.asLogs.at(-1).engineerName, gong.name);
+  // 기사모바일: AS관리에 보이고 방문일 등록
+  const eng = client();
+  await eng.ok('auth', 'login', 'gong', 'gong1234');
+  const mine = (await eng.ok('engineerApp', 'myAs')).find((a) => a.contractId === c.id);
+  assert.ok(mine && !mine.visitDate && mine.photoCount === 10, '담당 기사의 AS관리에 방문일 미정으로');
+  assert.equal((await eng.ok('engineerApp', 'asPhotos', c.id, mine.asIndex)).length, 10, '기사가 AS 사진을 봄');
+  assert.equal((await eng('engineerApp', 'setAsVisit', c.id, mine.asIndex, { date: 'x' })).status, 400);
+  await eng.ok('engineerApp', 'setAsVisit', c.id, mine.asIndex, { date: '2026-12-24', time: '14:30' });
+  got = await admin.ok('contracts', 'get', c.id);
+  assert.deepEqual([got.asLogs.at(-1).visitDate, got.asLogs.at(-1).visitTime], ['2026-12-24', '14:30'], '사무실에 방문일 표시');
+  assert.equal(got.history.at(-1).action, 'AS 방문일 등록');
+  // 다른 기사에게 맡기기 (퇴사 등): 새 회차는 고른 기사, 원래 기사 목록에서는 빠짐
+  await admin.ok('contracts', 'setAs', [c.id], false);
+  await admin.ok('contracts', 'setAs', [c.id], true, { request: '재발', engineerId: other.id });
+  got = await admin.ok('contracts', 'get', c.id);
+  assert.equal(got.asLogs.at(-1).engineerId, other.id, '고른 기사가 담당');
+  assert.ok(!(await eng.ok('engineerApp', 'myAs')).some((a) => a.contractId === c.id), '완료·다른 기사 회차는 안 보임');
+  assert.equal((await eng('engineerApp', 'setAsVisit', c.id, got.asLogs.length - 1, { date: '2026-12-25' })).status, 403, '남의 AS 는 못 바꿈');
+  // 담당 없음
+  await admin.ok('contracts', 'setAs', [c.id], true, { request: '추가', engineerId: '' });
+  assert.equal((await admin.ok('contracts', 'get', c.id)).asLogs.at(-1).engineerId, undefined);
+});
+
+test('데이터 일괄 정리: 관리자만, 미리보기 건수 = 바뀐 건수, 시공완료(취소 제외) · 서명완료(번호까지, 미발송만)', async () => {
+  const mk = (name, extra) => admin.ok('contracts', 'create', { ...base, customerName: name, customerPhone: `010-3${String(name.length).padStart(3, '0')}-${String(Date.now() % 10000).padStart(4, '0')}`, ...extra });
+  const old1 = await mk('일괄옛1', { contractDate: '2020-01-02', schedules: [{ date: '2020-01-10' }] });
+  const old2 = await mk('일괄옛취소', { contractDate: '2020-01-03', status: '취소', cancelReason: '고객 변심' });
+  const newer = await mk('일괄새', { contractDate: '2020-01-04', schedules: [{ date: '2099-01-01' }] });
+  assert.equal((await manager('contracts', 'bulkFixPreview', { kind: 'done', until: '2020-12-31' })).status, 403, '실장 불가');
+  const p = await admin.ok('contracts', 'bulkFixPreview', { kind: 'done', until: '2020-12-31' });
+  const r = await admin.ok('contracts', 'bulkFix', { kind: 'done', until: '2020-12-31' });
+  assert.equal(r.count, p.count);
+  assert.equal((await admin.ok('contracts', 'get', old1.id)).status, '시공완료');
+  assert.notEqual((await admin.ok('contracts', 'get', old2.id)).status, '시공완료', '취소는 그대로');
+  assert.notEqual((await admin.ok('contracts', 'get', newer.id)).status, '시공완료', '시공일이 뒤면 그대로');
+  // 서명완료: 번호까지 + 미발송만
+  const no1 = (await admin.ok('contracts', 'get', old1.id)).no;
+  const s = await admin.ok('contracts', 'bulkFix', { kind: 'signed', untilNo: no1 });
+  assert.ok(s.count >= 1);
+  const g = await admin.ok('contracts', 'get', old1.id);
+  assert.equal(g.esign.status, '서명완료');
+  assert.equal(g.esign.paperMarked, true);
+  assert.equal((await admin.ok('contracts', 'get', newer.id)).esign.status, '미발송', '번호 뒤는 그대로');
+});

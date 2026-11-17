@@ -32,6 +32,9 @@ export const FEATURES = [
   { key: 'lineAmounts', label: '계약 상세에 패키지·추가시공품목 금액 따로 표시', on: true },
   { key: 'autoRetry', label: '서버가 바쁠 때 화면이 알아서 다시 시도', on: true },
   { key: 'installOthers', label: '내 정보에서 상담실장·기사모바일 앱도 설치 (설치 화면 열기·주소 복사)', on: true },
+  { key: 'addressMap', label: '현장 주소 검색(우편번호) · 지도 보기 버튼', on: true },
+  { key: 'asEngineer', label: 'AS 담당 기사 지정 · 기사모바일 AS관리(알림 · 방문일 등록)', on: true },
+  { key: 'bulkFix', label: '데이터 일괄 정리 (관리자: 지난 시공 일괄 시공완료 · 예전 계약 서명완료 표시)', on: true },
   { key: 'photoStorage', label: '사진 전용 저장소 (새 사진을 DB 대신 사진 저장소에)', on: true },
 ];
 export function hasFeature(company, key) {

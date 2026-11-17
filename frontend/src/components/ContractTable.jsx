@@ -164,6 +164,11 @@ function FullTable({ contracts, selectedIds, onToggle, onToggleAll, showAmount, 
                     <div className="as-request">
                       🔧 AS{item.asLogs?.length > 1 ? ` ${item.asLogs.length}회` : ''} {asLast(item).date} · {asLast(item).request}{asLast(item).photoCount > 0 && ` 📷${asLast(item).photoCount}`}
                       {asLast(item).doneAt && <b> (완료)</b>}
+                      {!asLast(item).doneAt && asLast(item).engineerName && (
+                        <div className="sub-text">
+                          담당 {asLast(item).engineerName} · {asLast(item).visitDate ? `방문 ${asLast(item).visitDate}${asLast(item).visitTime ? ` ${asLast(item).visitTime}` : ''}` : <span className="text-red">방문일 미정</span>}
+                        </div>
+                      )}
                     </div>
                   )}
                   {itemsSummary(item) && <div className="sub-text ellipsis">{itemsSummary(item)}</div>}
