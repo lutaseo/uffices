@@ -22,7 +22,7 @@ import { useEffect, useState } from 'react';
 const EVENT = 'uffice:navigate';
 
 // 업체 코드가 아닌 첫 주소 단어 (화면 이름)
-const PAGES = ['c', 'e', 'm', 't', 'consult', 'contracts', 'customers', 'schedule', 'progress', 'stats', 'admin', 'settings', 'me', 'engineer', 'sign', 'api', 'assets'];
+const PAGES = ['c', 'e', 'm', 't', 'consult', 'contracts', 'customers', 'schedule', 'calls', 'progress', 'stats', 'admin', 'settings', 'me', 'engineer', 'sign', 'api', 'assets'];
 
 function split(pathname) {
   const clean = pathname.replace(/\/+$/, '') || '/';

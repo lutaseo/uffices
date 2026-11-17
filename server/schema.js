@@ -20,7 +20,8 @@ DO $$
 DECLARE t text;
 BEGIN
   FOREACH t IN ARRAY ARRAY['companies','users','engineers','engineer_offs','teams','products',
-                           'apartments','customers','contracts','notifications','payment_receipts']
+                           'apartments','customers','contracts','notifications','payment_receipts',
+                           'call_logs']
   LOOP
     EXECUTE format('CREATE TABLE IF NOT EXISTS %I (
       id          bigint PRIMARY KEY,
@@ -63,7 +64,8 @@ DO $$
 DECLARE t text;
 BEGIN
   FOREACH t IN ARRAY ARRAY['companies','users','engineers','engineer_offs','teams','products',
-                           'apartments','customers','contracts','notifications','payment_receipts']
+                           'apartments','customers','contracts','notifications','payment_receipts',
+                           'call_logs']
   LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
   END LOOP;

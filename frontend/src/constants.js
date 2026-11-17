@@ -37,6 +37,8 @@ export const FEATURES = [
   { key: 'asReport', label: '기사모바일 AS 보고 (상태 · 메모, 시공완료면 AS 완료)', on: true },
   { key: 'companyFiles', label: '회사 자료 백업 (PDF · PPT 등 올려 두고 내려받기)', on: true },
   { key: 'photoStorage', label: '사진 전용 저장소 (새 사진을 DB 대신 사진 저장소에)', on: true },
+  { key: 'callLog', label: '상담내역 메뉴 (전화번호별 통화 메모 · 번호 검색)', on: true },
+  { key: 'scheduleLock', label: '시공일자·기사배정은 권한 있는 사람만 (권한 없으면 계약 등록에서 시공 칸 숨김)', on: true },
 ];
 export function hasFeature(company, key) {
   const f = FEATURES.find((x) => x.key === key);

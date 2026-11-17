@@ -63,6 +63,8 @@ const ACTIONS = {
   'products.remove': '상품 삭제',
   'apartments.save': '아파트 저장',
   'apartments.remove': '아파트 삭제',
+  'callLogs.save': '상담내역 저장',
+  'callLogs.remove': '상담내역 삭제',
   'apartments.importMany': '아파트 가져오기',
   'scheduleSettings.save': '일정관리설정 저장',
   'imports.engineers': '기사 가져오기',
@@ -92,6 +94,7 @@ const TABLES = {
   products: (r) => `상품 ${r.name || ''}`,
   apartments: (r) => `아파트 ${r.name || ''}`,
   companies: (r) => `업체 설정 ${r.name || ''}`,
+  callLogs: (r) => `상담내역 ${r.phone || ''}`.trim(),
   notifications: (r) => `알림톡 ${r.template || ''} → ${r.receiverName || ''}`,
   paymentReceipts: (r) => (r.kind === 'contractPaper' ? '실물 계약서 사진' : r.kind === 'asPhoto' ? 'AS 사진' : '입금 영수증 사진'),
 };
