@@ -85,6 +85,7 @@ export const SERVICE_NAMES = [
   'fairs',
   'imports',
   'customerApp',
+  'companyFiles',
   'callLogs',
 ];
 

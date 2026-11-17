@@ -5638,7 +5638,7 @@ button.paper-add { font: inherit; }
 .btn-map:hover { background: #dfeafd; }
 
 /* 기사모바일 AS: 빨간 알림 · AS관리 탭 · AS 카드 */
-.as-alert { display: flex; align-items: center; gap: 12px; margin: 8px 0 12px; padding: 12px 14px; background: #fff; border: 1px solid #f1d4d4; border-radius: 12px; box-shadow: 0 2px 8px rgba(214, 40, 40, 0.08); cursor: pointer; }
+.as-alert { display: flex; align-items: center; gap: 12px; margin: 16px 0 14px; padding: 12px 14px; background: #fff; border: 1px solid #f1d4d4; border-radius: 12px; box-shadow: 0 2px 8px rgba(214, 40, 40, 0.08); cursor: pointer; }
 .as-alert:hover { border-color: #e9b4b4; }
 .as-alert-badge { flex: none; width: 28px; height: 28px; border-radius: 50%; background: #e5484d; color: #fff; font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
 .as-alert-text { flex: 1; display: flex; flex-direction: column; gap: 2px; line-height: 1.35; }
@@ -5660,6 +5660,22 @@ button.paper-add { font: inherit; }
 .engineer-card.as-schedule-card { border-color: #f1c4c4; }
 .as-visit-form .as-mode { flex: 0 1 130px; font-weight: 700; }
 
+/* 설정 > 회사 자료 백업 */
+.company-files .files-upload { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; }
+.company-files .files-upload .input-text { flex: 1; min-width: 200px; }
+.company-files .files-pick { cursor: pointer; display: inline-flex; align-items: center; }
+.company-files .files-pick.disabled { opacity: 0.5; pointer-events: none; }
+.company-files .files-busy { background: #eef4ff; color: #1d4ed8; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 14px; }
+.company-files .files-search { display: flex; gap: 8px; align-items: center; margin: 4px 0 12px; }
+.company-files .files-search .input-text { flex: 1; }
+.company-files .files-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid #e5e7eb; }
+.company-files .files-list li { display: flex; align-items: center; gap: 10px; padding: 10px 4px; border-bottom: 1px solid #e5e7eb; }
+.company-files .files-icon { font-size: 24px; }
+.company-files .files-info { flex: 1; min-width: 0; }
+.company-files .files-name { word-break: break-all; }
+.company-files .files-down { text-decoration: none; white-space: nowrap; }
+.company-files .files-del { white-space: nowrap; }
+.company-files .files-empty { color: #6b7280; text-align: center; padding: 28px 0; }
 /* 상담내역: 전화번호 검색 → 통화내역 입력 → (줄) → 작성된 상담내역 */
 .call-search {
   display: flex;
@@ -5752,3 +5768,4 @@ button.paper-add { font: inherit; }
   font-size: 14px;
   color: #1f2937;
 }
+.engineer-view-tags { margin-bottom: 14px; } /* 기사모바일: 위 버튼 줄과 날짜(2026. 11) 사이 */

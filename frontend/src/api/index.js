@@ -37,4 +37,5 @@ export const {
   imports,
   customerApp,
   auditLogs,
+  companyFiles,
 } = impl;

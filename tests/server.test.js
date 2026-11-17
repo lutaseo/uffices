@@ -24,6 +24,7 @@ process.env.SESSION_SECRET ||= 'test-session-secret-0123456789abcdef-0123456789'
 process.env.INIT_SUPER_LOGIN = 'super';
 process.env.INIT_SUPER_PASSWORD = 'super-test-1234';
 process.env.INIT_DEMO_DATA = 'true';
+process.env.FILE_STORE_FAKE = '1'; // 회사 자료: 파일 저장소 대신 가짜 주소
 process.env.VB_VERIFY_FAST = '1'; // 빠른 불러오기: 매 요청마다 전체로 읽은 결과와 같은지 비교 (다르면 실패)
 
 const { handleRpc } = await import('../server/handler.js');
@@ -2030,6 +2031,39 @@ test('AS 담당 기사: 시공등록① 기사가 자동 담당, 다른 기사�
   // 담당 없음
   await admin.ok('contracts', 'setAs', [c.id], true, { request: '추가', engineerId: '' });
   assert.equal((await admin.ok('contracts', 'get', c.id)).asLogs.at(-1).engineerId, undefined);
+});
+
+test('회사 자료 백업: 관리자가 올리고 실장은 내려받기만, 기사·기능 꺼짐은 막힘, 지우기', async () => {
+  const added = await admin.ok('companyFiles', 'add', { name: '2026 가격표.pdf', size: 1234, type: 'application/pdf', memo: '가격표' });
+  assert.ok(added.uploadUrl.startsWith('fake://upload/files/'), '올릴 주소');
+  assert.ok(!(await admin.ok('companyFiles', 'list')).some((f) => f.id === added.id), '올리기 끝나기 전엔 목록에 없음');
+  await admin.ok('companyFiles', 'confirm', added.id);
+  const list = await admin.ok('companyFiles', 'list');
+  const f = list.find((x) => x.id === added.id);
+  assert.ok(f && f.name === '2026 가격표.pdf' && f.memo === '가격표' && f.url.startsWith('fake://download/'), '목록 + 내려받기 주소');
+  assert.equal(f.path, undefined, '저장소 경로는 안 보냄');
+  assert.equal((await admin('companyFiles', 'add', { name: 'big.pptx', size: 51 * 1024 * 1024 })).status, 400, '50MB 넘으면 막힘');
+  assert.equal((await admin.ok('auth', 'me')).company.files, undefined, '로그인 정보에는 자료 목록 안 실음');
+  // 실장: 보기만
+  const mgr = client();
+  await mgr.ok('auth', 'login', 'manager', 'manager1234', 'thegood');
+  assert.ok((await mgr.ok('companyFiles', 'list')).some((x) => x.id === added.id), '실장도 내려받기 가능');
+  assert.equal((await mgr('companyFiles', 'add', { name: 'x.pdf', size: 10 })).status, 403, '실장은 올리기 못함');
+  assert.equal((await mgr('companyFiles', 'remove', added.id)).status, 403, '실장은 지우기 못함');
+  // 기사: 못 봄
+  const eng = client();
+  await eng.ok('auth', 'login', 'gong', 'gong1234');
+  assert.equal((await eng('companyFiles', 'list')).status, 403, '기사는 못 봄');
+  // 기능 끄면 막힘
+  const sup = client();
+  await sup.ok('auth', 'login', 'super', 'super-test-1234');
+  const good = (await sup.ok('companies', 'list')).find((c) => c.code === 'thegood');
+  await sup.ok('companies', 'update', good.id, { features: { companyFiles: false } });
+  assert.equal((await admin('companyFiles', 'list')).status, 403, '기능 꺼지면 막힘');
+  await sup.ok('companies', 'update', good.id, { features: {} });
+  // 지우기
+  await admin.ok('companyFiles', 'remove', added.id);
+  assert.ok(!(await admin.ok('companyFiles', 'list')).some((x) => x.id === added.id), '지우면 목록에서 빠짐');
 });
 
 test('상담내역: 권한 있는 사람만 작성·조회, 전화번호 가운데·뒷자리와 메모 글자로 검색, 다른 업체와 분리', async () => {
