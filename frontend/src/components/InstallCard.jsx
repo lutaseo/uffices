@@ -90,6 +90,15 @@ export function InstallScreen({ code, app }) {
           <>
             <p>이 브라우저에서는 아래 순서로 설치해 주세요. (설치 버튼이 잠시 뒤에 나타날 수도 있습니다)</p>
             <HowTo device={device} />
+            {device !== 'ios' && (
+              // 크롬 규칙: 같은 주소(veritybase.vercel.app)의 VerityBase 앱이 이미 설치돼 있으면 다른 화면 앱의 설치 버튼을 막음 (시험으로 확인)
+              <p className="install-note">
+                <b>설치 아이콘도 안 보이나요?</b> 이 기기에 VerityBase의 <b>다른 앱(예: 일반 화면)이 이미 설치</b>되어 있으면 크롬이 설치 버튼을 막습니다.{' '}
+                {device === 'pc'
+                  ? <>그럴 땐 크롬 오른쪽 위 메뉴(⋮) → <b>전송, 저장, 공유</b> → <b>페이지를 앱으로 설치</b>(또는 바로가기 만들기 → '창으로 열기' 체크)를 누르세요. 이름은 '{LABEL[app]}'처럼 바꿔 두면 구분하기 쉽습니다.</>
+                  : <>그럴 땐 메뉴 → <b>홈 화면에 추가</b>에서 <b>바로가기 만들기</b>를 고르세요.</>}
+              </p>
+            )}
           </>
         )}
         <a className="install-screen-go" href={appUrl(code, app)}>설치하지 않고 바로 열기 →</a>
