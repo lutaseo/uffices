@@ -132,7 +132,6 @@ const READ_ONLY = new Set([
   'engineerApp.paperPhotos',
   'engineerApp.myAs',
   'companyFiles.list',
-  'contracts.undoBulkDonePreview',
   'engineerApp.colleagues',
   'engineerApp.asPhotos',
   'contracts.receipt',

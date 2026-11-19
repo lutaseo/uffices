@@ -343,24 +343,6 @@ const receiptChangesOf = (payment) => ({
   image: payment.receiptImage,
 });
 
-// 일괄 시공완료 되돌리기 대상 → [{ c, back(되돌릴 시공상태) }]
-function undoBulkDoneTargets(db, user) {
-  const out = [];
-  db.contracts.forEach((c) => {
-    if (c.companyId !== user.companyId || c.deletedAt || c.status !== '시공완료') return;
-    if ((c.schedules || []).some((s) => s.date)) return; // 시공일자가 있으면 그대로 (정상 대상)
-    const h = c.history || [];
-    const i = h.map((x) => x.action).lastIndexOf('일괄 시공완료');
-    if (i < 0) return;
-    const changedLater = h.slice(i + 1).some((x) => (x.changes || []).some((ch) => ch.label === '시공상태'));
-    if (changedLater) return; // 그 뒤에 사람이 시공상태를 바꿨으면 손대지 않음
-    const from = (h[i].changes || []).find((ch) => ch.label === '시공상태')?.from;
-    const back = WORK_STATUS.includes(from) && from !== '시공완료' ? from : '미정';
-    out.push({ c, back });
-  });
-  return out;
-}
-
 // 저장된 사진 수로 입금의 사진 표시를 맞춤 (계약 수정 시 화면 값 대신 실제 값 사용)
 function syncReceiptCounts(db, c) {
   (c.payments || []).forEach((p) => {
@@ -784,34 +766,6 @@ export const contracts = {
       }
     });
     saveDb(db);
-  },
-
-  // ---------------- 일괄 시공완료 되돌리기 (한 번만 쓰는 도구, 업체 관리자, 기능 undoBulkDone) ----------------
-  //   예전 '데이터 일괄 정리'가 시공일자가 없는(미정) 계약까지 계약일로 보고 시공완료로 바꾼 것을 되돌림
-  //   대상: 변경이력에 '일괄 시공완료'가 있고, 시공등록 날짜가 하나도 없고, 그 뒤로 시공상태를 바꾼 적이 없고, 지금도 시공완료인 계약
-  //   → 그 기록에 남은 바뀌기 전 시공상태로 (비어 있으면 '미정')
-  async undoBulkDonePreview() {
-    const { db, user } = await authorize('contract.view');
-    if (user.role !== ROLES.ADMIN) throw new ApiError('업체 관리자만 쓸 수 있습니다.', 'FORBIDDEN');
-    requireFeature(db, user, 'undoBulkDone');
-    const list = undoBulkDoneTargets(db, user);
-    return {
-      count: list.length,
-      sample: list.slice(0, 8).map(({ c, back }) => ({ no: numberOf(db, c), customerName: c.customerName, category: c.category, contractDate: c.contractDate || '', back })),
-    };
-  },
-
-  async undoBulkDone() {
-    const { db, user } = await authorize('contract.edit');
-    if (user.role !== ROLES.ADMIN) throw new ApiError('업체 관리자만 쓸 수 있습니다.', 'FORBIDDEN');
-    requireFeature(db, user, 'undoBulkDone');
-    const list = undoBulkDoneTargets(db, user);
-    list.forEach(({ c, back }) => {
-      addHistory(c, user, '일괄 시공완료 되돌림 (시공일자 미정)', [{ label: '시공상태', from: c.status, to: back }]);
-      c.status = back;
-    });
-    if (list.length) saveDb(db);
-    return { count: list.length };
   },
 
   // AS 사진 이어서 올리기 (한 회차 최대 AS_PHOTOS_MAX 장 — 접수 때 5장 넘는 사진은 이걸로 나눠 보냄)

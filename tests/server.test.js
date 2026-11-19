@@ -2139,35 +2139,3 @@ test('시공일자·기사배정: schedule.edit 권한(관리자)만 — 권한 
   const c2 = await leader.ok('contracts', 'create', { ...base, customerName: '팀장고객', schedules: [step] });
   assert.equal(c2.schedules[0].date, '2026-12-01', '권한을 받은 팀장은 시공일자 등록 가능');
 });
-
-test('일괄 시공완료 되돌리기: 시공일자 없는 계약만 원래 상태로, 일자 있는 계약·나중에 바꾼 계약은 그대로', async () => {
-  const mk = (name, phone, schedules) => admin.ok('contracts', 'create', { ...base, customerName: name, customerPhone: phone, schedules });
-  const a = await mk('미정고객', '010-6161-0001', []);
-  const b = await mk('일자고객', '010-6161-0002', [{ date: '2026-10-05', time: '10:00' }]);
-  const c = await mk('바꾼고객', '010-6161-0003', []);
-  const pgc = new pg.Client({ connectionString: url });
-  await pgc.connect();
-  const bulk = { at: '2026-11-17T05:00:00.000Z', byName: '관리자', action: '일괄 시공완료', changes: [{ label: '시공상태', from: '미정', to: '시공완료' }] };
-  const later = { at: '2026-11-18T05:00:00.000Z', byName: '관리자', action: '계약 수정', changes: [{ label: '시공상태', from: '미정', to: '시공완료' }] };
-  for (const [id, extra] of [[a.id, [bulk]], [b.id, [bulk]], [c.id, [bulk, later]]]) {
-    await pgc.query(`UPDATE contracts SET data = jsonb_set(jsonb_set(data, '{status}', '"시공완료"'), '{history}', COALESCE(data->'history', '[]'::jsonb) || $2::jsonb) WHERE id = $1`, [id, JSON.stringify(extra)]);
-  }
-  await pgc.end();
-  assert.equal((await manager('contracts', 'undoBulkDonePreview')).status, 403, '실장은 못 씀');
-  const p = await admin.ok('contracts', 'undoBulkDonePreview');
-  const ids = p.sample.map((x) => x.customerName);
-  assert.ok(ids.includes('미정고객') && !ids.includes('일자고객') && !ids.includes('바꾼고객'), '시공일자 없고 나중에 안 바꾼 계약만');
-  const r = await admin.ok('contracts', 'undoBulkDone');
-  assert.equal(r.count, p.count);
-  assert.equal((await admin.ok('contracts', 'get', a.id)).status, '미정', '미정으로 되돌림');
-  assert.equal((await admin.ok('contracts', 'get', b.id)).status, '시공완료', '시공일자 있는 계약은 그대로');
-  assert.equal((await admin.ok('contracts', 'get', c.id)).status, '시공완료', '나중에 바꾼 계약은 그대로');
-  assert.equal((await admin.ok('contracts', 'undoBulkDonePreview')).count, 0, '두 번째는 대상 없음');
-  // 기능 끄면 막힘
-  const sup = client();
-  await sup.ok('auth', 'login', 'super', 'super-test-1234');
-  const good = (await sup.ok('companies', 'list')).find((x) => x.code === 'thegood');
-  await sup.ok('companies', 'update', good.id, { features: { undoBulkDone: false } });
-  assert.equal((await admin('contracts', 'undoBulkDone')).status, 403, '기능 꺼지면 막힘');
-  await sup.ok('companies', 'update', good.id, { features: {} });
-});
