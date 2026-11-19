@@ -667,7 +667,7 @@ export const engineerApp = {
             ...(list ? { items: list } : {}),
             done: list ? list.filter((x) => x.done).map((x) => x.text) : texts(done),
             undone: list ? list.filter((x) => !x.done).map((x) => x.text) : texts(undone),
-            material: str(material, 200),
+            material: str(material, 500),
             color: str(color, 30),
             helpers: str(helpers, 200),
             note: str(note, 1000),
