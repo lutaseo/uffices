@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import * as XLSX from 'xlsx';
-import { apartments, imports } from '../../api/index.js';
+import { apartments, contracts as contractApi, imports } from '../../api/index.js';
+import { ROLES } from '../../auth/permissions.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { categoriesFromName, legacyKeys, mapLegacyRow, parseLegacyHtml } from '../../utils/legacyImport.js';
 import { won } from '../../utils/format.js';
-import { currentCategories } from '../../constants.js';
+import { currentCategories, currentHasFeature } from '../../constants.js';
 import { parseProductText } from '../../utils/productImport.js';
 import { normalizeSido, parseApartmentText } from '../../utils/apartmentImport.js';
 
@@ -55,6 +56,7 @@ export default function ImportPage() {
           <li>기사 비밀번호는 가져오지 않습니다. 기사모바일을 쓰려면 [기사관리]에서 기사별 비밀번호를 정해 주세요.</li>
         </ul>
       </div>
+      <UndoBulkDone />
       <EngineerImport />
       <ContractImport />
       <UserImport />
@@ -602,4 +604,64 @@ function ApartmentImport() {
   );
 }
 
-
+// 일괄 시공완료 되돌리기 (한 번만 쓰는 도구): 시공일자가 없는(미정) 계약이 계약일 기준으로 시공완료가 된 것을 원래 상태로
+function UndoBulkDone() {
+  const { user, handleError } = useAuth();
+  const [preview, setPreview] = useState(null); // { count, sample }
+  const [busy, setBusy] = useState(false);
+  if (user.role !== ROLES.ADMIN || !currentHasFeature('undoBulkDone')) return null;
+  const look = async () => {
+    setBusy(true);
+    try {
+      setPreview(await contractApi.undoBulkDonePreview());
+    } catch (e) {
+      handleError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const apply = async () => {
+    if (!window.confirm(`${preview.count}건을 일괄 시공완료 전 상태로 되돌립니다. 진행할까요?`)) return;
+    setBusy(true);
+    try {
+      const r = await contractApi.undoBulkDone();
+      alert(`${r.count}건을 되돌렸습니다.`);
+      setPreview(null);
+    } catch (e) {
+      handleError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="import-box">
+      <h3>일괄 시공완료 되돌리기 (시공일자 미정 계약)</h3>
+      <p className="sub-text">
+        예전 '데이터 일괄 정리'로 <b>시공일자가 없는(미정) 계약</b>까지 시공완료가 된 것을 원래 상태(대부분 미정)로 되돌립니다. 시공일자가 있는 계약과, 그 뒤에 사람이 시공상태를 바꾼 계약은 그대로 둡니다.
+      </p>
+      <button type="button" className="btn-dark-sm" disabled={busy} onClick={look}>미리보기</button>
+      {preview && (
+        <div className="import-result">
+          <p>
+            대상 <b>{preview.count}건</b>
+          </p>
+          {preview.sample.length > 0 && (
+            <ul className="sub-text">
+              {preview.sample.map((x) => (
+                <li key={x.no}>
+                  No.{x.no} {x.customerName} · {x.category} · 계약일 {x.contractDate} · 시공완료 → {x.back}
+                </li>
+              ))}
+              {preview.count > preview.sample.length && <li>… 외 {preview.count - preview.sample.length}건</li>}
+            </ul>
+          )}
+          {preview.count > 0 && (
+            <button type="button" className="btn-dark-lg sm" disabled={busy} onClick={apply}>
+              {busy ? '되돌리는 중...' : `${preview.count}건 되돌리기`}
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
