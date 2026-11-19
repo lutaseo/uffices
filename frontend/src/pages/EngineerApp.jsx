@@ -566,7 +566,7 @@ function ReportForm({ contractId, step, onReported }) {
           </datalist>
           <textarea
             className="input-text full scope-note"
-            rows={7}
+            rows={13}
             placeholder="직접 적기 (예: 고객 요청으로 현관 추가 시공, 샤워벽은 다음 방문)"
             value={note}
             onChange={(e) => setNote(e.target.value)}

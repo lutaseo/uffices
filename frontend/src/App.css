@@ -5223,7 +5223,7 @@ a.btn-quick.blue:hover {
   font-family: inherit;
   font-size: 15px;
   resize: vertical;
-  min-height: 160px; /* 7줄 정도 */
+  min-height: 290px; /* 13줄 정도 */
   line-height: 1.45;
 }
 .work-record.summary {
