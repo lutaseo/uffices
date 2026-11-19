@@ -30,6 +30,18 @@ const withShort = (category, name) => (HAS_PREFIX.test(name || '') ? name : `${s
 
 const FAIR_ONLY = '__fair'; // 첫 칸 '박람회' (박람회 일정만 보기)
 
+// 고른 거르기(구분·기사·상태)는 이 탭에서 기억 — 배정하러 계약 화면에 갔다 와도 '전체'로 풀리지 않게
+const FILTER_KEY = 'vb.scheduleFilter';
+const EMPTY_FILTER = { category: '', engineerId: '', status: '', view: '' };
+function savedFilter() {
+  try {
+    const v = JSON.parse(window.sessionStorage.getItem(FILTER_KEY) || 'null');
+    return v && typeof v === 'object' ? { ...EMPTY_FILTER, ...v } : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function ScheduleManagement() {
   const { company, can, handleError } = useAuth();
   const showAmount = can('contract.amount');
@@ -47,7 +59,14 @@ export default function ScheduleManagement() {
   const [fairEdit, setFairEdit] = useState(null); // { fair } 또는 { date } — 박람회 팝업
   const [engineers, setEngineers] = useState([]);
   const [crewTeams, setCrewTeams] = useState([]);
-  const [filter, setFilter] = useState({ category: '', engineerId: '', status: '', view: '' });
+  const [filter, setFilter] = useState(() => ({ ...EMPTY_FILTER, ...(saved?.filter || savedFilter() || {}) }));
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(FILTER_KEY, JSON.stringify(filter));
+    } catch {
+      // 저장이 막힌 브라우저(사생활 보호 모드 등)는 기억만 못 함
+    }
+  }, [filter]);
 
   const [editItem, setEditItem] = useState(null);
   const [notifyItem, setNotifyItem] = useState(null);
@@ -157,7 +176,7 @@ export default function ScheduleManagement() {
   const canEditContract = can('contract.edit');
   const editSchedule = (row) => {
     if (canEditContract) {
-      window.history.replaceState({ ...window.history.state, schedule: { year, month, selectedDate } }, '');
+      window.history.replaceState({ ...window.history.state, schedule: { year, month, selectedDate, filter } }, '');
       navigateForward(`/contracts/${row.contract.id}/edit`);
       return;
     }

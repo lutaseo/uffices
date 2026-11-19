@@ -465,6 +465,8 @@ function ReportForm({ contractId, step, onReported }) {
   const [color, setColor] = useState(step.workRecord?.color || '');
   const [helpers, setHelpers] = useState(step.workRecord?.helpers || '');
   const [note, setNote] = useState(step.workRecord?.note || '');
+  // 항목마다 자재·작업자 따로 적기 (기본은 접어 두고 공통 자재 한 칸만) — 예전에 항목별로 적은 기록이 있으면 펼쳐서 시작
+  const [perItem, setPerItem] = useState(() => (step.workRecord?.items || []).some((x) => x.material || x.color || x.worker));
   useEffect(() => {
     setD({ mobileStatus: step.mobileStatus || '', memo: step.mobileMemo || '' });
     setRows(initialRows());
@@ -509,6 +511,26 @@ function ReportForm({ contractId, step, onReported }) {
         <div className="scope-check">
           <div className="scope-check-title">🧾 시공 기록</div>
           <input className="input-text full" placeholder="함께한 팀장·작업자 (예: 김민수 팀장, 이지훈)" value={helpers} onChange={(e) => setHelpers(e.target.value)} maxLength={200} />
+          <div className="scope-common">
+            <span className="scope-common-label">{scope.length ? '공통 자재 (모든 항목에 적용)' : '사용 자재'}</span>
+            <textarea
+              className="input-text full scope-common-mat"
+              rows={2}
+              placeholder="자재 (예: 크린파파 위너스, 케라폭시) — 아래 목록에서 골라도 됩니다"
+              value={material}
+              onChange={(e) => setMaterial(e.target.value)}
+              maxLength={500}
+            />
+            <div className="scope-common-row">
+              <select className="input-text" value="" onChange={(e) => e.target.value && setMaterial(material ? `${material}, ${e.target.value}` : e.target.value)}>
+                <option value="">자재 목록에서 고르기</option>
+                {materials.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+              <input className="input-text num" placeholder="번호(색상)" value={color} onChange={(e) => setColor(e.target.value)} maxLength={30} />
+            </div>
+          </div>
           {scope.map((g) => (
             <div key={g.group} className="scope-group">
               <div className="scope-group-name">{g.group}</div>
@@ -520,9 +542,9 @@ function ReportForm({ contractId, step, onReported }) {
                     <label className="scope-item">
                       <input type="checkbox" checked={r.done} onChange={(e) => setRow(k, { done: e.target.checked })} /> {p}
                     </label>
-                    {r.done && (
+                    {perItem && r.done && (
                       <div className="scope-row-fields">
-                        <input className="input-text mat" list={listId} placeholder="자재 (눌러서 고르기)" value={r.material} onChange={(e) => setRow(k, { material: e.target.value })} maxLength={100} />
+                        <input className="input-text mat" list={listId} placeholder="자재 (비우면 공통 자재)" value={r.material} onChange={(e) => setRow(k, { material: e.target.value })} maxLength={100} />
                         <input className="input-text num" placeholder="번호" value={r.color} onChange={(e) => setRow(k, { color: e.target.value })} maxLength={30} />
                         <input className="input-text worker" placeholder="작업자(팀장)" value={r.worker} onChange={(e) => setRow(k, { worker: e.target.value })} maxLength={50} />
                       </div>
@@ -532,13 +554,11 @@ function ReportForm({ contractId, step, onReported }) {
               })}
             </div>
           ))}
-          <div className="scope-common">
-            <span className="sub-text">{scope.length ? '공통 자재 (항목에 안 적으면 이것으로)' : '사용 자재'}</span>
-            <div className="scope-row-fields">
-              <input className="input-text mat" list={listId} placeholder="자재 (눌러서 고르기)" value={material} onChange={(e) => setMaterial(e.target.value)} maxLength={200} />
-              <input className="input-text num" placeholder="번호" value={color} onChange={(e) => setColor(e.target.value)} maxLength={30} />
-            </div>
-          </div>
+          {scope.length > 0 && (
+            <button type="button" className="scope-peritem-toggle" onClick={() => setPerItem(!perItem)}>
+              {perItem ? '− 항목별 입력 접기' : '＋ 항목마다 자재 · 작업자 따로 적기'}
+            </button>
+          )}
           <datalist id={listId}>
             {materials.map((m) => (
               <option key={m} value={m} />
