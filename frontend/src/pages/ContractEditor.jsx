@@ -53,6 +53,11 @@ const CIRCLED = ['①', '②', '③'];
 // 새 계약의 입금 줄 (계약 등록 때 입금은 필수 — 처음부터 한 줄 있음, 영수증 사진은 선택)
 const firstPayment = () => ({ date: today(), kind: '계약금', method: PAYMENT_METHODS[0], amount: '', memo: '' });
 const hasPaid = (payments) => (payments || []).some((p) => Number(p.amount) > 0);
+// 실계약금 (시공총액 − 할인 − 상품권, 상품내역이 있으면 그 합계) — 0원 이하면 입금 없이 저장 가능 (정회원 무상 시공 등)
+const actualOf = (w) => {
+  const lineTotal = (w.lineItems || []).reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.unitPrice) || 0), 0);
+  return calcAmounts({ ...w, totalAmount: (w.lineItems || []).length ? lineTotal : w.totalAmount }).actual;
+};
 
 const emptySchedule = () => ({ date: '', time: '', ampm: '', assignType: ASSIGN_TYPES.ENGINEER, engineerId: '', teamId: '', memo: '' });
 
@@ -242,12 +247,13 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
       return;
     }
     // 새 계약은 입금(계약금) 필수 — 본 시공과 [+ 시공 추가]로 늘린 시공 모두
+    //   단, 실계약금이 0원인 시공(정회원 혜택 무상 시공 등)은 입금 없이 저장
     if (!isEdit && showAmount) {
-      if (!hasPaid(form.payments)) {
+      if (amounts.actual > 0 && !hasPaid(form.payments)) {
         alert(`입금 내역을 입력해 주세요. (${form.category} 계약금 등 입금액)\n영수증 사진은 없어도 됩니다.`);
         return;
       }
-      const k = extras.findIndex((w) => !hasPaid(w.payments));
+      const k = extras.findIndex((w) => actualOf(w) > 0 && !hasPaid(w.payments));
       if (k >= 0) {
         alert(`추가 시공 ${k + 1} (${extras[k].category})의 입금 내역을 입력해 주세요.\n영수증 사진은 없어도 됩니다.`);
         return;
