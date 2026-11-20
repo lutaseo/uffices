@@ -2139,3 +2139,10 @@ test('시공일자·기사배정: schedule.edit 권한(관리자)만 — 권한 
   const c2 = await leader.ok('contracts', 'create', { ...base, customerName: '팀장고객', schedules: [step] });
   assert.equal(c2.schedules[0].date, '2026-12-01', '권한을 받은 팀장은 시공일자 등록 가능');
 });
+
+test('무상 시공(실계약금 0원): 입금 0원 줄만 있어도 계약 저장됨 (0원 입금 줄은 저장 안 함)', async () => {
+  const c = await admin.ok('contracts', 'create', { ...base, customerName: '정회원고객', customerPhone: '010-7171-0001', totalAmount: 0, payments: [{ kind: '계약금', method: '현금', amount: 0 }] });
+  const got = await admin.ok('contracts', 'get', c.id);
+  assert.equal(got.totalAmount, 0);
+  assert.equal(got.payments.length, 0, '0원 입금 줄은 저장하지 않음');
+});
