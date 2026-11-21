@@ -1107,6 +1107,7 @@ export const esign = {
     const views = list.map((c) => {
       const view = clone(c);
       view.no = numberOf(db, c);
+      view.ownerName = db.users.find((u) => u.id === c.ownerId)?.name || ''; // 계약서의 '상담자' (계약을 작성한 실장)
       if (view.esign.status === ESIGN_STATUS.SIGNED) {
         if (signature) view.esign.signature = signature; // 서명 완료 후에는 고객 본인 서명 표시
       } else delete view.esign.signature;
