@@ -109,7 +109,12 @@ export default function ContractDocument({ contract, contracts, company, showAmo
       <ContractTerms terms={terms} />
 
       <div className="doc-sign">
-        <div>
+        <div className="doc-sign-names">
+          {first.ownerName && (
+            <div>
+              상담자: <strong>{first.ownerName}</strong>
+            </div>
+          )}
           계약자: <strong>{esign.signerName || first.customerName}</strong>
           {esign.signedAt && <span className="sub-text"> (서명일시 {new Date(esign.signedAt).toLocaleString('ko-KR')})</span>}
         </div>

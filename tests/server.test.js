@@ -2146,3 +2146,12 @@ test('무상 시공(실계약금 0원): 입금 0원 줄만 있어도 계약 저�
   assert.equal(got.totalAmount, 0);
   assert.equal(got.payments.length, 0, '0원 입금 줄은 저장하지 않음');
 });
+
+test('계약서 상담자: 고객 서명 페이지에도 계약을 작성한 실장 이름', async () => {
+  const me = await admin.ok('auth', 'me');
+  const c = await admin.ok('contracts', 'create', { ...base, customerName: '상담자고객', customerPhone: '010-7272-0001' });
+  const tk = (await admin.ok('contracts', 'requestSign', c.id)).url.split('/sign/')[1];
+  const page = await client().ok('esign', 'getByToken', tk);
+  assert.equal(page.contract.ownerName, me.user.name, '서명 페이지 계약서에 상담자 이름');
+  assert.equal((await admin.ok('contracts', 'get', c.id)).ownerName, me.user.name, '사무실 계약서에도');
+});
