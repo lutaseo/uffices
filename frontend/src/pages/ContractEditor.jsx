@@ -24,6 +24,13 @@ import {
   currentHasFeature,
   DEFAULT_SCHEDULE_SETTINGS,
   MAX_SCHEDULE_STEPS,
+  MOLD_PRICE,
+  MOLD_ROOMS,
+  PAINT_PLACES,
+  PAINT_STYLE_CATEGORIES,
+  REVIEW_PAYBACK,
+  isMoldLine,
+  moldLineName,
   OFF_LABEL,
   PAYMENT_KINDS,
   PAYMENT_METHODS,
@@ -53,6 +60,9 @@ const CIRCLED = ['①', '②', '③'];
 // 새 계약의 입금 줄 (계약 등록 때 입금은 필수 — 처음부터 한 줄 있음, 영수증 사진은 선택)
 const firstPayment = () => ({ date: today(), kind: '계약금', method: PAYMENT_METHODS[0], amount: '', memo: '' });
 const hasPaid = (payments) => (payments || []).some((p) => Number(p.amount) > 0);
+// 신화탄성 탄성·페인트 계약서 칸 (기능 paintContract 가 켜진 업체의 탄성·페인트 시공)
+const paintOn = (category) => PAINT_STYLE_CATEGORIES.includes(category) && currentHasFeature('paintContract');
+
 // 실계약금 (시공총액 − 할인 − 상품권, 상품내역이 있으면 그 합계) — 0원 이하면 입금 없이 저장 가능 (정회원 무상 시공 등)
 const actualOf = (w) => {
   const lineTotal = (w.lineItems || []).reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.unitPrice) || 0), 0);
@@ -599,9 +609,40 @@ export default function ContractEditor({ contractId, prefillFrom, prefillCategor
                   lines={form.lineItems}
                   onLines={(lines) => set('lineItems', lines)}
                   showPrice={showAmount}
+                  paint={paintOn(form.category)}
                 />
               </td>
             </tr>
+            {paintOn(form.category) && (
+              <tr>
+                <td className="label-col">곰팡이방지 · AS</td>
+                <td className="input-col">
+                  <div className="inline-fields">
+                    <span>곰팡이방지 살균시공</span>
+                    {MOLD_ROOMS.map((room) => {
+                      const on = form.lineItems.some((l) => l.name === moldLineName(room));
+                      const toggle = () =>
+                        set('lineItems', on ? form.lineItems.filter((l) => l.name !== moldLineName(room)) : [...form.lineItems, { productId: null, name: moldLineName(room), detail: '', qty: 1, unitPrice: MOLD_PRICE }]);
+                      return (
+                        <label key={room} className="radio-item">
+                          <input type="checkbox" checked={on} onChange={toggle} /> {room}
+                          {showAmount && ` ${won(MOLD_PRICE / 10000)}만원`}
+                        </label>
+                      );
+                    })}
+                    <span className="sub-text">(시공선택 목록에 함께 들어갑니다)</span>
+                  </div>
+                  <div className="inline-fields" style={{ marginTop: 6 }}>
+                    <label className="radio-item">
+                      <input type="checkbox" checked={!!form.asCoverage} onChange={(e) => set('asCoverage', e.target.checked)} /> AS 보장범위: 곰팡이, 들뜸 AS보장
+                    </label>
+                    <label className="radio-item">
+                      <input type="checkbox" checked={!!form.reviewPayback} onChange={(e) => set('reviewPayback', e.target.checked)} /> 시공후기 페이백 (후기이벤트 참여 {won(REVIEW_PAYBACK / 10000)}만원)
+                    </label>
+                  </div>
+                </td>
+              </tr>
+            )}
             <tr>
               <td className="label-col">추가 시공내용</td>
               <td className="input-col">
@@ -877,6 +918,7 @@ function ExtraWork({ no, work, products, showAmount, stepCtx, onChange, onRemove
                 lines={work.lineItems}
                 onLines={(lines) => onChange({ lineItems: lines })}
                 showPrice={showAmount}
+                paint={paintOn(work.category)}
               />
             </td>
           </tr>
@@ -1093,7 +1135,7 @@ const ADDON = '추가시공품목';
 // 상세품목 칸 높이: 줄바꿈과 글자 수에 맞춰 (최대 6줄, 넘으면 스크롤)
 const detailRows = (text) => Math.min(6, Math.max(1, String(text || '').split('\n').reduce((n, x) => n + Math.max(1, Math.ceil(x.length / 26)), 0)));
 const kindOfProduct = (p) => (p && p.kind && p.kind !== '패키지' ? ADDON : '패키지');
-function ProductLines({ products, category, all, onAll, lines, onLines, showPrice = true }) {
+function ProductLines({ products, category, all, onAll, lines, onLines, showPrice = true, paint = false }) {
   // 이름 가나다순, 숫자는 크기대로 (메디알레1 → 2 → … → 10), 이름이 같으면 등록 번호순
   const byName = (a, b) => String(a.name || '').trim().localeCompare(String(b.name || '').trim(), 'ko', { numeric: true }) || a.id - b.id;
   // 줄의 종류: 상품관리의 그 상품 구분이 기준 (상품 번호로, 없으면 같은 이름으로 찾음 — 예전 프로그램에서 가져온 계약은 이름만 있음)
@@ -1112,7 +1154,12 @@ function ProductLines({ products, category, all, onAll, lines, onLines, showPric
     const p = products.find((x) => x.id === Number(id));
     if (!p) return;
     const detail = [p.detail, p.freeDetail && `[무료시공] ${p.freeDetail}`].filter(Boolean).join('\n');
-    onLines([...lines, { productId: p.id, kind, name: p.name, detail, qty: 1, unitPrice: p.price }]);
+    onLines([...lines, { productId: p.id, kind, name: p.name, detail, qty: 1, unitPrice: p.price, ...(paint && p.warranty ? { warranty: p.warranty } : {}) }]);
+  };
+  // 신화탄성 양식: 줄마다 시공장소 체크
+  const togglePlace = (i, place) => {
+    const cur = lines[i].places || [];
+    setLine(i, { places: cur.includes(place) ? cur.filter((x) => x !== place) : [...cur, place] });
   };
   const label = (g, p) => `${all ? `[${p.category}] ` : ''}${p.name}${showPrice ? ` — ${won(p.price)}원` : ''}`;
   return (
@@ -1144,7 +1191,7 @@ function ProductLines({ products, category, all, onAll, lines, onLines, showPric
                 <thead>
                   <tr>
                     <th>상품명</th>
-                    <th>상세품목</th>
+                    <th>{paint ? '시공장소 · 품질보증 · 구역' : '상세품목'}</th>
                     {showPrice && <th>금액</th>}
                     <th />
                   </tr>
@@ -1155,8 +1202,27 @@ function ProductLines({ products, category, all, onAll, lines, onLines, showPric
                       <td data-label="상품명">
                         <input className={`input-text full ${!String(l.name || '').trim() ? 'input-missing' : ''}`} value={l.name} onChange={(e) => setLine(i, { name: e.target.value })} placeholder="상품명 (필수)" />
                       </td>
-                      <td data-label="상세품목">
-                        <textarea className="input-text full line-detail" rows={detailRows(l.detail)} value={l.detail} onChange={(e) => setLine(i, { detail: e.target.value })} />
+                      <td data-label={paint ? '시공장소 · 품질보증 · 구역' : '상세품목'}>
+                        {paint && isMoldLine(l) ? (
+                          <span className="sub-text">아래 '곰팡이방지 · AS' 체크로 관리</span>
+                        ) : paint ? (
+                          <div className="paint-line">
+                            <div className="paint-places">
+                              {PAINT_PLACES.map((pl) => (
+                                <label key={pl} className="radio-item">
+                                  <input type="checkbox" checked={(l.places || []).includes(pl)} onChange={() => togglePlace(i, pl)} /> {pl}
+                                </label>
+                              ))}
+                            </div>
+                            <div className="inline-fields">
+                              <input className="input-text li-warranty" value={l.warranty || ''} onChange={(e) => setLine(i, { warranty: e.target.value })} placeholder="A/S 기간 (10년)" title="품질보증 A/S 기간 (예: 10년)" />
+                              <input className="input-text li-zone" value={l.zone || ''} onChange={(e) => setLine(i, { zone: e.target.value })} placeholder="비고(구역)" />
+                            </div>
+                            {l.detail && <div className="sub-text pre-wrap paint-line-detail">{l.detail}</div>}
+                          </div>
+                        ) : (
+                          <textarea className="input-text full line-detail" rows={detailRows(l.detail)} value={l.detail} onChange={(e) => setLine(i, { detail: e.target.value })} />
+                        )}
                       </td>
                       {/* 수량 칸은 없앰 (한 줄 = 1개). 예전에 수량을 2 이상으로 넣은 줄만 수량을 함께 보여 줌 */}
                       {showPrice && (

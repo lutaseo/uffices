@@ -2155,3 +2155,45 @@ test('계약서 상담자: 고객 서명 페이지에도 계약을 작성한 실
   assert.equal(page.contract.ownerName, me.user.name, '서명 페이지 계약서에 상담자 이름');
   assert.equal((await admin.ok('contracts', 'get', c.id)).ownerName, me.user.name, '사무실 계약서에도');
 });
+
+test('신화탄성 탄성·페인트 계약서(paintContract): 켜진 업체만 시공장소·품질보증·구역·AS보장·후기 페이백 저장, 업체 정보·상품 품질보증', async () => {
+  const sup = client();
+  await sup.ok('auth', 'login', 'super', 'super-test-1234');
+  const good = (await sup.ok('companies', 'list')).find((x) => x.code === 'thegood');
+  const line = { name: '에코그리트', qty: 1, unitPrice: 500000, places: ['세탁실', '베란다', '거실'], warranty: '10년', zone: '앞뒤 베란다' };
+  // 기본은 꺼짐 → 칸이 저장되지 않음
+  const off = await admin.ok('contracts', 'create', { ...base, customerName: '탄성꺼짐', customerPhone: '010-7373-0001', category: '탄성', asCoverage: true, lineItems: [line] });
+  const gotOff = await admin.ok('contracts', 'get', off.id);
+  assert.equal(gotOff.lineItems[0].places, undefined, '꺼진 업체는 시공장소 저장 안 함');
+  assert.equal(gotOff.asCoverage, undefined);
+  // 운영자가 켬 + 업체 정보 칸
+  const up = await sup.ok('companies', 'update', good.id, { features: { paintContract: true }, bizType: '건설업', bizItem: '페인트, 도장', csPhone: '1599-0000' });
+  assert.equal(up.bizType, '건설업');
+  assert.equal(up.csPhone, '1599-0000');
+  const prod = await admin.ok('products', 'save', { name: '에코그리트', category: '탄성', price: 500000, warranty: '10년' });
+  assert.equal(prod.warranty, '10년', '상품 품질보증');
+  const c = await admin.ok('contracts', 'create', {
+    ...base,
+    customerName: '탄성고객',
+    customerPhone: '010-7373-0002',
+    category: '탄성',
+    asCoverage: true,
+    reviewPayback: true,
+    lineItems: [{ ...line, productId: prod.id }, { name: '곰팡이방지 살균시공 (드레스룸)', qty: 1, unitPrice: 150000 }],
+  });
+  const got = await admin.ok('contracts', 'get', c.id);
+  assert.deepEqual(got.lineItems[0].places, ['베란다', '세탁실'], '정해진 장소만, 정해진 순서로');
+  assert.equal(got.lineItems[0].warranty, '10년');
+  assert.equal(got.lineItems[0].zone, '앞뒤 베란다');
+  assert.equal(got.lineItems[1].places, undefined, '장소 없는 줄은 그대로');
+  assert.equal(got.totalAmount, 650000, '곰팡이방지 포함 합계');
+  assert.equal(got.asCoverage, true);
+  assert.equal(got.reviewPayback, true);
+  // 서명 페이지도 같은 양식 (업체 정보 · 기능 표시)
+  const tk = (await admin.ok('contracts', 'requestSign', c.id)).url.split('/sign/')[1];
+  const page = await client().ok('esign', 'getByToken', tk);
+  assert.equal(page.company.features?.paintContract, true, '서명 페이지에 양식 표시');
+  assert.equal(page.company.csPhone, '1599-0000', '서명 페이지 계약서 하단 업체 정보');
+  assert.deepEqual(page.contract.lineItems[0].places, ['베란다', '세탁실']);
+  await sup.ok('companies', 'update', good.id, { features: {} });
+});

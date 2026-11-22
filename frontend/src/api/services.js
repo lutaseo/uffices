@@ -23,7 +23,7 @@ import {
 } from './runtime.js';
 import { ROLES, DATA_SCOPES, permissionsOf, isOwnScopeOnly, ALL_PERMISSION_KEYS } from '../auth/permissions.js';
 import { digitsOnly, formatPhone } from '../utils/format.js';
-import { CATEGORIES, DEPARTMENTS, brandTerms, companyCategories, hasFeature, parseCategories, parseFeatures, termsSource } from '../constants.js';
+import { CATEGORIES, COMPANY_DOC_FIELDS, DEPARTMENTS, brandTerms, companyCategories, hasFeature, parseCategories, parseFeatures, termsSource } from '../constants.js';
 import { AUDIT_KEEP_DAYS, UNDO_KEEP, auditText, skipAudit, undoComparable } from './audit.js';
 import { addHistory } from './views.js';
 import {
@@ -252,6 +252,8 @@ export const companies = {
       ceo: company.ceo || '',
       bizNo: company.bizNo || '',
       address: company.address || '',
+      // 계약서 하단 업체 정보 (신화탄성 양식: 업태·종목·고객센터·휴대번호·빠른문의)
+      ...Object.fromEntries(COMPANY_DOC_FIELDS.map((k) => [k, String(company[k] || '').trim().slice(0, 50)])),
       brands: company.brands?.length ? company.brands : [company.name.trim()],
       ...(parseCategories(company.categories).length ? { categories: parseCategories(company.categories) } : {}),
       ...(company.features ? { features: parseFeatures(company.features) } : {}),
@@ -278,7 +280,10 @@ export const companies = {
     if ('categories' in patch) patch = { ...patch, categories: parseCategories(patch.categories) };
     // 기능 스위치: 아는 기능 이름의 켜기/끄기만 저장
     if ('features' in patch) patch = { ...patch, features: parseFeatures(patch.features) };
-    const allowed = ['code', 'name', 'ceo', 'bizNo', 'address', 'brands', 'categories', 'features', 'periodStart', 'periodEnd', 'active'];
+    COMPANY_DOC_FIELDS.forEach((k) => {
+      if (k in patch) patch = { ...patch, [k]: String(patch[k] || '').trim().slice(0, 50) };
+    });
+    const allowed = ['code', 'name', 'ceo', 'bizNo', 'address', ...COMPANY_DOC_FIELDS, 'brands', 'categories', 'features', 'periodStart', 'periodEnd', 'active'];
     allowed.forEach((k) => {
       if (k in patch) c[k] = patch[k];
     });
@@ -579,6 +584,7 @@ export const products = masterTable('products', {
     detail: d.detail || '',
     freeDetail: d.freeDetail || '', // 무료시공내역
     price: Math.max(0, Number(d.price) || 0),
+    warranty: String(d.warranty || '').trim().slice(0, 30), // 품질보증 A/S 기간 (신화탄성 양식 계약서, 비우면 '')
     visible: d.visible !== false,
   }),
 });
