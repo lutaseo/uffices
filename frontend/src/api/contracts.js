@@ -13,6 +13,8 @@ import {
   ASSIGN_TYPES,
   companyCategories,
   hasFeature,
+  COMPANY_DOC_FIELDS,
+  PAINT_PLACES,
   ESIGN_STATUS,
   MAX_SCHEDULE_STEPS,
   ISSUE_STATUS,
@@ -145,6 +147,7 @@ function assertSchedulesAssignable(db, user, schedules, prev = [], contractId) {
 function normalizeContractInput(db, user, data, existing) {
   const company = db.companies.find((c) => c.id === user.companyId);
   const brands = company.brands?.length ? company.brands : [company.name];
+  const paint = hasFeature(company, 'paintContract'); // 신화탄성 탄성·페인트 계약서 칸 (시공장소·품질보증·구역, AS 보장, 후기 페이백)
 
   // 계약자명은 등록 후 수정 불가
   const customerName = existing ? existing.customerName : String(data.customerName || '').trim();
@@ -205,6 +208,8 @@ function normalizeContractInput(db, user, data, existing) {
     happyCallMemo: data.happyCallMemo || '',
     memo: data.memo || '',
     customerNote: String(data.customerNote || '').slice(0, 1000), // 고객 참고사항 (계약서·서명 화면에 고객에게 표시)
+    // 신화탄성 양식: AS 보장범위(곰팡이·들뜸) / 시공후기 페이백 — 기능 꺼진 업체는 넣지 않음 (수정 때는 예전 값 그대로)
+    ...(paint ? { asCoverage: !!data.asCoverage, reviewPayback: !!data.reviewPayback } : {}),
   };
   if (status === '취소' && !out.cancelReason) throw new ApiError('취소 사유를 입력해 주세요.');
 
@@ -222,6 +227,10 @@ function normalizeContractInput(db, user, data, existing) {
         detail: l.detail || '',
         qty: Math.max(1, Math.floor(Number(l.qty) || 1)),
         unitPrice: Math.max(0, Number(l.unitPrice) || 0),
+        // 신화탄성 양식: 시공장소 체크 / 품질보증(A/S 기간) / 비고(구역)
+        ...(paint && Array.isArray(l.places) && l.places.length ? { places: PAINT_PLACES.filter((p) => l.places.includes(p)) } : {}),
+        ...(paint && String(l.warranty || '').trim() ? { warranty: String(l.warranty).trim().slice(0, 30) } : {}),
+        ...(paint && String(l.zone || '').trim() ? { zone: String(l.zone).trim().slice(0, 100) } : {}),
       }));
     // 상품내역이 있으면 시공총액은 상품 합계로 자동 계산
     out.totalAmount = out.lineItems.length
@@ -445,6 +454,9 @@ function diffContract(db, before, after) {
     push('환불합계', won(a.refund), won(b.refund));
   }
   if ((before.items || '') !== (after.items || '')) changes.push({ label: '시공내용', from: '(변경)', to: '(변경)' });
+  // 신화탄성 양식: AS 보장범위 · 시공후기 페이백 체크
+  if (!!before.asCoverage !== !!after.asCoverage) changes.push({ label: 'AS 보장범위', from: before.asCoverage ? '보장' : '-', to: after.asCoverage ? '보장' : '-' });
+  if (!!before.reviewPayback !== !!after.reviewPayback) changes.push({ label: '시공후기 페이백', from: before.reviewPayback ? '참여' : '-', to: after.reviewPayback ? '참여' : '-' });
   if ((before.happyCallMemo || '') !== (after.happyCallMemo || '')) changes.push({ label: '해피콜 메모', from: '(변경)', to: '(변경)' });
   if ((before.memo || '') !== (after.memo || '')) changes.push({ label: '기타사항', from: '(변경)', to: '(변경)' });
   if ((before.customerNote || '') !== (after.customerNote || '')) changes.push({ label: '고객 참고사항', from: before.customerNote || '-', to: after.customerNote || '-' });
@@ -1123,7 +1135,16 @@ export const esign = {
       contract: views[0],
       contracts: views,
       // 계약 조건은 이 계약 브랜드 것만 (ContractDocument 가 brandTerms 로 계산)
-      company: { name: company.name, ceo: company.ceo, bizNo: company.bizNo, address: company.address, code: company.code, contractTerms: { [brand]: clone(company.contractTerms?.[brand] || []) } },
+      company: {
+        name: company.name,
+        ceo: company.ceo,
+        bizNo: company.bizNo,
+        address: company.address,
+        ...Object.fromEntries(COMPANY_DOC_FIELDS.map((k) => [k, company[k] || ''])), // 신화탄성 양식 계약서 하단 업체 정보
+        code: company.code,
+        ...(hasFeature(company, 'paintContract') ? { features: { paintContract: true } } : {}), // 서명 화면도 같은 계약서 양식
+        contractTerms: { [brand]: clone(company.contractTerms?.[brand] || []) },
+      },
     };
   },
 

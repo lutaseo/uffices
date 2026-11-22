@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { apartments, engineers, products, scheduleSettings, teams } from '../../api/index.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
-import { currentWorkCategories, DEFAULT_SCHEDULE_SETTINGS, PRODUCT_KINDS } from '../../constants.js';
+import { currentHasFeature, currentWorkCategories, DEFAULT_SCHEDULE_SETTINGS, PRODUCT_KINDS } from '../../constants.js';
 import { formatPhone, won } from '../../utils/format.js';
 import Pagination from '../../components/Pagination.jsx';
 import MoneyInput from '../../components/MoneyInput.jsx';
@@ -382,13 +382,14 @@ export function ProductSettings({ path = '' }) {
         { key: 'category', placeholder: '시공 구분', options: WORK_CATEGORIES },
         { key: 'kind', placeholder: '상품 종류', options: PRODUCT_KINDS },
       ]}
-      emptyForm={{ name: '', kind: PRODUCT_KINDS[0], category: WORK_CATEGORIES[0], detail: '', freeDetail: '', price: '', visible: true }}
+      emptyForm={{ name: '', kind: PRODUCT_KINDS[0], category: WORK_CATEGORIES[0], detail: '', freeDetail: '', price: '', warranty: '', visible: true }}
       columns={[
         { key: 'name', label: '상품명', className: 'text-left' },
         { key: 'kind', label: '상품 종류' },
         { key: 'category', label: '시공 구분' },
         { key: 'detail', label: '상세품목', className: 'text-left' },
         { key: 'price', label: '금액', className: 'text-right', render: (r) => won(r.price) },
+        ...(currentHasFeature('paintContract') ? [{ key: 'warranty', label: '품질보증', render: (r) => r.warranty || '-' }] : []),
         { key: 'visible', label: '활성화', render: (r) => (r.visible === false ? <span className="text-red">비활성</span> : '활성') },
       ]}
       fields={[
@@ -398,6 +399,7 @@ export function ProductSettings({ path = '' }) {
         { key: 'detail', label: '상세품목', type: 'textarea', rows: 10 },
         { key: 'freeDetail', label: '무료시공내역', type: 'textarea', rows: 10 },
         { key: 'price', label: '금액', type: 'money', help: '계약 등록 [시공선택]에서 이 상품을 고르면 이 금액이 단가로 들어갑니다.' },
+        ...(currentHasFeature('paintContract') ? [{ key: 'warranty', label: '품질보증', help: 'A/S 기간 (예: 10년). 탄성·페인트 계약서의 품질보증 칸에 들어갑니다.' }] : []),
         { key: 'visible', label: '활성화', type: 'checkbox', checkLabel: '활성화', note: '사용하지 않는 상품은 비활성화 하세요. 비활성화 하시면 계약서 작성 시 상품리스트에 표시되지 않습니다.' },
       ]}
     />

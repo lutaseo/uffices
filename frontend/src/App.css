@@ -5781,3 +5781,130 @@ button.paper-add { font: inherit; }
 .scope-common-row .num { flex: 0 0 110px; font-size: 14px; }
 .scope-peritem-toggle { margin: 8px 0 4px; padding: 8px 10px; width: 100%; background: #fff; border: 1px dashed #9db5d6; border-radius: 8px; color: #35598a; font-size: 14px; cursor: pointer; }
 .doc-sign-names { text-align: right; line-height: 1.8; } /* 계약서: 상담자 위, 계약자 아래 */
+
+/* 신화탄성 탄성·페인트 계약서 (기능 paintContract, v-base 에서 가져옴) */
+.paint-line {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 260px;
+}
+
+.paint-places {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+}
+
+.paint-doc .doc-title {
+  letter-spacing: 4px;
+}
+
+.paint-doc .doc-table th {
+  white-space: nowrap;
+}
+
+.paint-products thead th,
+.paint-amounts thead th {
+  background: #e5e7eb;
+  text-align: center;
+}
+
+.paint-product strong {
+  font-size: 15px;
+}
+
+.paint-places-cell span {
+  display: inline-block;
+  min-width: 72px;
+  color: #94a3b8;
+}
+
+.paint-places-cell span.on {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.paint-check {
+  display: inline-block;
+  margin-right: 16px;
+}
+
+.paint-amounts caption {
+  font-weight: 700;
+  padding: 6px 0;
+  color: #334155;
+}
+
+.paint-amounts tr.paint-total th,
+.paint-amounts tr.paint-total td {
+  font-weight: 700;
+  background: #f1f5f9;
+}
+
+.paint-bottom {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.paint-terms {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.paint-terms h4 {
+  margin: 0 0 6px;
+}
+
+.paint-terms p {
+  margin: 0 0 6px;
+  line-height: 1.5;
+}
+
+.paint-company {
+  margin: 0;
+  align-self: start;
+}
+
+@media screen and (max-width: 768px) {
+  .paint-bottom {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 계약서 작성 상품 줄: 품질보증·구역 칸 */
+.paint-line .li-warranty {
+  width: 110px;
+}
+
+.paint-line .li-zone {
+  flex: 1;
+  min-width: 120px;
+}
+
+.paint-line-detail { max-height: 6em; overflow: auto; }
+@media screen and (max-width: 768px) {
+  .line-items .paint-line {
+    min-width: 0;
+  }
+
+  .line-items .paint-places {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .line-items .paint-line .inline-fields {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    gap: 6px;
+  }
+
+  .line-items .paint-line .li-zone {
+    min-width: 0;
+  }
+}

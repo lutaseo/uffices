@@ -5,6 +5,22 @@ export const BRANDS = ['더좋은집', '더스타트'];
 // 구분 (품목)
 export const CATEGORIES = ['줄눈', '청소', '탄성', '새집증후군', '나노코팅', '기타'];
 
+// ---------------- 신화탄성 탄성·페인트 계약서 (기능 paintContract, 업체 전용) ----------------
+// 제품별 시공장소 체크, 품질보증, 구역 / 곰팡이방지 살균시공 / AS 보장범위 / 시공후기 페이백
+//   '페인트' 구분은 운영자가 업체/계정관리 > 시공 구분에 넣으면 됨
+export const PAINT_STYLE_CATEGORIES = ['탄성', '페인트'];
+export const PAINT_PLACES = ['베란다', '대피실', '세탁실', '실외기실'];
+export const MOLD_PREFIX = '곰팡이방지 살균시공';
+export const MOLD_ROOMS = ['드레스룸', '펜트리'];
+export const MOLD_PRICE = 150000;
+export const moldLineName = (room) => `${MOLD_PREFIX} (${room})`;
+export const isMoldLine = (l) => String(l?.name || '').startsWith(MOLD_PREFIX);
+export const REVIEW_PAYBACK = 20000; // 시공 후기이벤트 참여 페이백
+// 계약서 하단 업체 정보 (운영자가 업체 등록·수정에서 입력): 업태 / 종목 / 고객센터 / 휴대번호 / 빠른문의
+export const COMPANY_DOC_FIELDS = ['bizType', 'bizItem', 'csPhone', 'mobile', 'quickPhone'];
+// 이 업체·구분이 신화탄성 양식인지 (기능이 켜져 있고 구분이 탄성·페인트)
+export const isPaintStyle = (company, category) => PAINT_STYLE_CATEGORIES.includes(category) && hasFeature(company, 'paintContract');
+
 // 업체의 시공 구분 (운영자가 업체/계정관리에서 순서까지 정함) — 정하지 않았으면 기본 목록
 export function companyCategories(company) {
   const list = Array.isArray(company?.categories) ? company.categories.filter((c) => String(c || '').trim()) : [];
@@ -36,6 +52,7 @@ export const FEATURES = [
   { key: 'asEngineer', label: 'AS 담당 기사 지정 · 기사모바일 AS관리(알림 · 방문일 등록)', on: true },
   { key: 'asReport', label: '기사모바일 AS 보고 (상태 · 메모, 시공완료면 AS 완료)', on: true },
   { key: 'companyFiles', label: '회사 자료 백업 (PDF · PPT 등 올려 두고 내려받기)', on: true },
+  { key: 'paintContract', label: '신화탄성 탄성·페인트 계약서 (시공장소·품질보증·구역, 곰팡이방지·AS보장·후기 페이백, 업체 정보 칸)', on: false },
   { key: 'photoStorage', label: '사진 전용 저장소 (새 사진을 DB 대신 사진 저장소에)', on: true },
   { key: 'callLog', label: '상담내역 메뉴 (전화번호별 통화 메모 · 번호 검색)', on: true },
   { key: 'scheduleLock', label: '시공일자·기사배정은 권한 있는 사람만 (권한 없으면 계약 등록에서 시공 칸 숨김)', on: true },
@@ -150,6 +167,15 @@ const THEGOOD_TERMS = [
 ];
 
 // 화면에서 입력하기 전부터 쓰던 조건 (업체주소코드:브랜드) — 운영자가 저장하면 저장한 것이 우선
+// 신화탄성 탄성·페인트 계약서 기본 조건 (계약서 비고) — {업체} 자리에 업체명
+const PAINT_TERMS = [
+  `위의 제품을 설치함에 있어 계약자를 "갑"으로 하고 {업체}을 "을"이라 하며 다음과 같이 계약을 체결한다.`,
+  '제1조[계약] 본 계약서 작성 및 계약금 납부와 동시에 계약이 성립됨을 확인한다.',
+  '제2조[계약금 및 잔금] "갑"은 본 계약에 의한 계약금은 총 금액의 10%이며, "갑"은 계약한 시공장소에 시공이 완료 상태를 확인 후 잔금을 납부한다.',
+  '제3조[해약 및 취소] 본 계약서 작성 및 계약 체결 후 일정이 정해지지 않는 한 계약금은 100% 환불 가능하다. 단, 일정이 정해진 후에 취소는 다른 일정을 받지 못하였으므로 계약금 환불은 불가하다.',
+  '제4조[시공] "을"은 "갑"의 시공 장소에 계약 제품을 표준시방서에 따라 시공한다. 또한, "을"이 계약서에 달리 정하지 않는 한 "갑"이 요청하는 날까지 시공을 완료하여야 한다.',
+];
+
 const BUILTIN_TERMS = {
   'thegood:더좋은집': THEGOOD_TERMS,
 };
@@ -174,6 +200,10 @@ export function brandTerms(company, brand) {
 // 그 계약서에 보일 조건. categories(계약서의 구분들)에 맞는 '[구분]' 묶음 + 중요 조항(구분 없는 묶음)
 //   맞는 구분 묶음이 없으면(예: 나노코팅) 중요 조항만, 중요 조항도 없으면 전체
 export function contractTermsFor(company, brand, categories = []) {
+  // 신화탄성 양식(기능 paintContract) 탄성·페인트 계약서: 운영자가 조건을 넣지 않았으면 신화탄성 계약서 비고 조항
+  if (hasFeature(company, 'paintContract') && termsSource(company, brand) === 'default' && categories.length && categories.every((c) => PAINT_STYLE_CATEGORIES.includes(c))) {
+    return PAINT_TERMS.map((t) => t.replace('{업체}', company?.name || brand || '시공사'));
+  }
   const list = brandTerms(company, brand);
   if (!categories.length || !list.some(termSection)) return list;
   const picked = list.filter((t) => !termSection(t) || categories.includes(termSection(t)));
