@@ -454,6 +454,9 @@ function diffContract(db, before, after) {
     push('환불합계', won(a.refund), won(b.refund));
   }
   if ((before.items || '') !== (after.items || '')) changes.push({ label: '시공내용', from: '(변경)', to: '(변경)' });
+  // 신화탄성 양식: AS 보장범위 · 시공후기 페이백 체크
+  if (!!before.asCoverage !== !!after.asCoverage) changes.push({ label: 'AS 보장범위', from: before.asCoverage ? '보장' : '-', to: after.asCoverage ? '보장' : '-' });
+  if (!!before.reviewPayback !== !!after.reviewPayback) changes.push({ label: '시공후기 페이백', from: before.reviewPayback ? '참여' : '-', to: after.reviewPayback ? '참여' : '-' });
   if ((before.happyCallMemo || '') !== (after.happyCallMemo || '')) changes.push({ label: '해피콜 메모', from: '(변경)', to: '(변경)' });
   if ((before.memo || '') !== (after.memo || '')) changes.push({ label: '기타사항', from: '(변경)', to: '(변경)' });
   if ((before.customerNote || '') !== (after.customerNote || '')) changes.push({ label: '고객 참고사항', from: before.customerNote || '-', to: after.customerNote || '-' });

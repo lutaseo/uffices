@@ -2189,6 +2189,13 @@ test('신화탄성 탄성·페인트 계약서(paintContract): 켜진 업체만 
   assert.equal(got.totalAmount, 650000, '곰팡이방지 포함 합계');
   assert.equal(got.asCoverage, true);
   assert.equal(got.reviewPayback, true);
+  // 수정: 체크를 풀면 저장되고 변경이력에 남음
+  await admin.ok('contracts', 'update', c.id, { ...got, asCoverage: false });
+  const edited = await admin.ok('contracts', 'get', c.id);
+  assert.equal(edited.asCoverage, false, '수정 때 AS 보장 해제 저장');
+  assert.equal(edited.reviewPayback, true, '안 바꾼 체크는 그대로');
+  assert.deepEqual(edited.lineItems[0].places, ['베란다', '세탁실'], '수정해도 시공장소 그대로');
+  assert.ok(edited.history.at(-1).changes.some((ch) => ch.label === 'AS 보장범위'), '변경이력에 AS 보장범위');
   // 서명 페이지도 같은 양식 (업체 정보 · 기능 표시)
   const tk = (await admin.ok('contracts', 'requestSign', c.id)).url.split('/sign/')[1];
   const page = await client().ok('esign', 'getByToken', tk);
