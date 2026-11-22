@@ -52,6 +52,7 @@ export const FEATURES = [
   { key: 'asEngineer', label: 'AS 담당 기사 지정 · 기사모바일 AS관리(알림 · 방문일 등록)', on: true },
   { key: 'asReport', label: '기사모바일 AS 보고 (상태 · 메모, 시공완료면 AS 완료)', on: true },
   { key: 'companyFiles', label: '회사 자료 백업 (PDF · PPT 등 올려 두고 내려받기)', on: true },
+  { key: 'parallelSave', label: '업체별 따로 저장 (다른 업체 저장을 기다리지 않음 — 끄면 예전처럼 모든 업체가 한 줄)', on: true },
   { key: 'paintContract', label: '신화탄성 탄성·페인트 계약서 (시공장소·품질보증·구역, 곰팡이방지·AS보장·후기 페이백, 업체 정보 칸)', on: false },
   { key: 'photoStorage', label: '사진 전용 저장소 (새 사진을 DB 대신 사진 저장소에)', on: true },
   { key: 'callLog', label: '상담내역 메뉴 (전화번호별 통화 메모 · 번호 검색)', on: true },

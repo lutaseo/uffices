@@ -304,7 +304,34 @@ function keepOtherLogin(ctx, service) {
 }
 
 // req: { body, headers }  → { status, headers, body }
-export async function handleRpc({ body, headers }) {
+// 쓰기 잠금 (advisory lock): 업체마다 따로 줄을 세워 다른 업체 저장을 기다리지 않게
+//   업체 요청: 전체 잠금(공유) + 그 업체 잠금(단독)  /  운영자·로그인 전·업체 없는 요청·외부 발송: 전체 잠금(단독 = 예전처럼 한 줄)
+const LOCK_NS_ALL = 7351;
+const LOCK_NS_COMPANY = 7352;
+// 외부 서비스(알림톡 등)를 부르는 호출: 다시 실행되면 안 되므로 항상 한 줄로 (번호 충돌로 다시 실행될 일이 없게)
+const GLOBAL_WRITE_CALLS = new Set(['notifications.send', 'notifications.testSend']);
+// 로그인 아이디는 모든 업체에서 겹치면 안 됨 → 직원·기사 계정을 만들고 바꾸는 요청(가져오기 포함)도 한 줄로
+const GLOBAL_WRITE_SERVICES = new Set(['users', 'engineers', 'imports', 'companies', 'auth']);
+class SeqConflict extends Error {
+  constructor() {
+    super('번호 충돌 — 다시 실행');
+    this.code = 'SEQ_CONFLICT';
+  }
+}
+
+const RETRY = Symbol('retry');
+
+// 요청 처리: 번호 충돌(다른 업체와 같은 순간 새 자료를 만듦)이면 연결을 돌려준 뒤 처음부터 다시 (최대 3번)
+export async function handleRpc(req) {
+  for (let attempt = 0; ; attempt += 1) {
+    const out = await handleRpcOnce(req, attempt);
+    if (out !== RETRY) return out;
+    await new Promise((r) => setTimeout(r, 20 + Math.random() * 80));
+  }
+}
+
+async function handleRpcOnce(req, attempt) {
+  const { body, headers } = req;
   const { service, method, args = [] } = body || {};
   const name = `${service}.${method}`;
   const fn = SERVICES[service] && Object.prototype.hasOwnProperty.call(SERVICES[service], method) ? SERVICES[service][method] : null;
@@ -344,7 +371,6 @@ export async function handleRpc({ body, headers }) {
     // 무엇이든 무한정 기다리지 않게: 잠금 대기 15초, 한 문장 45초, 트랜잭션 중 멈춤 60초 넘으면 오류로 끝냄
     //   (Vercel 함수 제한 60초 안에서 '불러오는 중...'이 끝없이 이어지지 않도록)
     await client.query(`SET LOCAL lock_timeout = '${LOCK_TIMEOUT()}'; SET LOCAL statement_timeout = '45s'; SET LOCAL idle_in_transaction_session_timeout = '60s'`);
-    if (!readOnlyCall) await client.query(`SELECT 1 FROM meta WHERE key = 'seq' FOR UPDATE`); // 쓰기 직렬화
 
     // 필요한 업체 데이터 범위 결정
     let scope;
@@ -368,6 +394,17 @@ export async function handleRpc({ body, headers }) {
         scope.focusContracts = focusOf(name, args);
       }
     }
+    // 쓰기 잠금: 업체마다 따로 (기능 parallelSave 가 꺼진 업체·운영자 등은 예전처럼 전체 한 줄)
+    if (!readOnlyCall) {
+      const cid = Number(scope.companyId) > 0 ? Number(scope.companyId) : null;
+      const perCompany = cid && !scope.allCompanies && !GLOBAL_WRITE_CALLS.has(name) && !GLOBAL_WRITE_SERVICES.has(service) && hasFeature(await companyRow(client, cid), 'parallelSave');
+      if (perCompany) {
+        await client.query('SELECT pg_advisory_xact_lock_shared($1, 0)', [LOCK_NS_ALL]);
+        await client.query('SELECT pg_advisory_xact_lock($1, $2)', [LOCK_NS_COMPANY, cid]);
+      } else {
+        await client.query('SELECT pg_advisory_xact_lock($1, 0)', [LOCK_NS_ALL]);
+      }
+    }
     // 계약 목록 '바뀌었나' 확인: 먼저 계약 요약만 읽어 보고, 바뀌었을 때만 계약 전체를 다시 읽음 (트래픽 절약)
     const quickCheck = name === 'contracts.listCached' && args[1] && scope.companyId;
     const { focusContracts: _focus, ...fullScope } = scope; // eslint-disable-line no-unused-vars
@@ -376,6 +413,7 @@ export async function handleRpc({ body, headers }) {
     const fullSessionAtStart = ctx.fullSession;
     const tLoad = Date.now();
     let { db, readOnly, slimIds } = await loadSnapshot(client, scope);
+    let seqBase = { ...(db.seq || {}) }; // 읽은 때의 번호표 — 저장할 때 다른 업체가 그사이 늘린 번호와 합침
     let loadMs = Date.now() - tLoad;
     let before = readOnlyCall ? null : fingerprint(db); // 저장 비교용 지문 (읽기 전용은 생략)
     ctx.committed = db;
@@ -390,6 +428,7 @@ export async function handleRpc({ body, headers }) {
     if (quickCheck && error?.code === 'NEED_FULL_LOAD') {
       const t2 = Date.now();
       ({ db, readOnly } = await loadSnapshot(client, fullScope));
+      seqBase = { ...(db.seq || {}) };
       loadMs += Date.now() - t2;
       ctx.committed = db;
       error = null;
@@ -404,6 +443,7 @@ export async function handleRpc({ body, headers }) {
     if (slimIds && !readOnlyCall && touchedSlim(before, ctx.committed, slimIds)) {
       const t2 = Date.now();
       ({ db, readOnly } = await loadSnapshot(client, fullScope));
+      seqBase = { ...(db.seq || {}) };
       loadMs += Date.now() - t2;
       before = fingerprint(db);
       Object.assign(ctx, { session: sessionAtStart, fullSession: fullSessionAtStart, setCookie: null, committed: db });
@@ -417,12 +457,21 @@ export async function handleRpc({ body, headers }) {
     }
     // 시험용: 가볍게 읽은 결과가 전체로 읽은 결과와 똑같은지 매번 비교 (VB_VERIFY_FAST=1)
     if (slimIds && process.env.VB_VERIFY_FAST === '1') {
-      await verifyFast({ slimIds, client, fullScope, fn, args, ctx, sessionAtStart, fullSessionAtStart, readOnlyCall, result, error, slimDb: ctx.committed, name });
+      await verifyFast({ slimIds, client, fullScope, fn, args, ctx, sessionAtStart, fullSessionAtStart, readOnlyCall, result, error, slimDb: ctx.committed, name, seqBase });
     }
 
     // 업무 코드가 저장(saveDb)한 내용만 반영. (예: 로그인 실패 횟수는 오류여도 저장됨)
     if (!readOnlyCall) {
-      const changes = await persistChanges(client, before, ctx.committed, readOnly);
+      // 번호표(seq): 이번 요청이 늘린 표만 반영. 그사이 다른 업체가 같은 표 번호를 늘렸으면 처음부터 다시 (번호 겹침 방지)
+      const seqAfter = ctx.committed.seq || {};
+      const grown = Object.keys(seqAfter).filter((t) => (seqAfter[t] || 0) !== (seqBase[t] || 0));
+      let seqWrite = null;
+      if (grown.length) {
+        const cur = (await client.query(`SELECT value FROM meta WHERE key = 'seq' FOR UPDATE`)).rows[0]?.value || {};
+        if (grown.some((t) => (cur[t] || 0) !== (seqBase[t] || 0))) throw new SeqConflict();
+        seqWrite = { ...cur, ...Object.fromEntries(grown.map((t) => [t, seqAfter[t]])) };
+      }
+      const changes = await persistChanges(client, before, ctx.committed, readOnly, seqWrite);
       if (!error && changes.length && !skipAudit(name)) await writeAuditLog(client, { name, args, session: sessionAtStart, db, scope, changes });
     }
     await client.query('COMMIT');
@@ -444,6 +493,7 @@ export async function handleRpc({ body, headers }) {
     return ok;
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});
+    if (e?.code === 'SEQ_CONFLICT' && attempt < 3) return RETRY; // finally 에서 연결을 돌려준 뒤 handleRpc 가 다시 실행
     console.error(`[rpc] ${name} 실패:`, e);
     // 55P03 잠금 대기 초과, 57014 시간 초과 → 다른 요청이 처리 중이라 잠시 뒤 다시 시도하면 됨
     //   code 'BUSY' 는 저장이 취소(롤백)된 것이 확실한 경우 → 화면이 알아서 다시 보냄 (remote.js)
@@ -461,8 +511,9 @@ async function companyRow(client, companyId) {
 }
 
 // 시험용 비교: 같은 요청을 전체로 읽은 자료에서 한 번 더 실행해 응답·저장될 자료가 같은지 (다르면 오류)
-async function verifyFast({ slimIds, client, fullScope, fn, args, ctx, sessionAtStart, fullSessionAtStart, readOnlyCall, result, error, slimDb, name }) {
+async function verifyFast({ slimIds, client, fullScope, fn, args, ctx, sessionAtStart, fullSessionAtStart, readOnlyCall, result, error, slimDb, name, seqBase }) {
   const { db: full } = await loadSnapshot(client, fullScope);
+  if (seqBase) full.seq = { ...seqBase }; // 같은 번호표로 비교 (그사이 다른 업체가 번호를 늘렸을 수 있음)
   const originals = new Map(full.contracts.map((r) => [r.id, r]));
   const ctx2 = { ...ctx, session: sessionAtStart, fullSession: fullSessionAtStart, setCookie: null, committed: clone(full) };
   let result2;
