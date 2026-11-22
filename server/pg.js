@@ -211,7 +211,8 @@ export function fingerprint(db) {
 }
 
 // 반환: 바뀐 행 목록 [{ table, before(이전 JSON 문자열 | null), after(행 | null) }] — 수정 로그용
-export async function persistChanges(client, before, after, readOnly) {
+//   seqWrite: 저장할 번호표 (handler 가 다른 업체 번호와 합친 값, null = 저장 안 함, 없으면 예전처럼 비교해서)
+export async function persistChanges(client, before, after, readOnly, seqWrite) {
   const fp = before && before.__fingerprint ? before : fingerprint(before);
   const changes = [];
   for (const key of TABLE_KEYS) {
@@ -272,10 +273,11 @@ export async function persistChanges(client, before, after, readOnly) {
       if (isContracts) await client.query(`DELETE FROM contract_signatures WHERE contract_id = ANY($1::bigint[])`, [removed]);
     }
   }
-  if (JSON.stringify(before.seq) !== JSON.stringify(after.seq)) {
+  const seq = seqWrite !== undefined ? seqWrite : JSON.stringify(before.seq) !== JSON.stringify(after.seq) ? after.seq : null;
+  if (seq) {
     await client.query(
       `INSERT INTO meta (key, value) VALUES ('seq', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-      [JSON.stringify(after.seq)],
+      [JSON.stringify(seq)],
     );
   }
   return changes;

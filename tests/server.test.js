@@ -2204,3 +2204,22 @@ test('신화탄성 탄성·페인트 계약서(paintContract): 켜진 업체만 
   assert.deepEqual(page.contract.lineItems[0].places, ['베란다', '세탁실']);
   await sup.ok('companies', 'update', good.id, { features: {} });
 });
+
+test('업체별 따로 저장(parallelSave): 두 업체가 동시에 계약을 만들어도 번호가 겹치지 않고 번호표가 맞음', async () => {
+  const other = client();
+  await other.ok('auth', 'login', 'otheradmin', 'other1234', 'other-co');
+  const brandOf = { a: base.brand, b: '다른업체' };
+  const mk = (cl, tag, i) => cl.ok('contracts', 'create', { ...base, brand: brandOf[tag], customerName: `${tag}동시${i}`, customerPhone: `010-8${tag === 'a' ? 1 : 2}00-${String(1000 + i)}` });
+  const made = await Promise.all(Array.from({ length: 12 }, (_, i) => [mk(admin, 'a', i), mk(other, 'b', i)]).flat());
+  const ids = made.map((c) => c.id);
+  assert.equal(new Set(ids).size, ids.length, '계약 번호가 겹치지 않음');
+  const pgc = new pg.Client({ connectionString: url });
+  await pgc.connect();
+  const { rows } = await pgc.query(`SELECT (SELECT max(id) FROM contracts)::int AS maxid, (SELECT (value->>'contracts')::int FROM meta WHERE key = 'seq') AS seq, (SELECT count(*) FROM contracts WHERE data->>'customerName' ~ '^[ab]동시[0-9]+$')::int AS n`);
+  await pgc.end();
+  assert.equal(rows[0].n, 24, '24건 모두 저장');
+  assert.ok(rows[0].seq >= Math.max(...ids), '번호표가 이번에 만든 가장 큰 번호 이상 (다음 번호가 겹치지 않음)');
+  // 다음 계약도 정상
+  const next = await admin.ok('contracts', 'create', { ...base, customerName: '동시뒤고객', customerPhone: '010-8300-0001' });
+  assert.ok(next.id > Math.max(...ids));
+});

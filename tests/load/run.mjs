@@ -3,6 +3,8 @@
 //
 //   LOAD_DATABASE_URL=postgresql://...(비어 있는 시험 전용 DB) npm run loadtest
 //   선택: USERS=150 CONTRACTS=3000 SECONDS=180 THINK=20-60 (한 사람이 다음 작업까지 쉬는 초)
+//   여러 업체: COMPANIES=3 → 업체마다 계약 CONTRACTS건 · 실장 USERS명 (업체끼리 저장이 서로 기다리는지 확인)
+//   PARALLEL=0 → 업체별 따로 저장(parallelSave)을 끄고 예전처럼 모든 업체 한 줄로 (비교용)
 //   물결 시험: WAVES=10,20,10 → 10명이 동시에 '계약 저장 + 사진 1장'을, 10초 간격으로 20번 (평소·몰림 시험 대신)
 //
 // ⚠ 시험 DB 의 표를 모두 지우고 시작합니다. 실서비스(Supabase) 주소는 거부합니다.
@@ -17,6 +19,8 @@ if (/supabase/i.test(url)) throw new Error('실서비스(Supabase) DB 에서는 
 const USERS = Number(process.env.USERS || 150);
 const CONTRACTS = Number(process.env.CONTRACTS || 3000);
 const SECONDS = Number(process.env.SECONDS || 180);
+const COMPANIES = Math.max(1, Number(process.env.COMPANIES || 1));
+const TOTAL = USERS * COMPANIES; // 전체 실장 수 (업체마다 USERS명)
 const [TMIN, TMAX] = String(process.env.THINK || '20-60').split('-').map((x) => Number(x) * 1000);
 const SERVERS = 4;
 const PORTS = Array.from({ length: SERVERS }, (_, i) => 3201 + i);
@@ -45,7 +49,7 @@ const seedCall = async (service, method, ...args) => {
   if (out.status !== 200) throw new Error(`${service}.${method}: ${b.error?.message}`);
   return b.result;
 };
-console.log(`시험 자료 만드는 중: 계약 ${CONTRACTS}건, 실장 ${USERS}명 ...`);
+console.log(`시험 자료 만드는 중: 업체 ${COMPANIES}곳 × (계약 ${CONTRACTS}건, 실장 ${USERS}명) ...`);
 await seedCall('auth', 'login', 'admin', 'admin1234', 'thegood');
 const first = await seedCall('contracts', 'create', {
   brand: '더좋은집', category: '줄눈', customerName: '원본고객', customerPhone: '010-1111-2222', aptName: '시험아파트', dong: '101', ho: '1001',
@@ -57,20 +61,41 @@ const { rows } = await pool.query('SELECT company_id, data FROM contracts WHERE 
 const tpl = rows[0].data;
 const companyId = rows[0].company_id;
 tpl.history = Array.from({ length: 6 }, (_, i) => ({ at: new Date().toISOString(), byId: 1, byName: '관리자', byRole: 'ADMIN', action: '계약 수정', changes: [{ label: '금액', from: String(i), to: String(i + 1) }] }));
-const ids = [], datas = [];
-for (let i = 0; i < CONTRACTS; i++) {
-  const d = { ...tpl, id: 100000 + i, customerName: `고객${i}`, customerPhone: `010-${2000 + (i % 7000)}-${String(i % 10000).padStart(4, '0')}`,
-    customerToken: `load${i}${Math.random().toString(36).slice(2)}`, contractDate: `2026-${String(1 + (i % 11)).padStart(2, '0')}-${String(1 + (i % 28)).padStart(2, '0')}` };
-  delete d.customerId;
-  ids.push(d.id); datas.push(JSON.stringify(d));
+// 업체 목록: 첫 업체(thegood) + 시험 업체들 (운영자가 만듦)
+const cos = [{ code: 'thegood', id: Number(companyId), brand: '더좋은집' }];
+{
+  let supCookie = '';
+  const sup = async (service, method, ...args) => {
+    const out = await handleRpc({ body: { service, method, args }, headers: { cookie: supCookie, host: 'load.local' } });
+    if (out.headers['Set-Cookie']) supCookie = out.headers['Set-Cookie'].split(';')[0];
+    const b = JSON.parse(out.body);
+    if (out.status !== 200) throw new Error(`${service}.${method}: ${b.error?.message}`);
+    return b.result;
+  };
+  await sup('auth', 'login', 'super', 'super-load-1234');
+  for (let k = 1; k < COMPANIES; k++) {
+    const c = await sup('companies', 'create', { company: { code: `loadco${k}`, name: `부하업체${k}`, periodStart: '2026-01-01', periodEnd: '2027-12-31' }, admin: { loginId: `loadadmin${k}`, password: 'load12345', name: `부하관리자${k}` } });
+    cos.push({ code: c.code, id: c.id, brand: `부하업체${k}` });
+  }
+  if (process.env.PARALLEL === '0') for (const c of cos) await sup('companies', 'update', c.id, { features: { parallelSave: false } });
 }
-await pool.query(`INSERT INTO contracts (id, company_id, data, updated_at) SELECT id, $2, data::jsonb, now() FROM unnest($1::bigint[], $3::text[]) AS t(id, data)`, [ids, companyId, datas]);
-await pool.query(`UPDATE meta SET value = jsonb_set(value, '{contracts}', $1::jsonb) WHERE key = 'seq'`, [String(100000 + CONTRACTS)]);
+const ids = [], datas = [], coIds = [];
+cos.forEach((co, k) => {
+  for (let i = 0; i < CONTRACTS; i++) {
+    const d = { ...tpl, id: 100000 + k * CONTRACTS + i, companyId: co.id, brand: co.brand, customerName: `고객${i}`, customerPhone: `010-${2000 + (i % 7000)}-${String(i % 10000).padStart(4, '0')}`,
+      customerToken: `load${k}_${i}${Math.random().toString(36).slice(2)}`, contractDate: `2026-${String(1 + (i % 11)).padStart(2, '0')}-${String(1 + (i % 28)).padStart(2, '0')}` };
+    delete d.customerId;
+    ids.push(d.id); datas.push(JSON.stringify(d)); coIds.push(co.id);
+  }
+});
+await pool.query(`INSERT INTO contracts (id, company_id, data, updated_at) SELECT id, cid, data::jsonb, now() FROM unnest($1::bigint[], $2::bigint[], $3::text[]) AS t(id, cid, data)`, [ids, coIds, datas]);
+await pool.query(`UPDATE meta SET value = jsonb_set(value, '{contracts}', $1::jsonb) WHERE key = 'seq'`, [String(100000 + COMPANIES * CONTRACTS)]);
+const coOf = (i) => cos[Math.floor(i / USERS) % cos.length]; // 실장 i 의 업체
 const perms = (await pool.query(`SELECT data->'permissions' AS p FROM users WHERE data->>'loginId' = 'manager'`)).rows[0].p;
 const { hashPassword } = await import('../../server/password.js');
 const hash = await hashPassword('load12345');
-const userRows = Array.from({ length: USERS }, (_, i) => ({ id: 900000 + i, companyId: Number(companyId), loginId: `load${i}`, passwordHash: hash, name: `실장${i}`, role: 'MANAGER', permissions: perms, dataScope: 'ALL', active: true, createdAt: new Date().toISOString() }));
-await pool.query(`INSERT INTO users (id, company_id, data, updated_at) SELECT id, $2, data::jsonb, now() FROM unnest($1::bigint[], $3::text[]) AS t(id, data)`, [userRows.map((u) => u.id), companyId, userRows.map((u) => JSON.stringify(u))]);
+const userRows = Array.from({ length: TOTAL }, (_, i) => ({ id: 900000 + i, companyId: coOf(i).id, loginId: `load${i}`, passwordHash: hash, name: `실장${i}`, role: 'MANAGER', permissions: perms, dataScope: 'ALL', active: true, createdAt: new Date().toISOString() }));
+await pool.query(`INSERT INTO users (id, company_id, data, updated_at) SELECT id, cid, data::jsonb, now() FROM unnest($1::bigint[], $2::bigint[], $3::text[]) AS t(id, cid, data)`, [userRows.map((u) => u.id), userRows.map((u) => u.companyId), userRows.map((u) => JSON.stringify(u))]);
 await closePool();
 
 // ---------- 2. 서버 여러 대 ----------
@@ -100,7 +125,7 @@ function client(i) {
     for (let attempt = 0; attempt < 3; attempt++) {
       err = null;
       try {
-        const r = await fetch(`http://localhost:${PORTS[i % SERVERS]}/api/rpc`, { method: 'POST', headers: { 'content-type': 'application/json', cookie, 'x-vb-co': 'thegood', 'x-vb-device': 'pc' }, body: JSON.stringify({ service, method, args }) });
+        const r = await fetch(`http://localhost:${PORTS[i % SERVERS]}/api/rpc`, { method: 'POST', headers: { 'content-type': 'application/json', cookie, 'x-vb-co': coOf(i).code, 'x-vb-device': 'pc' }, body: JSON.stringify({ service, method, args }) });
         const sc = r.headers.get('set-cookie');
         if (sc) cookie = sc.split(';')[0];
         const txt = await r.text();
@@ -122,7 +147,7 @@ const n = (i) => `${i}-${Date.now() % 100000}`;
 async function person(i, until) {
   const call = client(i);
   await sleep(rnd(0, 15000)); // 출근하듯 15초에 걸쳐 들어옴
-  await call('auth', 'login', `load${i}`, 'load12345', 'thegood');
+  await call('auth', 'login', `load${i}`, 'load12345', coOf(i).code);
   const list = await call('contracts', 'listCached', {}, '');
   let version = list?.version || '';
   const all = (list?.rows || []).map((r) => r.id);
@@ -132,7 +157,7 @@ async function person(i, until) {
     const p = Math.random();
     if (p < 0.35) { const r = await call('contracts', 'listCached', {}, version); if (r?.version) version = r.version; }
     else if (p < 0.65) await call('contracts', 'get', all[Math.floor(Math.random() * all.length)] || first.id);
-    else if (p < 0.80) { const c = await call('contracts', 'create', { brand: '더좋은집', category: '줄눈', customerName: `부하${n(i)}`, customerPhone: `010-9${String(i % 1000).padStart(3, '0')}-${String(Date.now() % 10000).padStart(4, '0')}`, aptName: '부하아파트', contractDate: '2026-11-14', totalAmount: 1200000, payments: [] }); if (c?.id) mine = c.id; }
+    else if (p < 0.80) { const c = await call('contracts', 'create', { brand: coOf(i).brand, category: '줄눈', customerName: `부하${n(i)}`, customerPhone: `010-9${String(i % 1000).padStart(3, '0')}-${String(Date.now() % 10000).padStart(4, '0')}`, aptName: '부하아파트', contractDate: '2026-11-14', totalAmount: 1200000, payments: [] }); if (c?.id) mine = c.id; }
     else if (p < 0.90) { if (mine) { const g = await call('contracts', 'get', mine); if (g) await call('contracts', 'update', mine, { ...g, memo: `수정 ${Date.now()}` }); } }
     else if (mine) await call('contracts', 'setPaperPhotos', mine, { add: [photo] });
   }
@@ -154,18 +179,18 @@ function report(title) {
 if (process.env.WAVES) {
   const [size, rounds, gap] = process.env.WAVES.split(',').map(Number);
   console.log(`물결 시험: ${size}명이 동시에 계약 저장 + 사진 1장, ${gap}초 간격으로 ${rounds}번`);
-  const people = Array.from({ length: USERS }, (_, i) => client(i));
-  for (let i = 0; i < USERS; i += 10) await Promise.all(people.slice(i, i + 10).map((c, j) => c('auth', 'login', `load${i + j}`, 'load12345', 'thegood')));
+  const people = Array.from({ length: TOTAL }, (_, i) => client(i));
+  for (let i = 0; i < TOTAL; i += 10) await Promise.all(people.slice(i, i + 10).map((c, j) => c('auth', 'login', `load${i + j}`, 'load12345', coOf(i + j).code)));
   delete stats['auth.login'];
   const rows = [];
   for (let r = 0; r < rounds; r++) {
     const start = Date.now();
     const waits = await Promise.all(
       Array.from({ length: size }, async (_, k) => {
-        const i = (r * size + k) % USERS;
+        const i = (k % COMPANIES) * USERS + ((r * size + k) % USERS); // 업체를 돌아가며
         const call = people[i];
         const t = Date.now();
-        const c = await call('contracts', 'create', { brand: '더좋은집', category: '줄눈', customerName: `물결${r}-${k}-${Date.now() % 1000}`, customerPhone: `010-6${String(r).padStart(3, '0')}-${String(k).padStart(4, '0')}`, aptName: '물결아파트', contractDate: '2026-11-14', totalAmount: 1000000, payments: [] });
+        const c = await call('contracts', 'create', { brand: coOf(i).brand, category: '줄눈', customerName: `물결${r}-${k}-${Date.now() % 1000}`, customerPhone: `010-6${String(r).padStart(3, '0')}-${String(k).padStart(4, '0')}`, aptName: '물결아파트', contractDate: '2026-11-14', totalAmount: 1000000, payments: [] });
         if (c?.id) await call('contracts', 'setPaperPhotos', c.id, { add: [photo] });
         return Date.now() - t;
       }),
@@ -180,16 +205,16 @@ if (process.env.WAVES) {
   process.exit(0);
 }
 
-console.log(`평소 사용: ${USERS}명이 ${SECONDS}초 동안 (한 사람이 ${TMIN / 1000}~${TMAX / 1000}초마다 한 번씩 작업)`);
+console.log(`평소 사용: ${TOTAL}명(업체 ${COMPANIES}곳)이 ${SECONDS}초 동안 (한 사람이 ${TMIN / 1000}~${TMAX / 1000}초마다 한 번씩 작업)`);
 const t0 = Date.now();
-await Promise.all(Array.from({ length: USERS }, (_, i) => person(i, t0 + SECONDS * 1000)));
-report(`평소 사용 — ${USERS}명, ${Math.round((Date.now() - t0) / 1000)}초`);
+await Promise.all(Array.from({ length: TOTAL }, (_, i) => person(i, t0 + SECONDS * 1000)));
+report(`평소 사용 — ${TOTAL}명, ${Math.round((Date.now() - t0) / 1000)}초`);
 
 // ---------- 4. 몰림: 모두가 같은 순간에 저장 ----------
-const burst = Array.from({ length: USERS }, (_, i) => client(i));
-for (let i = 0; i < USERS; i += 10) await Promise.all(burst.slice(i, i + 10).map((c, j) => c('auth', 'login', `load${i + j}`, 'load12345', 'thegood')));
+const burst = Array.from({ length: TOTAL }, (_, i) => client(i));
+for (let i = 0; i < TOTAL; i += 10) await Promise.all(burst.slice(i, i + 10).map((c, j) => c('auth', 'login', `load${i + j}`, 'load12345', coOf(i + j).code)));
 delete stats['auth.login'];
-await Promise.all(burst.map((c, i) => c('contracts', 'create', { brand: '더좋은집', category: '줄눈', customerName: `동시${n(i)}`, customerPhone: `010-8${String(i % 1000).padStart(3, '0')}-1234`, aptName: '동시아파트', contractDate: '2026-11-14', totalAmount: 1000000, payments: [] })));
-report(`몰림 — ${USERS}명이 같은 순간에 계약 저장 (최대 = 마지막 사람이 기다린 시간)`);
+await Promise.all(burst.map((c, i) => c('contracts', 'create', { brand: coOf(i).brand, category: '줄눈', customerName: `동시${n(i)}`, customerPhone: `010-8${String(i % 1000).padStart(3, '0')}-1234`, aptName: '동시아파트', contractDate: '2026-11-14', totalAmount: 1000000, payments: [] })));
+report(`몰림 — ${TOTAL}명이 같은 순간에 계약 저장 (최대 = 마지막 사람이 기다린 시간)`);
 
 servers.forEach((s) => s.kill());
