@@ -26,6 +26,8 @@ export const TABLES = [
   'notifications',
   'paymentReceipts', // 입금 영수증 사진 (계약과 분리 저장)
   'callLogs', // 상담내역: 전화번호별 통화 메모 (상단 [상담내역])
+  'purchases', // 매입 (통계정보 > 매입관리)
+  'stocks', // 재고 품목 + 입출고 기록 (통계정보 > 재고체크)
 ];
 
 export function emptyDb() {
@@ -67,6 +69,14 @@ export function migrate(db) {
   });
   if (!db.paymentReceipts) {
     db.paymentReceipts = [];
+    changed = true;
+  }
+  if (!db.purchases) {
+    db.purchases = [];
+    changed = true;
+  }
+  if (!db.stocks) {
+    db.stocks = [];
     changed = true;
   }
   if (!db.callLogs) {

@@ -26,6 +26,8 @@ export const {
   customers,
   contracts,
   callLogs,
+  purchases,
+  stocks,
   esign,
   notifications,
   reports,

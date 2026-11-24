@@ -17,10 +17,12 @@ const TABLE_MAP = {
   notifications: 'notifications',
   paymentReceipts: 'payment_receipts',
   callLogs: 'call_logs',
+  purchases: 'purchases', // 매입 (통계정보 > 매입관리)
+  stocks: 'stocks', // 재고 품목 + 입출고 기록 (통계정보 > 재고체크)
 };
 export const TABLE_KEYS = Object.keys(TABLE_MAP);
 // 업체별로 나뉘는 테이블 (요청한 사람의 업체 데이터만 읽음)
-const COMPANY_SCOPED = ['engineerOffs', 'teams', 'products', 'apartments', 'customers', 'contracts', 'notifications', 'paymentReceipts', 'callLogs'];
+const COMPANY_SCOPED = ['engineerOffs', 'teams', 'products', 'apartments', 'customers', 'contracts', 'notifications', 'paymentReceipts', 'callLogs', 'purchases', 'stocks'];
 // 영수증 사진은 용량이 커서 기본으로 읽지 않음 (scope.receiptsFor 로 해당 계약 것만)
 const HEAVY = ['paymentReceipts'];
 

@@ -21,9 +21,10 @@ import {
   clearSession,
   resetDemoData,
 } from './runtime.js';
-import { ROLES, DATA_SCOPES, permissionsOf, isOwnScopeOnly, ALL_PERMISSION_KEYS } from '../auth/permissions.js';
+import { ROLES, DATA_SCOPES, permissionsOf, isOwnScopeOnly, ALL_PERMISSION_KEYS, can } from '../auth/permissions.js';
 import { digitsOnly, formatPhone } from '../utils/format.js';
-import { CATEGORIES, COMPANY_DOC_FIELDS, DEPARTMENTS, brandTerms, companyCategories, hasFeature, parseCategories, parseFeatures, termsSource } from '../constants.js';
+import { CATEGORIES, COMPANY_DOC_FIELDS, DEPARTMENTS, brandTerms, companyCategories, hasFeature, parseCategories, parseFeatures, purchaseCategories, termsSource } from '../constants.js';
+import { today } from '../utils/date.js';
 import { AUDIT_KEEP_DAYS, UNDO_KEEP, auditText, skipAudit, undoComparable } from './audit.js';
 import { addHistory } from './views.js';
 import {
@@ -642,6 +643,196 @@ export const apartments = {
     }
     saveDb(db);
     return result;
+  },
+};
+
+// ============================================================
+// 매입 (통계정보 > 매입관리): 자재·인건비 등 업체가 쓴 비용을 날짜별로 적어 두고 통계에서 매출과 비교
+//   조회·등록·수정·삭제 모두 purchase.manage 권한 + 업체 기능 purchases (운영자가 켬)
+// ============================================================
+function findPurchase(db, user, id) {
+  const row = db.purchases.find((r) => r.id === Number(id) && r.companyId === user.companyId);
+  if (!row) throw new ApiError('매입 내역을 찾을 수 없습니다.', 'NOT_FOUND');
+  return row;
+}
+
+export const purchases = {
+  async list({ from = '', to = '' } = {}) {
+    const { db, user } = await authorize('purchase.manage');
+    requireFeature(db, user, 'purchases');
+    return clone(
+      db.purchases
+        .filter((r) => r.companyId === user.companyId && (!from || r.date >= from) && (!to || r.date <= to))
+        .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id), // 최근 날짜부터
+    );
+  },
+
+  // stockItemId·stockQty: 재고 품목을 고르면 그 수량만큼 재고에 '입고'도 함께 기록 (재고 권한이 있을 때만)
+  async save(d = {}) {
+    const { db, user } = await authorize('purchase.manage');
+    requireFeature(db, user, 'purchases');
+    const date = String(d.date || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new ApiError('매입일을 입력해 주세요.');
+    const amount = Math.round(Number(String(d.amount ?? '').replace(/,/g, '')));
+    if (!Number.isFinite(amount) || amount <= 0) throw new ApiError('매입 금액을 1원 이상으로 입력해 주세요.');
+    const fields = {
+      date,
+      category: purchaseCategories(companyOf(db, user)).includes(d.category) ? d.category : '공통',
+      vendor: String(d.vendor || '').trim(), // 거래처
+      item: required(d.item, '매입 내용(품목)을 입력해 주세요.'),
+      amount,
+      memo: String(d.memo || '').trim(),
+    };
+    let row;
+    if (d.id) {
+      row = findPurchase(db, user, d.id);
+      Object.assign(row, fields, { updatedAt: nowIso() });
+    } else {
+      row = { id: nextId(db, 'purchases'), companyId: user.companyId, ...fields, createdBy: user.id, createdAt: nowIso() };
+      db.purchases.push(row);
+    }
+    if (can(user, 'stock.manage') && hasFeature(companyOf(db, user), 'stocks')) linkPurchaseStock(db, user, row, d);
+    saveDb(db);
+    return clone(row);
+  },
+
+  async remove(id) {
+    const { db, user } = await authorize('purchase.manage');
+    requireFeature(db, user, 'purchases');
+    const row = findPurchase(db, user, id);
+    if (row.stockItemId) unlinkPurchaseStock(db, user, row);
+    db.purchases = db.purchases.filter((r) => r !== row);
+    saveDb(db);
+  },
+};
+
+// ============================================================
+// 재고 (통계정보 > 재고체크): 페인트·자재 품목별 입고 / 사용 / 실사(실제 남은 수량 확인)
+//   품목 한 줄에 입출고 기록(moves)을 함께 저장. 현재고 = 기록을 날짜순으로 계산
+//   (입고 +, 사용 −, 실사 = 그 수량으로 맞춤)  /  stock.manage 권한 + 업체 기능 stocks (운영자가 켬)
+// ============================================================
+export const STOCK_MOVE_TYPES = ['입고', '사용', '실사'];
+
+const qtyOf = (v, msg) => {
+  const n = Math.round(Number(String(v ?? '').replace(/,/g, '')) * 100) / 100; // 소수 둘째 자리까지 (예: 0.5통)
+  if (!Number.isFinite(n) || n < 0) throw new ApiError(msg);
+  return n;
+};
+
+export function stockQty(item) {
+  return [...(item.moves || [])]
+    .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)
+    .reduce((q, m) => (m.type === '실사' ? m.qty : m.type === '입고' ? q + m.qty : q - m.qty), 0);
+}
+
+const presentStock = (item) => ({ ...item, qty: Math.round(stockQty(item) * 100) / 100 });
+
+function findStock(db, user, id) {
+  const item = db.stocks.find((r) => r.id === Number(id) && r.companyId === user.companyId);
+  if (!item) throw new ApiError('재고 품목을 찾을 수 없습니다.', 'NOT_FOUND');
+  item.moves = item.moves || [];
+  return item;
+}
+
+function unlinkPurchaseStock(db, user, purchase) {
+  const item = db.stocks.find((r) => r.id === purchase.stockItemId && r.companyId === user.companyId);
+  if (item) item.moves = (item.moves || []).filter((m) => m.purchaseId !== purchase.id);
+}
+
+function linkPurchaseStock(db, user, purchase, d) {
+  const itemId = Number(d.stockItemId) || null;
+  if (purchase.stockItemId) unlinkPurchaseStock(db, user, purchase);
+  if (!itemId) {
+    delete purchase.stockItemId;
+    delete purchase.stockQty;
+    return;
+  }
+  const item = findStock(db, user, itemId);
+  const qty = qtyOf(d.stockQty, '입고 수량을 입력해 주세요.');
+  if (!qty) throw new ApiError('입고 수량을 입력해 주세요.');
+  item.moves.push({ id: nextId(db, 'stockMoves'), date: purchase.date, type: '입고', qty, memo: `매입: ${purchase.item}`, purchaseId: purchase.id, by: user.id, at: nowIso() });
+  item.updatedAt = nowIso();
+  Object.assign(purchase, { stockItemId: item.id, stockQty: qty });
+}
+
+export const stocks = {
+  async list({ includeInactive = false } = {}) {
+    const { db, user } = await authorize('stock.manage');
+    requireFeature(db, user, 'stocks');
+    return clone(
+      db.stocks
+        .filter((r) => r.companyId === user.companyId && (includeInactive || r.active !== false))
+        .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+        .map(presentStock),
+    );
+  },
+
+  async saveItem(d = {}) {
+    const { db, user } = await authorize('stock.manage');
+    requireFeature(db, user, 'stocks');
+    const fields = {
+      name: required(d.name, '품목 이름을 입력해 주세요.'),
+      category: purchaseCategories(companyOf(db, user)).includes(d.category) ? d.category : '공통',
+      spec: String(d.spec || '').trim(), // 색상·규격 (예: 화이트 18L)
+      unit: String(d.unit || '').trim() || '개',
+      minQty: qtyOf(d.minQty || 0, '부족 알림 수량을 확인해 주세요.'), // 이 수량 이하면 '부족' 표시
+      memo: String(d.memo || '').trim(),
+      active: d.active !== false,
+    };
+    const dup = db.stocks.find((r) => r.companyId === user.companyId && r.id !== Number(d.id) && r.name === fields.name && (r.spec || '') === fields.spec);
+    if (dup) throw new ApiError('같은 이름·규격의 품목이 이미 있습니다.');
+    let item;
+    if (d.id) {
+      item = findStock(db, user, d.id);
+      Object.assign(item, fields, { updatedAt: nowIso() });
+    } else {
+      item = { id: nextId(db, 'stocks'), companyId: user.companyId, ...fields, moves: [], createdAt: nowIso() };
+      const start = qtyOf(d.startQty || 0, '현재 수량을 확인해 주세요.');
+      const startDate = /^\d{4}-\d{2}-\d{2}$/.test(d.startDate || '') ? d.startDate : today(); // 처음 수량을 센 날 (이 날 이후 기록부터 더하고 뺌)
+      if (start) item.moves.push({ id: nextId(db, 'stockMoves'), date: startDate, type: '실사', qty: start, memo: '처음 등록', by: user.id, at: nowIso() });
+      db.stocks.push(item);
+    }
+    saveDb(db);
+    return clone(presentStock(item));
+  },
+
+  // 입출고 기록이 있는 품목은 기록 보존을 위해 삭제 대신 '사용 안 함'
+  async removeItem(id) {
+    const { db, user } = await authorize('stock.manage');
+    requireFeature(db, user, 'stocks');
+    const item = findStock(db, user, id);
+    if (item.moves.length) item.active = false;
+    else db.stocks = db.stocks.filter((r) => r !== item);
+    saveDb(db);
+  },
+
+  async addMove(itemId, d = {}) {
+    const { db, user } = await authorize('stock.manage');
+    requireFeature(db, user, 'stocks');
+    const item = findStock(db, user, itemId);
+    const date = String(d.date || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new ApiError('날짜를 입력해 주세요.');
+    if (!STOCK_MOVE_TYPES.includes(d.type)) throw new ApiError('입고 / 사용 / 실사 중에서 골라 주세요.');
+    const qty = qtyOf(d.qty, '수량을 0 이상으로 입력해 주세요.');
+    if (!qty && d.type !== '실사') throw new ApiError('수량을 입력해 주세요.');
+    item.moves.push({ id: nextId(db, 'stockMoves'), date, type: d.type, qty, memo: String(d.memo || '').trim(), by: user.id, at: nowIso() });
+    item.updatedAt = nowIso();
+    saveDb(db);
+    return clone(presentStock(item));
+  },
+
+  // 매입에서 자동으로 들어간 입고는 매입관리에서 고치거나 지움
+  async removeMove(itemId, moveId) {
+    const { db, user } = await authorize('stock.manage');
+    requireFeature(db, user, 'stocks');
+    const item = findStock(db, user, itemId);
+    const move = item.moves.find((m) => m.id === Number(moveId));
+    if (!move) throw new ApiError('기록을 찾을 수 없습니다.', 'NOT_FOUND');
+    if (move.purchaseId) throw new ApiError('매입과 연결된 입고입니다. 매입관리에서 수정·삭제해 주세요.');
+    item.moves = item.moves.filter((m) => m !== move);
+    item.updatedAt = nowIso();
+    saveDb(db);
+    return clone(presentStock(item));
   },
 };
 
