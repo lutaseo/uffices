@@ -60,7 +60,7 @@ const MENUS = [
     // 매입관리·재고체크는 업체 기능을 켠 곳만 (켜진 하위 메뉴가 없으면 예전처럼 통계정보 하나)
     subs: [
       { key: 'statsMain', label: '통계정보', path: '/stats', exact: true },
-      { key: 'purchases', label: '매입관리', path: '/stats/purchases', perm: 'purchase.manage', feature: 'purchases' },
+      { key: 'purchases', label: '매입·매출관리', path: '/stats/purchases', perm: 'purchase.manage', feature: 'purchases' },
       { key: 'stock', label: '재고체크', path: '/stats/stock', perm: 'stock.manage', feature: 'stocks' },
     ],
   },

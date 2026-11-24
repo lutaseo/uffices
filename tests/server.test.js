@@ -2324,3 +2324,25 @@ test('재고체크: 품목 등록(처음 수량), 입고·사용·실사로 현�
   await sup.ok('companies', 'update', good.id, { features: {} });
   await sup.ok('companies', 'update', oth.id, { features: {} });
 });
+
+test('매입·매출관리: 매출(계약 외 수입)도 저장, 박람회 구분, 매출은 재고 입고와 연결 안 함', async () => {
+  const sup = client();
+  await sup.ok('auth', 'login', 'super', 'super-test-1234');
+  const good = (await sup.ok('companies', 'list')).find((x) => x.code === 'thegood');
+  await sup.ok('companies', 'update', good.id, { features: { purchases: true, stocks: true } });
+  const fair = await admin.ok('purchases', 'save', { date: '2026-12-02', category: '박람회', item: '박람회 부스비', amount: 300000 });
+  assert.equal(fair.kind, '매입', '기본은 매입');
+  assert.equal(fair.category, '박람회', '박람회 구분');
+  const sale = await admin.ok('purchases', 'save', { kind: '매출', date: '2026-12-02', category: '박람회', item: '박람회 현장 판매', amount: 120000 });
+  assert.equal(sale.kind, '매출');
+  const item = await admin.ok('stocks', 'saveItem', { name: '매출시험자재', unit: '통' });
+  // 매입으로 재고 입고 연결 → 매출로 바꾸면 입고 연결이 빠짐
+  const linked = await admin.ok('purchases', 'save', { date: '2026-12-03', item: '자재 구입', amount: 50000, stockItemId: item.id, stockQty: 4 });
+  assert.equal((await admin.ok('stocks', 'list', {})).find((x) => x.id === item.id).qty, 4);
+  const changed = await admin.ok('purchases', 'save', { ...linked, kind: '매출', stockItemId: item.id, stockQty: 4 });
+  assert.equal(changed.stockItemId, undefined, '매출은 재고 연결 없음');
+  assert.equal((await admin.ok('stocks', 'list', {})).find((x) => x.id === item.id).qty, 0, '연결된 입고도 지워짐');
+  const dec = await admin.ok('purchases', 'list', { from: '2026-12-01', to: '2026-12-31' });
+  assert.deepEqual(dec.map((r) => r.kind).sort(), ['매입', '매출', '매출']);
+  await sup.ok('companies', 'update', good.id, { features: {} });
+});

@@ -647,7 +647,8 @@ export const apartments = {
 };
 
 // ============================================================
-// 매입 (통계정보 > 매입관리): 자재·인건비 등 업체가 쓴 비용을 날짜별로 적어 두고 통계에서 매출과 비교
+// 매입·매출 (통계정보 > 매입·매출관리): 쓴 비용(매입: 자재·인건비·박람회비 등)과 계약 밖의 수입(매출)을
+//   날짜별로 적어 두고 통계에서 계약 매출과 함께 비교. kind: '매입' | '매출' (예전 자료는 없음 = 매입)
 //   조회·등록·수정·삭제 모두 purchase.manage 권한 + 업체 기능 purchases (운영자가 켬)
 // ============================================================
 function findPurchase(db, user, id) {
@@ -672,14 +673,16 @@ export const purchases = {
     const { db, user } = await authorize('purchase.manage');
     requireFeature(db, user, 'purchases');
     const date = String(d.date || '').trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new ApiError('매입일을 입력해 주세요.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new ApiError('날짜를 입력해 주세요.');
     const amount = Math.round(Number(String(d.amount ?? '').replace(/,/g, '')));
-    if (!Number.isFinite(amount) || amount <= 0) throw new ApiError('매입 금액을 1원 이상으로 입력해 주세요.');
+    if (!Number.isFinite(amount) || amount <= 0) throw new ApiError('금액을 1원 이상으로 입력해 주세요.');
+    const kind = d.kind === '매출' ? '매출' : '매입';
     const fields = {
+      kind,
       date,
       category: purchaseCategories(companyOf(db, user)).includes(d.category) ? d.category : '공통',
       vendor: String(d.vendor || '').trim(), // 거래처
-      item: required(d.item, '매입 내용(품목)을 입력해 주세요.'),
+      item: required(d.item, '내용(품목)을 입력해 주세요.'),
       amount,
       memo: String(d.memo || '').trim(),
     };
@@ -691,7 +694,9 @@ export const purchases = {
       row = { id: nextId(db, 'purchases'), companyId: user.companyId, ...fields, createdBy: user.id, createdAt: nowIso() };
       db.purchases.push(row);
     }
-    if (can(user, 'stock.manage') && hasFeature(companyOf(db, user), 'stocks')) linkPurchaseStock(db, user, row, d);
+    // 재고 입고 연결은 매입만 (매출로 바꾸면 연결된 입고도 지움)
+    if (can(user, 'stock.manage') && hasFeature(companyOf(db, user), 'stocks')) linkPurchaseStock(db, user, row, kind === '매입' ? d : {});
+    else if (kind === '매출' && row.stockItemId) linkPurchaseStock(db, user, row, {});
     saveDb(db);
     return clone(row);
   },

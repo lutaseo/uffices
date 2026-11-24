@@ -45,7 +45,9 @@ export default function StatsPage() {
   const [engRows, setEngRows] = useState([]);
   const [engNames, setEngNames] = useState([]);
   const [engPick, setEngPick] = useState(''); // '' = 전체 기사
-  const [buys, setBuys] = useState([]); // 매입 (매입일 기준)
+  const [ledger, setLedger] = useState([]); // 매입·매출관리에 적은 것 (그 날짜 기준)
+  const buys = ledger.filter((p) => p.kind !== '매출'); // 매입 (쓴 돈)
+  const extras = ledger.filter((p) => p.kind === '매출'); // 계약 외 매출 (박람회 현장 판매 등)
   const byEngineer = group === 'engineer';
 
   useEffect(() => {
@@ -59,7 +61,7 @@ export default function StatsPage() {
     else reports.contracts({ dateType, from: range[0], to: range[1] }).then(setRows).catch(handleError);
   }, [byEngineer, dateType, range, handleError]);
   useEffect(() => {
-    if (showPurchase && !byEngineer) purchaseApi.list({ from: range[0], to: range[1] }).then(setBuys).catch(handleError);
+    if (showPurchase && !byEngineer) purchaseApi.list({ from: range[0], to: range[1] }).then(setLedger).catch(handleError);
   }, [showPurchase, byEngineer, range, handleError]);
   // 매입은 월별(매입일)·구분별로만 나눌 수 있음 — 그 외에는 위 합계 카드에서만
   const buyKey = group === 'month' ? (p) => p.date.slice(0, 7) : group === 'category' ? (p) => p.category : null;
@@ -70,8 +72,9 @@ export default function StatsPage() {
     if (!g.fn && g.key !== 'month') return [];
     const keyFn = g.fn || ((c) => dateOf(c, dateType).slice(0, 7) || '미정');
     const map = {};
-    const rowOf = (k) => (map[k] = map[k] || { key: k, count: 0, done: 0, canceled: 0, actual: 0, paid: 0, balance: 0, purchase: 0 });
+    const rowOf = (k) => (map[k] = map[k] || { key: k, count: 0, done: 0, canceled: 0, actual: 0, paid: 0, balance: 0, purchase: 0, other: 0 });
     if (buyCols) buys.forEach((p) => (rowOf(buyKey(p)).purchase += p.amount));
+    if (buyCols) extras.forEach((p) => (rowOf(buyKey(p)).other += p.amount));
     rows.forEach((c) => {
       const r = rowOf(keyFn(c));
       r.count += 1;
@@ -86,7 +89,7 @@ export default function StatsPage() {
       r.balance += a.balance;
     });
     return Object.values(map).sort((a, b) => a.key.localeCompare(b.key));
-  }, [rows, group, dateType, buys, buyCols]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rows, group, dateType, ledger, buyCols]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const total = table.reduce(
     (s, r) => ({
@@ -97,13 +100,16 @@ export default function StatsPage() {
       paid: s.paid + r.paid,
       balance: s.balance + r.balance,
       purchase: s.purchase + r.purchase,
+      other: s.other + r.other,
     }),
-    { count: 0, done: 0, canceled: 0, actual: 0, paid: 0, balance: 0, purchase: 0 },
+    { count: 0, done: 0, canceled: 0, actual: 0, paid: 0, balance: 0, purchase: 0, other: 0 },
   );
+  const gap = (r) => r.actual + r.other - r.purchase; // 차액 = 계약 매출 + 기타 매출 − 매입
   // 위 카드: 기간 전체 매출(취소 제외 실계약금) · 매입 · 차액 (나누는 기준과 상관없이 같음)
   const salesSum = rows.reduce((t, c) => (c.status === '취소' ? t : t + calcAmounts(c).actual), 0);
   const buySum = buys.reduce((t, p) => t + p.amount, 0);
-  const cols = 5 + (showAmount ? 3 : 0) + (buyCols ? 1 : 0) + (buyCols && showAmount ? 1 : 0);
+  const extraSum = extras.reduce((t, p) => t + p.amount, 0);
+  const cols = 5 + (showAmount ? 3 : 0) + (buyCols ? 2 : 0) + (buyCols && showAmount ? 1 : 0);
   const maxCount = Math.max(1, ...table.map((r) => r.count));
 
   return (
@@ -174,8 +180,8 @@ export default function StatsPage() {
                   시공완료: r.done,
                   취소: r.canceled,
                   ...(showAmount ? { 실계약금: r.actual, 입금: r.paid, 잔액: r.balance } : {}),
-                  ...(buyCols ? { 매입: r.purchase } : {}),
-                  ...(buyCols && showAmount ? { 차액: r.actual - r.purchase } : {}),
+                  ...(buyCols ? { 기타매출: r.other, 매입: r.purchase } : {}),
+                  ...(buyCols && showAmount ? { 차액: gap(r) } : {}),
                 })),
                 '통계',
                 '통계정보',
@@ -191,20 +197,25 @@ export default function StatsPage() {
         <div className="amount-cards">
           {showAmount && (
             <div className="amount-card">
-              <span>매출 (실계약금, 취소 제외)</span>
+              <span>계약 매출 (실계약금, 취소 제외)</span>
               <b>{won(salesSum)}원</b>
               <small>{DATE_TYPES.find((d) => d.value === dateType)?.label} 기준</small>
             </div>
           )}
           <div className="amount-card">
+            <span>기타 매출 (계약 외)</span>
+            <b>{won(extraSum)}원</b>
+            <small>{extras.length}건</small>
+          </div>
+          <div className="amount-card">
             <span>매입</span>
             <b>{won(buySum)}원</b>
-            <small>매입일 기준 {buys.length}건</small>
+            <small>{buys.length}건</small>
           </div>
           {showAmount && (
-            <div className={`amount-card ${salesSum - buySum < 0 ? 'minus' : 'done'}`}>
-              <span>차액 (매출 − 매입)</span>
-              <b>{won(salesSum - buySum)}원</b>
+            <div className={`amount-card ${salesSum + extraSum - buySum < 0 ? 'minus' : 'done'}`}>
+              <span>차액 (계약 매출 + 기타 매출 − 매입)</span>
+              <b>{won(salesSum + extraSum - buySum)}원</b>
             </div>
           )}
         </div>
@@ -229,6 +240,7 @@ export default function StatsPage() {
                   <th>잔액</th>
                 </>
               )}
+              {buyCols && <th>기타매출</th>}
               {buyCols && <th>매입</th>}
               {buyCols && showAmount && <th>차액</th>}
             </tr>
@@ -255,8 +267,9 @@ export default function StatsPage() {
                     <td className="text-right">{won(r.balance)}</td>
                   </>
                 )}
+                {buyCols && <td className="text-right">{won(r.other)}</td>}
                 {buyCols && <td className="text-right">{won(r.purchase)}</td>}
-                {buyCols && showAmount && <td className={`text-right ${r.actual - r.purchase < 0 ? 'text-red' : ''}`}>{won(r.actual - r.purchase)}</td>}
+                {buyCols && showAmount && <td className={`text-right ${gap(r) < 0 ? 'text-red' : ''}`}>{won(gap(r))}</td>}
               </tr>
             ))}
             {table.length > 0 && (
@@ -273,8 +286,9 @@ export default function StatsPage() {
                     <td className="text-right">{won(total.balance)}</td>
                   </>
                 )}
+                {buyCols && <td className="text-right">{won(total.other)}</td>}
                 {buyCols && <td className="text-right">{won(total.purchase)}</td>}
-                {buyCols && showAmount && <td className={`text-right ${total.actual - total.purchase < 0 ? 'text-red' : ''}`}>{won(total.actual - total.purchase)}</td>}
+                {buyCols && showAmount && <td className={`text-right ${gap(total) < 0 ? 'text-red' : ''}`}>{won(gap(total))}</td>}
               </tr>
             )}
           </tbody>
