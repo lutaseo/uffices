@@ -2223,3 +2223,126 @@ test('업체별 따로 저장(parallelSave): 두 업체가 동시에 계약을 �
   const next = await admin.ok('contracts', 'create', { ...base, customerName: '동시뒤고객', customerPhone: '010-8300-0001' });
   assert.ok(next.id > Math.max(...ids));
 });
+
+test('매입관리: 관리자 등록·수정·삭제, 기간 조회, 권한 없는 실장 차단, 다른 업체와 분리', async () => {
+  const sup = client();
+  await sup.ok('auth', 'login', 'super', 'super-test-1234');
+  const cos = await sup.ok('companies', 'list');
+  const good = cos.find((x) => x.code === 'thegood');
+  const oth = cos.find((x) => x.code === 'other-co');
+  // 기본은 꺼짐 → 막힘, 운영자가 켜면 사용
+  assert.equal((await admin('purchases', 'list', {})).status, 403, '기능 꺼진 업체는 막힘');
+  await sup.ok('companies', 'update', good.id, { features: { purchases: true, stocks: true } });
+  await sup.ok('companies', 'update', oth.id, { features: { purchases: true, stocks: true } });
+  const boss = client();
+  await boss.ok('auth', 'login', 'admin', 'admin1234');
+  const a = await boss.ok('purchases', 'save', { date: '2026-09-03', category: '줄눈', vendor: '자재상', item: '줄눈재 20박스', amount: '1,200,000' });
+  assert.equal(a.amount, 1200000, '쉼표 있는 금액도 숫자로');
+  await boss.ok('purchases', 'save', { date: '2026-10-05', category: '없는구분', item: '공구', amount: 30000 });
+  assert.equal((await boss('purchases', 'save', { date: '2026-10-05', item: '공구', amount: 0 })).status, 400, '0원 거부');
+  assert.equal((await boss('purchases', 'save', { date: '', item: '공구', amount: 100 })).status, 400, '날짜 없으면 거부');
+  assert.equal((await boss('purchases', 'save', { date: '2026-10-05', item: ' ', amount: 100 })).status, 400, '품목 없으면 거부');
+
+  const sept = await boss.ok('purchases', 'list', { from: '2026-09-01', to: '2026-09-30' });
+  assert.deepEqual(sept.map((r) => r.item), ['줄눈재 20박스'], '기간 안 매입만');
+  const all = await boss.ok('purchases', 'list', {});
+  assert.equal(all.length, 2);
+  assert.equal(all[0].category, '공통', '모르는 구분은 공통으로');
+
+  await boss.ok('purchases', 'save', { ...a, amount: 1000000 });
+  assert.equal((await boss.ok('purchases', 'list', { from: '2026-09-01', to: '2026-09-30' }))[0].amount, 1000000, '수정');
+  await boss.ok('purchases', 'remove', a.id);
+  assert.equal((await boss.ok('purchases', 'list', {})).length, 1, '삭제');
+
+  await boss.ok('users', 'create', { role: 'MANAGER', loginId: 'buymgr', password: 'buy12345', name: '매입실장', permissions: ['stats.view'], dataScope: 'all' });
+  const mgr = client();
+  await mgr.ok('auth', 'login', 'buymgr', 'buy12345');
+  assert.equal((await mgr('purchases', 'list', {})).status, 403, '매입 권한 없으면 조회 불가');
+  assert.equal((await mgr('purchases', 'save', { date: '2026-10-05', item: 'x', amount: 1 })).status, 403, '등록 불가');
+
+  const other = client(); // 위 '업체 주소 코드' 시험에서 만든 다른 업체
+  await other.ok('auth', 'login', 'otheradmin', 'other1234', 'other-co');
+  assert.equal((await other.ok('purchases', 'list', {})).length, 0, '다른 업체 매입은 안 보임');
+  const mine = (await boss.ok('purchases', 'list', {}))[0];
+  assert.equal((await other('purchases', 'remove', mine.id)).status, 404, '다른 업체 매입 삭제 불가');
+  await sup.ok('companies', 'update', good.id, { features: {} });
+  await sup.ok('companies', 'update', oth.id, { features: {} });
+});
+
+test('재고체크: 품목 등록(처음 수량), 입고·사용·실사로 현재고 계산, 매입과 연결된 입고, 기록 있는 품목은 사용 안 함', async () => {
+  const sup = client();
+  await sup.ok('auth', 'login', 'super', 'super-test-1234');
+  const cos = await sup.ok('companies', 'list');
+  const good = cos.find((x) => x.code === 'thegood');
+  const oth = cos.find((x) => x.code === 'other-co');
+  // 기본은 꺼짐 → 막힘, 운영자가 켜면 사용
+  assert.equal((await admin('stocks', 'list', {})).status, 403, '기능 꺼진 업체는 막힘');
+  await sup.ok('companies', 'update', good.id, { features: { purchases: true, stocks: true } });
+  await sup.ok('companies', 'update', oth.id, { features: { purchases: true, stocks: true } });
+  const boss = client();
+  await boss.ok('auth', 'login', 'admin', 'admin1234');
+  const paint = await boss.ok('stocks', 'saveItem', { name: '탄성 페인트', spec: '화이트 18L', unit: '통', minQty: 3, startQty: 5, startDate: '2026-09-30' });
+  assert.equal(paint.qty, 5, '처음 수량');
+  assert.equal((await boss('stocks', 'saveItem', { name: '탄성 페인트', spec: '화이트 18L' })).status, 400, '같은 이름·규격 중복');
+
+  await boss.ok('stocks', 'addMove', paint.id, { date: '2026-10-01', type: '사용', qty: 2, memo: '현장' });
+  let it = await boss.ok('stocks', 'addMove', paint.id, { date: '2026-10-02', type: '입고', qty: '1.5' });
+  assert.equal(it.qty, 4.5, '5 - 2 + 1.5');
+  it = await boss.ok('stocks', 'addMove', paint.id, { date: '2026-10-03', type: '실사', qty: 4 });
+  assert.equal(it.qty, 4, '실사 수량으로 맞춤');
+  assert.equal((await boss('stocks', 'addMove', paint.id, { date: '2026-10-03', type: '도난', qty: 1 })).status, 400, '모르는 종류');
+  assert.equal((await boss('stocks', 'addMove', paint.id, { date: '2026-10-03', type: '사용', qty: 0 })).status, 400, '0 사용');
+
+  // 매입하면서 입고 → 재고 증가, 매입 수정·삭제 시 같이 반영
+  const buy = await boss.ok('purchases', 'save', { date: '2026-10-04', item: '페인트 구매', amount: 300000, stockItemId: paint.id, stockQty: 3 });
+  assert.equal(buy.stockQty, 3);
+  const qtyNow = async () => (await boss.ok('stocks', 'list', {})).find((r) => r.id === paint.id).qty;
+  assert.equal(await qtyNow(), 7, '매입 입고 +3');
+  const linked = (await boss.ok('stocks', 'list', {})).find((r) => r.id === paint.id).moves.find((m) => m.purchaseId === buy.id);
+  assert.equal((await boss('stocks', 'removeMove', paint.id, linked.id)).status, 400, '매입 연결 입고는 재고에서 못 지움');
+  await boss.ok('purchases', 'save', { ...buy, stockQty: 2 });
+  assert.equal(await qtyNow(), 6, '매입 수정 → 입고 2로');
+  await boss.ok('purchases', 'remove', buy.id);
+  assert.equal(await qtyNow(), 4, '매입 삭제 → 입고도 삭제');
+
+  const first = (await boss.ok('stocks', 'list', {})).find((r) => r.id === paint.id).moves[1];
+  await boss.ok('stocks', 'removeMove', paint.id, first.id);
+  await boss.ok('stocks', 'removeItem', paint.id);
+  assert.equal((await boss.ok('stocks', 'list', {})).length, 0, '기록 있는 품목은 숨김(사용 안 함)');
+  assert.equal((await boss.ok('stocks', 'list', { includeInactive: true }))[0].active, false);
+  const empty = await boss.ok('stocks', 'saveItem', { name: '마스킹테이프' });
+  await boss.ok('stocks', 'removeItem', empty.id);
+  assert.equal((await boss.ok('stocks', 'list', { includeInactive: true })).length, 1, '기록 없는 품목은 삭제');
+
+  const mgr = client();
+  await mgr.ok('auth', 'login', 'buymgr', 'buy12345'); // 매입관리 시험의 실장 (재고 권한 없음)
+  assert.equal((await mgr('stocks', 'list', {})).status, 403, '재고 권한 없으면 차단');
+  const other = client();
+  await other.ok('auth', 'login', 'otheradmin', 'other1234', 'other-co');
+  assert.equal((await other.ok('stocks', 'list', { includeInactive: true })).length, 0, '다른 업체 재고는 안 보임');
+  assert.equal((await other('stocks', 'addMove', paint.id, { date: '2026-10-05', type: '입고', qty: 1 })).status, 404, '다른 업체 품목 기록 불가');
+  await sup.ok('companies', 'update', good.id, { features: {} });
+  await sup.ok('companies', 'update', oth.id, { features: {} });
+});
+
+test('매입·매출관리: 매출(계약 외 수입)도 저장, 박람회 구분, 매출은 재고 입고와 연결 안 함', async () => {
+  const sup = client();
+  await sup.ok('auth', 'login', 'super', 'super-test-1234');
+  const good = (await sup.ok('companies', 'list')).find((x) => x.code === 'thegood');
+  await sup.ok('companies', 'update', good.id, { features: { purchases: true, stocks: true } });
+  const fair = await admin.ok('purchases', 'save', { date: '2026-12-02', category: '박람회', item: '박람회 부스비', amount: 300000 });
+  assert.equal(fair.kind, '매입', '기본은 매입');
+  assert.equal(fair.category, '박람회', '박람회 구분');
+  const sale = await admin.ok('purchases', 'save', { kind: '매출', date: '2026-12-02', category: '박람회', item: '박람회 현장 판매', amount: 120000 });
+  assert.equal(sale.kind, '매출');
+  const item = await admin.ok('stocks', 'saveItem', { name: '매출시험자재', unit: '통' });
+  // 매입으로 재고 입고 연결 → 매출로 바꾸면 입고 연결이 빠짐
+  const linked = await admin.ok('purchases', 'save', { date: '2026-12-03', item: '자재 구입', amount: 50000, stockItemId: item.id, stockQty: 4 });
+  assert.equal((await admin.ok('stocks', 'list', {})).find((x) => x.id === item.id).qty, 4);
+  const changed = await admin.ok('purchases', 'save', { ...linked, kind: '매출', stockItemId: item.id, stockQty: 4 });
+  assert.equal(changed.stockItemId, undefined, '매출은 재고 연결 없음');
+  assert.equal((await admin.ok('stocks', 'list', {})).find((x) => x.id === item.id).qty, 0, '연결된 입고도 지워짐');
+  const dec = await admin.ok('purchases', 'list', { from: '2026-12-01', to: '2026-12-31' });
+  assert.deepEqual(dec.map((r) => r.kind).sort(), ['매입', '매출', '매출']);
+  await sup.ok('companies', 'update', good.id, { features: {} });
+});

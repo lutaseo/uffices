@@ -21,6 +21,8 @@ import FairModal from './components/FairModal.jsx';
 import { InstallScreen } from './components/InstallCard.jsx';
 import ProgressStatus from './components/ProgressStatus.jsx';
 import StatsPage from './pages/StatsPage.jsx';
+import PurchasePage from './pages/PurchasePage.jsx';
+import StockPage from './pages/StockPage.jsx';
 import CallLogPage from './pages/CallLogPage.jsx';
 import AccountManagement from './pages/AccountManagement.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
@@ -49,7 +51,19 @@ const MENUS = [
   { key: 'schedule', label: '일정관리', icon: '📅', perm: 'schedule.view', path: '/schedule' },
   { key: 'calls', label: '상담내역', icon: '📞', perm: 'calllog.manage', path: '/calls', feature: 'callLog' },
   { key: 'progress', label: '진행상황', icon: '📑', perm: 'stats.view', path: '/progress' },
-  { key: 'stats', label: '통계정보', icon: '📊', perm: 'stats.view', path: '/stats' },
+  {
+    key: 'stats',
+    label: '통계정보',
+    icon: '📊',
+    perm: 'stats.view',
+    path: '/stats',
+    // 매입관리·재고체크는 업체 기능을 켠 곳만 (켜진 하위 메뉴가 없으면 예전처럼 통계정보 하나)
+    subs: [
+      { key: 'statsMain', label: '통계정보', path: '/stats', exact: true },
+      { key: 'purchases', label: '매입·매출관리', path: '/stats/purchases', perm: 'purchase.manage', feature: 'purchases' },
+      { key: 'stock', label: '재고체크', path: '/stats/stock', perm: 'stock.manage', feature: 'stocks' },
+    ],
+  },
   // 운영자 전용 (업체 관리자는 설정 > 사용자관리 에서 실장을 관리)
   { key: 'accounts', label: '업체/계정관리', icon: '🔑', visible: (u) => u.role === ROLES.SUPER, path: '/admin' },
   { key: 'alimtalk', label: '알림톡연결', icon: '💬', visible: (u) => u.role === ROLES.SUPER, path: '/admin/alimtalk' },
@@ -250,14 +264,14 @@ function MainLayout({ route }) {
     : null;
 
   // 탭 이름: '계약관리 · 더좋은집 VerityBase', AS관리·휴지통 등 하위 메뉴면 그 이름, 운영자는 'VerityBase 운영자'
-  const currentSub = current?.subs?.length > 1 ? current.subs.find((s) => (s.key === 'main' ? path === s.path || /^\/contracts\/(\d+|new)/.test(path) : path.startsWith(s.path))) : null;
+  const currentSub = current?.subs?.length > 1 ? current.subs.find((s) => (s.key === 'main' ? path === s.path || /^\/contracts\/(\d+|new)/.test(path) : s.exact ? path === s.path : path.startsWith(s.path))) : null;
   const pageName = path === '/consult' ? '상담홈' : path === '/contracts/new' ? '계약 등록' : (currentSub || current)?.label || '';
   usePageTitle(
     `${pageName ? `${pageName} · ` : ''}${company ? `${company.name} VerityBase` : 'VerityBase 운영자'}${consult ? ' (상담실장)' : ''}`,
     company ? `${company.name}${consult ? ' 상담' : ''}` : 'VerityBase 운영자',
   );
 
-  const subActive = (s) => (s.key === 'main' ? path === s.path || /^\/contracts\/(\d+|new)/.test(path) : path.startsWith(s.path));
+  const subActive = (s) => (s.key === 'main' ? path === s.path || /^\/contracts\/(\d+|new)/.test(path) : s.exact ? path === s.path : path.startsWith(s.path));
 
   return (
     <div className={`app-container ${consult ? 'consult-mode' : ''}`}>
@@ -343,7 +357,7 @@ function MainLayout({ route }) {
         {current?.key === 'schedule' && <ScheduleManagement />}
         {current?.key === 'calls' && <CallLogPage />}
         {current?.key === 'progress' && <ProgressStatus />}
-        {current?.key === 'stats' && <StatsPage />}
+        {current?.key === 'stats' && <StatsSubPage path={path} subs={current.subs} />}
         {current?.key === 'accounts' && <AccountManagement />}
         {current?.key === 'alimtalk' && <AlimtalkSettings />}
         {current?.key === 'terms' && <ContractTermsSettings />}
@@ -351,6 +365,14 @@ function MainLayout({ route }) {
       </main>
     </div>
   );
+}
+
+// 통계정보 하위 화면 (기능·권한 없는 하위 메뉴 주소는 통계정보로)
+function StatsSubPage({ path, subs }) {
+  const has = (key) => subs.some((s) => s.key === key);
+  if (path.startsWith('/stats/purchases') && has('purchases')) return <PurchasePage />;
+  if (path.startsWith('/stats/stock') && has('stock')) return <StockPage />;
+  return <StatsPage />;
 }
 
 function SettingPage({ path, subs }) {

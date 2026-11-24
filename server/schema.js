@@ -21,7 +21,7 @@ DECLARE t text;
 BEGIN
   FOREACH t IN ARRAY ARRAY['companies','users','engineers','engineer_offs','teams','products',
                            'apartments','customers','contracts','notifications','payment_receipts',
-                           'call_logs']
+                           'call_logs','purchases','stocks']
   LOOP
     EXECUTE format('CREATE TABLE IF NOT EXISTS %I (
       id          bigint PRIMARY KEY,
@@ -65,7 +65,7 @@ DECLARE t text;
 BEGIN
   FOREACH t IN ARRAY ARRAY['companies','users','engineers','engineer_offs','teams','products',
                            'apartments','customers','contracts','notifications','payment_receipts',
-                           'call_logs']
+                           'call_logs','purchases','stocks']
   LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
   END LOOP;

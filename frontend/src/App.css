@@ -5908,3 +5908,114 @@ button.paper-add { font: inherit; }
     min-width: 0;
   }
 }
+
+/* 통계정보 > 매입관리: 입력 줄 */
+.purchase-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px 10px;
+  align-items: end;
+  margin: 12px 0 16px;
+  padding: 12px;
+  border: 1px solid #dce1e8;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.purchase-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.purchase-form label.wide {
+  grid-column: span 2;
+}
+
+.purchase-form .input-text,
+.purchase-form .input-date,
+.purchase-form .input-select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.purchase-form-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.customer-table tr.selected-row td {
+  background: #eef4ff;
+}
+
+/* 통계정보: 매출·매입·차액 */
+.amount-card.minus b {
+  color: #dc2626;
+}
+
+@media screen and (max-width: 768px) {
+  .purchase-form label.wide {
+    grid-column: 1 / -1;
+  }
+}
+
+/* 통계정보 > 재고체크: 선택한 품목의 입출고 */
+.stock-panel {
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid #c7d7fe;
+  border-radius: 8px;
+  background: #fbfcff;
+}
+
+.stock-panel h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.stock-move-types {
+  display: flex;
+  gap: 6px;
+  align-items: end;
+  grid-column: span 2;
+}
+
+.stock-move-types .radio-tag {
+  white-space: nowrap;
+}
+
+/* 재고체크: 물품 사용 / 물품 등록 전환 */
+.stock-mode {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  scroll-margin-top: 12px;
+}
+
+.stock-mode button {
+  padding: 9px 18px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+}
+
+.stock-mode button.active {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #fff;
+}
+
+.stock-mode + .purchase-form {
+  margin-top: 8px;
+}
+
+.stock-move-help {
+  grid-column: 1 / -1;
+  margin: 0;
+}

@@ -21,6 +21,11 @@ export const COMPANY_DOC_FIELDS = ['bizType', 'bizItem', 'csPhone', 'mobile', 'q
 // 이 업체·구분이 신화탄성 양식인지 (기능이 켜져 있고 구분이 탄성·페인트)
 export const isPaintStyle = (company, category) => PAINT_STYLE_CATEGORIES.includes(category) && hasFeature(company, 'paintContract');
 
+// 매입·재고 구분: 여러 시공에 같이 쓰는 비용(공통) + 업체의 시공 구분
+//   박람회: 박람회 참가비·부스비 등 (매입) / 박람회 현장 판매 등 (매출)
+export const purchaseCategories = (company) => [...new Set(['공통', '박람회', ...companyCategories(company)])];
+export const currentPurchaseCategories = () => [...new Set(['공통', '박람회', ...currentCategories()])];
+
 // 업체의 시공 구분 (운영자가 업체/계정관리에서 순서까지 정함) — 정하지 않았으면 기본 목록
 export function companyCategories(company) {
   const list = Array.isArray(company?.categories) ? company.categories.filter((c) => String(c || '').trim()) : [];
@@ -52,6 +57,8 @@ export const FEATURES = [
   { key: 'asEngineer', label: 'AS 담당 기사 지정 · 기사모바일 AS관리(알림 · 방문일 등록)', on: true },
   { key: 'asReport', label: '기사모바일 AS 보고 (상태 · 메모, 시공완료면 AS 완료)', on: true },
   { key: 'companyFiles', label: '회사 자료 백업 (PDF · PPT 등 올려 두고 내려받기)', on: true },
+  { key: 'purchases', label: '매입·매출관리 (통계정보 > 매입·매출관리: 박람회비 등 비용·기타 수입, 통계에서 매출·매입·차액)', on: false },
+  { key: 'stocks', label: '재고체크 (통계정보 > 재고체크: 자재 입고·사용·실사, 부족 표시)', on: false },
   { key: 'parallelSave', label: '업체별 따로 저장 (다른 업체 저장을 기다리지 않음 — 끄면 예전처럼 모든 업체가 한 줄)', on: true },
   { key: 'paintContract', label: '신화탄성 탄성·페인트 계약서 (시공장소·품질보증·구역, 곰팡이방지·AS보장·후기 페이백, 업체 정보 칸)', on: false },
   { key: 'photoStorage', label: '사진 전용 저장소 (새 사진을 DB 대신 사진 저장소에)', on: true },

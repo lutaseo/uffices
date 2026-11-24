@@ -42,6 +42,8 @@ export const PERMISSIONS = [
   { key: 'schedule.view', group: '일정관리', label: '일정 조회', short: '일정조회' },
   { key: 'schedule.edit', group: '일정관리', label: '시공일자 등록·기사배정 (계약 등록·수정의 시공정보, 일정관리)', short: '시공일자' },
   { key: 'fair.manage', group: '일정관리', label: '박람회 일정 등록·확인 (전체 박람회 보기)', short: '박람회' },
+  { key: 'purchase.manage', group: '기타', label: '매입·매출 등록/조회 (통계정보 > 매입·매출관리, 통계의 매입·차액)', short: '매입·매출' },
+  { key: 'stock.manage', group: '기타', label: '재고 등록/입고·사용·실사 (통계정보 > 재고체크)', short: '재고' },
   { key: 'calllog.manage', group: '상담내역', label: '상담내역(통화 메모) 작성·조회 (상단 [상담내역] 메뉴)', short: '상담내역' },
   { key: 'excel.export', group: '기타', label: '엑셀 다운로드', short: '엑셀' },
   { key: 'stats.view', group: '기타', label: '진행상황/통계 조회', short: '통계' },

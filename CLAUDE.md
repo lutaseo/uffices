@@ -15,7 +15,7 @@
 ## 파일 지도 (찾을 때 여기부터)
 업무 로직 `frontend/src/api/`
 - `contracts.js` 계약 전체(등록·수정·입금·사진·AS·서명·알림톡 `notifications`·가져오기 `imports`·고객확인 `customerApp`) — 큰 파일이라 함수 이름으로 grep
-- `services.js` 로그인 `auth`·업체 `companies`·직원 `users`·기사 `engineers`·팀·상품·아파트·수정로그 `auditLogs`(되돌리기)
+- `services.js` 로그인 `auth`·업체 `companies`·직원 `users`·기사 `engineers`·팀·상품·아파트·수정로그 `auditLogs`(되돌리기)·상담내역 `callLogs`·매입 `purchases`·재고 `stocks`
 - `schedule.js` 일정·휴무·박람회 `fairs`·기사모바일 `engineerApp` / `core.js` 세션·권한·`requireFeature` / `views.js` 화면용 계약 모양·변경이력
 - `files.js` 회사 자료 백업 `companyFiles`(파일은 Supabase Storage, 목록은 업체 정보 `files`)
 - `audit.js` 수정로그 문구·되돌리기 자료 / `numbering.js` 계약번호(계약일 순) / `seed.js` 데모 자료·`migrate()` / `sessionSlots.js` 탭별 로그인 칸
@@ -28,6 +28,7 @@
 
 화면 `frontend/src/`
 - `App.jsx` 메뉴·주소 연결 / `pages/ContractPage.jsx` 계약 목록 / `ContractDetail.jsx` 계약 상세 / `ContractEditor.jsx` 계약 등록·수정
+- `pages/StatsPage.jsx` 통계(매출·매입·차액) / `PurchasePage.jsx` 매입관리 / `StockPage.jsx` 재고체크 (통계정보 하위, 기능 `purchases`·`stocks`)
 - `pages/EngineerApp.jsx` 기사모바일 / `ConsultHome.jsx` 상담실장 / `CustomerApp.jsx` 고객확인 / `SignPage.jsx` 서명 / `AccountManagement.jsx` 운영자 업체·계정
 - `pages/settings/` 설정 화면들(가져오기·회사 자료 백업·알림톡·계약조건·수정로그·기사/팀/상품/아파트) / `components/ScheduleManagement.jsx` 일정 달력
 - `components/InstallCard.jsx` + `utils/install.js` 앱 설치 / `auth/AuthContext.jsx` 로그인 상태
