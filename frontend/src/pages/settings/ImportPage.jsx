@@ -4,7 +4,8 @@ import { apartments, imports } from '../../api/index.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { categoriesFromName, legacyKeys, mapLegacyRow, parseLegacyHtml } from '../../utils/legacyImport.js';
 import { won } from '../../utils/format.js';
-import { currentCategories } from '../../constants.js';
+import { currentCategories, currentHasFeature } from '../../constants.js';
+import { mapPaintRow } from '../../utils/paintImport.js';
 import { parseProductText } from '../../utils/productImport.js';
 import { normalizeSido, parseApartmentText } from '../../utils/apartmentImport.js';
 
@@ -57,10 +58,123 @@ export default function ImportPage() {
       </div>
       <EngineerImport />
       <ContractImport />
+      {currentHasFeature('paintImport') && currentHasFeature('paintContract') && <PaintImport />}
       <UserImport />
       <ProductImport />
       <ApartmentImport />
     </div>
+  );
+}
+
+function PaintImport() {
+  const { handleError } = useAuth();
+  const [rows, setRows] = useState(null);
+  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState('');
+
+  const pick = async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    setResult(null);
+    try {
+      const wb = XLSX.read(await readFile(file), { type: 'array' });
+      const sheet = wb.Sheets['등록용'] || wb.Sheets[wb.SheetNames[0]];
+      // 맨 위 안내 줄이 있으면 '고객명' 이 있는 줄부터 제목으로
+      const grid = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+      const head = grid.findIndex((row) => row.some((v) => String(v).trim() === '고객명'));
+      if (head < 0) throw new Error('"고객명" 제목이 있는 줄을 찾지 못했습니다. 신화탄성 계약서 엑셀(등록용 시트)인지 확인해 주세요.');
+      const titles = grid[head].map((v) => String(v).trim());
+      const list = grid
+        .slice(head + 1)
+        .map((row) => mapPaintRow(Object.fromEntries(titles.map((t, i) => [t, row[i]]))))
+        .filter((r) => r.customerName);
+      if (!list.length) throw new Error('등록할 줄이 없습니다.');
+      setRows(list);
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const run = async () => {
+    const total = { created: 0, skipped: 0, errors: [] };
+    try {
+      for (let i = 0; i < rows.length; i += BATCH) {
+        setBusy(`${Math.min(i + BATCH, rows.length)} / ${rows.length}건 등록 중…`);
+        const r = await imports.paintContracts(rows.slice(i, i + BATCH));
+        total.created += r.created;
+        total.skipped += r.skipped;
+        total.errors.push(...r.errors);
+      }
+      setResult(total);
+      setRows(null);
+    } catch (err) {
+      handleError(err);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const bad = (r) => !r.contractDate || r.customerPhone.replace(/\D/g, '').length < 10 || !r.aptName;
+  return (
+    <section className="import-box">
+      <h3>신화탄성 계약서 엑셀</h3>
+      <p className="sub-text">
+        손글씨 계약서를 옮긴 엑셀의 <b>등록용</b> 시트. 제목: 계약일 · 아파트 · 동 · 호 · 타입 · 고객명 · 연락처 · 제품 · 시공장소 · 품질보증 · 구역 · 정가 · 곰팡이방지 · AS보장 · 최종금액 · 계약금 · 계약금결제 · 후기페이백 · 할인내용 · 메모.
+        실계약금은 최종금액으로 맞추고, 계약금은 입금으로 넣습니다. 같은 계약일·연락처·고객명이 이미 있으면 건너뜁니다.
+      </p>
+      <label className="btn-file">
+        파일 선택
+        <input type="file" accept=".xlsx,.xls" onChange={pick} hidden />
+      </label>
+      {rows && (
+        <>
+          <div className="table-responsive import-preview">
+            <table className="customer-table">
+              <thead>
+                <tr>
+                  <th>계약일</th>
+                  <th>고객</th>
+                  <th>연락처</th>
+                  <th>현장</th>
+                  <th>제품</th>
+                  <th>정가 → 최종</th>
+                  <th>계약금</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i} className={bad(r) ? 'text-red' : ''}>
+                    <td>{r.contractDate || '날짜?'}</td>
+                    <td>{r.customerName}</td>
+                    <td>{r.customerPhone}</td>
+                    <td>{[r.aptName, r.dong && `${r.dong}동`, r.ho && `${r.ho}호`].filter(Boolean).join(' ')}</td>
+                    <td>{r.product}</td>
+                    <td>{won(r.price)} → {won(r.finalAmount || r.price)}</td>
+                    <td>{r.deposit ? `${won(r.deposit)} ${r.depositMethod}` : '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <button type="button" className="btn-dark-lg sm" onClick={run} disabled={!!busy}>
+            {busy || `${rows.length}건 등록하기`}
+          </button>
+        </>
+      )}
+      {result && (
+        <div className="import-result">
+          등록 {result.created}건 · 이미 있어 건너뜀 {result.skipped}건
+          {result.errors.length > 0 && (
+            <ul className="text-red">
+              {result.errors.map((e, i) => (
+                <li key={i}>{e.customerName}: {e.message}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 

@@ -18,6 +18,7 @@
 - `services.js` 로그인 `auth`·업체 `companies`·직원 `users`·기사 `engineers`·팀·상품·아파트·수정로그 `auditLogs`(되돌리기)·상담내역 `callLogs`·매입 `purchases`·재고 `stocks`
 - `schedule.js` 일정·휴무·박람회 `fairs`·기사모바일 `engineerApp` / `core.js` 세션·권한·`requireFeature` / `views.js` 화면용 계약 모양·변경이력
 - `files.js` 회사 자료 백업 `companyFiles`(파일은 Supabase Storage, 목록은 업체 정보 `files`) / `photoCleanup.js` 6개월 지난 사진 정리(압축 파일 내려받기 → 지우기)
+- `utils/paintImport.js` 신화탄성 계약서 엑셀 한 줄 → 등록 자료 (서버 `imports.paintContracts`, 기능 `paintImport`)
 - `audit.js` 수정로그 문구·되돌리기 자료 / `numbering.js` 계약번호(계약일 순) / `seed.js` 데모 자료·`migrate()` / `sessionSlots.js` 탭별 로그인 칸
 - `constants.js`(src 바로 아래) 브랜드·시공 구분·`FEATURES` 기능 스위치
 
