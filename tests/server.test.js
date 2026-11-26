@@ -25,6 +25,7 @@ process.env.INIT_SUPER_LOGIN = 'super';
 process.env.INIT_SUPER_PASSWORD = 'super-test-1234';
 process.env.INIT_DEMO_DATA = 'true';
 process.env.FILE_STORE_FAKE = '1'; // 회사 자료: 파일 저장소 대신 가짜 주소
+process.env.VB_VERIFY_CACHE = '1'; // 자료 기억(dbCache): 매 요청마다 기억해 둔 자료가 DB 와 같은지 비교 (다르면 실패)
 process.env.VB_VERIFY_FAST = '1'; // 빠른 불러오기: 매 요청마다 전체로 읽은 결과와 같은지 비교 (다르면 실패)
 
 const { handleRpc } = await import('../server/handler.js');
@@ -2235,6 +2236,33 @@ test('신화탄성 계약서 엑셀 일괄 등록(paintImport): 꺼진 업체는
   const again = await admin.ok('imports', 'paintContracts', [row]);
   assert.equal(again.created, 0);
   assert.equal(again.skipped, 1, '같은 계약일·연락처·고객명은 건너뜀');
+  await sup.ok('companies', 'update', good.id, { features: {} });
+});
+
+test('자료 기억해 두기(dbCache): 다른 서버가 DB 를 직접 고치거나 지워도 바뀐 줄만 읽어 바로 반영, 기능을 끄면 예전처럼', async () => {
+  const { getPool } = await import('../server/pg.js');
+  const sup = client();
+  await sup.ok('auth', 'login', 'super', 'super-test-1234');
+  const good = (await sup.ok('companies', 'list')).find((x) => x.code === 'thegood');
+  const a = await admin.ok('contracts', 'create', { ...base, customerName: '기억고객', customerPhone: '010-7575-1001' });
+  const memoOf = async () => (await admin.ok('contracts', 'get', a.id)).memo;
+  assert.equal(await memoOf(), base.memo || '');
+  // 다른 서버(인스턴스)가 쓴 것처럼 DB 를 직접 고침 → 다음 요청에 보임
+  await getPool().query(`UPDATE contracts SET data = jsonb_set(data, '{memo}', '"밖에서 고침"') WHERE id = $1`, [a.id]);
+  assert.equal(await memoOf(), '밖에서 고침', '바뀐 줄 반영');
+  const { rows } = await getPool().query(`SELECT vx IS NOT NULL AS marked FROM contracts WHERE id = $1`, [a.id]);
+  assert.equal(rows[0].marked, true, '트리거가 쓴 트랜잭션 번호 기록');
+  // 직접 지움 → 지운 줄 기록으로 반영
+  await getPool().query(`DELETE FROM contracts WHERE id = $1`, [a.id]);
+  const gone = await admin('contracts', 'get', a.id);
+  assert.notEqual(gone.status, 200, '지운 계약은 안 보임');
+  const { rows: logged } = await getPool().query(`SELECT count(*)::int AS n FROM row_deletes WHERE tbl = 'contracts' AND row_id = $1`, [a.id]);
+  assert.equal(logged[0].n, 1, '지운 줄 기록');
+  // 기능 끄기 → DB 에서 바로 읽음 (같은 결과)
+  await sup.ok('companies', 'update', good.id, { features: { dbCache: false } });
+  const b = await admin.ok('contracts', 'create', { ...base, customerName: '기억끔', customerPhone: '010-7575-1002' });
+  await getPool().query(`UPDATE contracts SET data = jsonb_set(data, '{memo}', '"끈 상태"') WHERE id = $1`, [b.id]);
+  assert.equal((await admin.ok('contracts', 'get', b.id)).memo, '끈 상태');
   await sup.ok('companies', 'update', good.id, { features: {} });
 });
 

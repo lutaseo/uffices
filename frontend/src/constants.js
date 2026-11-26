@@ -61,6 +61,7 @@ export const FEATURES = [
   { key: 'stocks', label: '재고체크 (통계정보 > 재고체크: 자재 입고·사용·실사, 부족 표시)', on: false },
   { key: 'photoCleanup', label: '오래된 사진 정리 (관리자: 6개월 지난 사진을 압축 파일로 내려받고 서버에서 지우기)', on: true },
   { key: 'smallPhotos', label: '사진 더 작게 저장 (사진 1장 약 150KB, 실물 계약서 약 300KB — 끄면 약 300KB · 500KB)', on: true },
+  { key: 'dbCache', label: '자료 기억해 두기 (서버가 업체 자료를 기억하고 바뀐 것만 DB에서 읽음 — DB 전송량 절약)', on: true },
   { key: 'parallelSave', label: '업체별 따로 저장 (다른 업체 저장을 기다리지 않음 — 끄면 예전처럼 모든 업체가 한 줄)', on: true },
   { key: 'paintContract', label: '신화탄성 탄성·페인트 계약서 (시공장소·품질보증·구역, 곰팡이방지·AS보장·후기 페이백, 업체 정보 칸)', on: false },
   { key: 'paintImport', label: '신화탄성 계약서 엑셀 일괄 등록 (설정 > 데이터 가져오기: 손글씨 계약서를 옮긴 엑셀 → 계약 · 계약금 입금)', on: false },

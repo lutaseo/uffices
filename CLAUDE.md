@@ -28,6 +28,7 @@
 서버 `server/`
 - `handler.js` 요청 처리(호출 목록 `SERVICES`·`READ_ONLY`·`LIGHT_TABLES`·`FOCUS_CALLS`, 잠금·BUSY)
 - `pg.js` DB 읽기/쓰기(`loadSnapshot`·`persistChanges`) / `photoStore.js` 사진 저장소 / `page.js` 업체 주소별 첫 화면·앱 정보(manifest·아이콘)
+- `rowCache.js` 업체 자료 기억해 두기(기능 `dbCache`): 바뀐 줄(vx 트리거)·지운 줄(`row_deletes`)만 DB 에서 읽음 — Supabase 전송량 절약, 시험은 `VB_VERIFY_CACHE=1` 로 매번 DB 와 비교, `VB_DB_CACHE=0` 이면 끔
 - `session.js` 쿠키 / `health.js` `/api/rpc` 점검 / `bizgo.js` 알림톡 발송
 
 화면 `frontend/src/`
