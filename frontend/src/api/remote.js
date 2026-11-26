@@ -86,6 +86,7 @@ export const SERVICE_NAMES = [
   'imports',
   'customerApp',
   'companyFiles',
+  'photoCleanup',
   'callLogs',
   'purchases',
   'stocks',

@@ -308,6 +308,35 @@ export async function resolveCompanyId(client, session) {
   return { companyId: null };
 }
 
+// 운영자 화면: 업체별 저장 용량 (사진 · 회사 자료) — 요청 처리 중인 트랜잭션과 따로 읽음
+//   photos: 업체별 사진 장수와 DB 에 그대로 든 사진 용량(글자 수)
+//   stored: 사진 저장소(Supabase Storage)에 든 파일 용량 — 저장소 표를 읽을 수 없으면 null
+export async function storageUsage() {
+  const pool = getPool();
+  const photos = (
+    await pool.query(
+      `SELECT company_id, count(*)::int AS n,
+              count(*) FILTER (WHERE data->>'image' LIKE 'vbstore:%')::int AS stored_n,
+              coalesce(sum(CASE WHEN data->>'image' LIKE 'vbstore:%' THEN 0 ELSE length(data->>'image') END), 0)::bigint AS db_chars
+         FROM payment_receipts GROUP BY company_id`,
+    )
+  ).rows.map((r) => ({ companyId: Number(r.company_id), count: r.n, storedCount: r.stored_n, dbBytes: Math.round(Number(r.db_chars) * 0.75) }));
+  let stored = null;
+  try {
+    stored = (
+      await pool.query(
+        `SELECT CASE WHEN name LIKE 'files/%' THEN split_part(name, '/', 2) ELSE split_part(name, '/', 1) END AS cid,
+                (name LIKE 'files/%') AS is_file, count(*)::int AS n, coalesce(sum((metadata->>'size')::bigint), 0)::bigint AS bytes
+           FROM storage.objects WHERE bucket_id = $1 GROUP BY 1, 2`,
+        [String(process.env.PHOTO_BUCKET || 'photos').trim()],
+      )
+    ).rows.map((r) => ({ companyId: Number(r.cid) || 0, isFile: r.is_file, count: r.n, bytes: Number(r.bytes) }));
+  } catch {
+    stored = null; // 저장소가 없거나(시험·자체 서버) 읽을 권한이 없음 → 화면은 어림값
+  }
+  return { photos, stored };
+}
+
 // 고객모바일: 업체 주소 코드 / 고객 링크 → 업체 번호 (없으면 null)
 export async function companyIdForCustomer(client, name, args, session) {
   if (name === 'customerApp.login') {

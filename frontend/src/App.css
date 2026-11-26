@@ -6019,3 +6019,14 @@ button.paper-add { font: inherit; }
   grid-column: 1 / -1;
   margin: 0;
 }
+
+/* 운영자: 업체별 저장 용량 */
+.usage-summary { margin: 8px 0 12px; padding: 10px 12px; background: #f4f8ff; border: 1px solid #d6e4f7; border-radius: 8px; font-size: 14px; }
+.usage-bar { height: 8px; margin: 6px 0; background: #e5e7eb; border-radius: 4px; overflow: hidden; }
+.usage-bar > div { height: 100%; background: #3b82f6; }
+
+/* 설정 > 사진 정리 */
+.photo-cleanup-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0; }
+.photo-cleanup-clear { padding: 8px 14px; border: 1px solid #e5484d; border-radius: 8px; }
+.photo-cleanup-clear:disabled { opacity: 0.4; cursor: not-allowed; }
+.photo-cleanup-empty { color: #6b7280; text-align: center; padding: 28px 0; }

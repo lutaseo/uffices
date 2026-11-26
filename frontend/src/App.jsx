@@ -31,6 +31,7 @@ import AlimtalkSettings from './pages/settings/AlimtalkSettings.jsx';
 import ContractTermsSettings from './pages/settings/ContractTermsSettings.jsx';
 import AuditLogPage from './pages/settings/AuditLogPage.jsx';
 import CompanyFilesPage from './pages/settings/CompanyFilesPage.jsx';
+import PhotoCleanupPage from './pages/settings/PhotoCleanupPage.jsx';
 import { EngineerSettings, TeamSettings, ProductSettings, ApartmentSettings, ScheduleSettings } from './pages/settings/MasterSettings.jsx';
 
 // 메뉴 정의. 새 메뉴는 여기에 추가하고 주소(path)와 필요한 권한(perm)만 지정하면 됩니다.
@@ -81,6 +82,7 @@ const MENUS = [
       { key: 'apartments', label: '아파트관리', path: '/settings/apartments', perm: 'settings.manage' },
       { key: 'scheduleSetting', label: '일정관리설정', path: '/settings/schedule', perm: 'settings.manage' },
       { key: 'import', label: '데이터 가져오기', path: '/settings/import', visible: (u) => u.role === ROLES.ADMIN },
+      { key: 'photos', label: '사진 정리', path: '/settings/photos', feature: 'photoCleanup', visible: (u) => u.role === ROLES.ADMIN },
       { key: 'files', label: '회사 자료 백업', path: '/settings/files', feature: 'companyFiles', visible: (u) => u.role === ROLES.ADMIN || u.role === ROLES.MANAGER },
       { key: 'logs', label: '수정로그', path: '/settings/logs', visible: (u) => u.role === ROLES.ADMIN },
       { key: 'me', label: '내 정보', path: '/me' },
@@ -102,6 +104,7 @@ const SETTING_PAGES = {
   scheduleSetting: ScheduleSettings,
   import: ImportPage,
   files: CompanyFilesPage,
+  photos: PhotoCleanupPage,
   logs: AuditLogPage,
   me: SettingsPage,
 };

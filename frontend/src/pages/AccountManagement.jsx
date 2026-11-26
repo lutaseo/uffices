@@ -24,6 +24,9 @@ export default function AccountManagement() {
 // ------------------------------------------------------------
 // 운영자: 업체 + 업체 관리자 계정 발급
 // ------------------------------------------------------------
+// 용량 글자: 1.2GB / 340MB / 12KB
+const sizeText = (b) => (b >= 1024 ** 3 ? `${(b / 1024 ** 3).toFixed(2)}GB` : b >= 1024 ** 2 ? `${(b / 1024 ** 2).toFixed(1)}MB` : `${Math.round(b / 1024)}KB`);
+
 function SuperAdminView() {
   const { handleError } = useAuth();
   const [list, setList] = useState([]);
@@ -32,6 +35,21 @@ function SuperAdminView() {
 
   const load = useCallback(() => companyApi.list().then(setList).catch(handleError), [handleError]);
   const [sampleBusy, setSampleBusy] = useState(null);
+  // 업체별 저장 용량 (사진 · 회사 자료) — [저장 용량 보기]를 눌렀을 때만 셈
+  const [usage, setUsage] = useState(null);
+  const [usageBusy, setUsageBusy] = useState(false);
+  const loadUsage = async () => {
+    setUsageBusy(true);
+    try {
+      setUsage(await companyApi.usage());
+    } catch (e) {
+      handleError(e);
+    } finally {
+      setUsageBusy(false);
+    }
+  };
+  const usageOf = (id) => usage?.find((u) => u.companyId === id);
+  const usageTotal = usage ? usage.reduce((t, u) => t + u.totalBytes, 0) : 0;
 
   // 시연용 샘플 계약 넣기/지우기 (가짜 이름·010-0000 번호, 변경이력·수정로그 안 남김)
   const addSample = async (c) => {
@@ -181,7 +199,20 @@ function SuperAdminView() {
         <button type="button" className="btn-add-customer" onClick={openNewCompany}>
           + 업체 등록
         </button>
+        <button type="button" className="btn-outline-action" onClick={loadUsage} disabled={usageBusy}>
+          {usageBusy ? '세는 중…' : usage ? '🔄 저장 용량 다시 보기' : '📊 저장 용량 보기'}
+        </button>
       </div>
+      {usage && (
+        <div className="usage-summary">
+          전체 저장 용량 <b>{sizeText(usageTotal)}</b> / Pro 요금 포함 100GB
+          <div className="usage-bar">
+            <div style={{ width: `${Math.min(100, (usageTotal / (100 * 1024 ** 3)) * 100)}%` }} />
+          </div>
+          <span className="sub-text">사진(실물 계약서 · 영수증 · AS)과 회사 자료 백업 합계 · 계약 내용 같은 글자 자료는 아주 작아 빼고 셈</span>
+          {usage.some((u) => u.estimated) && <span className="sub-text"> · 일부는 사진 1장 약 200KB 로 어림한 값</span>}
+        </div>
+      )}
 
       <div className="table-responsive">
         <table className="customer-table">
@@ -194,6 +225,7 @@ function SuperAdminView() {
               <th>관리자 계정</th>
               <th>실장 수</th>
               <th>계약 수</th>
+              {usage && <th>저장 용량</th>}
               <th>관리</th>
             </tr>
           </thead>
@@ -261,6 +293,13 @@ function SuperAdminView() {
                       </button>
                     </div>
                   </td>
+                  {usage && (
+                    <td className="nowrap">
+                      <b>{sizeText(usageOf(c.id)?.totalBytes || 0)}</b>
+                      <div className="sub-text">사진 {(usageOf(c.id)?.photoCount || 0).toLocaleString()}장 · {sizeText(usageOf(c.id)?.photoBytes || 0)}</div>
+                      <div className="sub-text">회사 자료 {usageOf(c.id)?.fileCount || 0}개 · {sizeText(usageOf(c.id)?.fileBytes || 0)}</div>
+                    </td>
+                  )}
                   <td>
                     <div className="row-actions">
                       <button
