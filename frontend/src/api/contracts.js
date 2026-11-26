@@ -15,6 +15,8 @@ import {
   hasFeature,
   COMPANY_DOC_FIELDS,
   PAINT_PLACES,
+  PAINT_STYLE_CATEGORIES,
+  moldLineName,
   ESIGN_STATUS,
   MAX_SCHEDULE_STEPS,
   ISSUE_STATUS,
@@ -1956,6 +1958,87 @@ export const imports = {
     });
     invalidateNumbers(db);
     saveDb(db);
+    return result;
+  },
+
+  // 신화탄성 손글씨 계약서를 옮긴 엑셀 → 계약 일괄 등록 (기능 paintImport + paintContract, 업체 관리자)
+  //   한 줄 = 계약 1건: 제품 1줄(시공장소·품질보증·구역·정가) + 곰팡이방지(드레스룸·펜트리, 0원 서비스 줄)
+  //   실계약금 = 최종금액(할인으로 맞춤), 계약금은 입금 1건으로, 후기 페이백·AS 보장 체크
+  //   같은 계약일·연락처·고객명이 이미 있으면 건너뜀 (같은 파일을 다시 올려도 중복 안 됨)
+  async paintContracts(rows = []) {
+    const { db, user } = authorizeImport(await authorize('contract.create'));
+    requireFeature(db, user, 'paintImport');
+    requireFeature(db, user, 'paintContract');
+    const company = db.companies.find((c) => c.id === user.companyId);
+    const brands = company.brands?.length ? company.brands : [company.name];
+    const cats = companyCategories(company);
+    const result = { created: 0, skipped: 0, errors: [] };
+    const keyOf = (date, phone, name) => `${date}|${digitsOnly(phone)}|${String(name || '').replace(/\s+/g, '')}`;
+    const seen = new Set(db.contracts.filter((c) => c.companyId === user.companyId && !c.deletedAt).map((c) => keyOf(c.contractDate, c.customerPhone, c.customerName)));
+    const won0 = (v) => Math.max(0, Math.round(Number(String(v ?? '').replace(/[^\d.]/g, '')) || 0));
+    rows.slice(0, IMPORT_BATCH_MAX).forEach((r) => {
+      const name = String(r.customerName || '').trim();
+      try {
+        const key = keyOf(r.contractDate, r.customerPhone, name);
+        if (seen.has(key)) {
+          result.skipped += 1;
+          return;
+        }
+        const category = cats.includes(r.category) ? r.category : cats.find((c) => PAINT_STYLE_CATEGORIES.includes(c)) || cats[0];
+        const price = won0(r.price);
+        const product = String(r.product || '').trim() || category;
+        const lineItems = [
+          { productId: null, name: product, detail: '', qty: 1, unitPrice: price, places: r.places || [], warranty: r.warranty || '', zone: r.zone || '' },
+          ...(r.molds || []).map((room) => ({ productId: null, name: moldLineName(room), detail: '서비스', qty: 1, unitPrice: 0 })),
+        ];
+        const final = won0(r.finalAmount) || price;
+        const deposit = won0(r.deposit);
+        const input = {
+          brand: brands.includes(r.brand) ? r.brand : brands[0],
+          category,
+          customerName: name,
+          customerPhone: r.customerPhone,
+          aptName: String(r.aptName || '').trim(),
+          dong: r.dong,
+          ho: r.ho,
+          aptType: r.aptType,
+          contractDate: r.contractDate,
+          status: '미정',
+          lineItems,
+          discount: Math.max(0, price - final),
+          discountReason: String(r.discountReason || '').slice(0, 100),
+          voucher: 0,
+          payments: deposit ? [{ kind: '계약금', method: PAYMENT_METHODS.includes(r.depositMethod) ? r.depositMethod : '계좌이체', amount: deposit, date: r.contractDate, memo: '계약서 엑셀' }] : [],
+          asCoverage: !!r.asCoverage,
+          reviewPayback: !!r.reviewPayback,
+          memo: String(r.memo || '').slice(0, 2000),
+          ownerId: null,
+        };
+        const fields = normalizeContractInput(db, user, input, null);
+        const cust = upsertCustomerForContract(db, user, fields.customerName, fields.customerPhone, fields.customerPhone2, fields);
+        const contract = {
+          ...fields,
+          id: nextId(db, 'contracts'),
+          companyId: user.companyId,
+          customerId: cust.id,
+          esign: { status: ESIGN_STATUS.NONE, token: null },
+          history: [],
+          createdAt: nowIso(),
+          updatedAt: nowIso(),
+          deletedAt: null,
+        };
+        addHistory(contract, user, '계약서 엑셀에서 등록');
+        db.contracts.push(contract);
+        seen.add(key);
+        result.created += 1;
+      } catch (e) {
+        result.errors.push({ customerName: name, message: e.message });
+      }
+    });
+    if (result.created) {
+      invalidateNumbers(db);
+      saveDb(db);
+    }
     return result;
   },
 };

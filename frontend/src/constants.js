@@ -63,6 +63,7 @@ export const FEATURES = [
   { key: 'smallPhotos', label: '사진 더 작게 저장 (사진 1장 약 150KB, 실물 계약서 약 300KB — 끄면 약 300KB · 500KB)', on: true },
   { key: 'parallelSave', label: '업체별 따로 저장 (다른 업체 저장을 기다리지 않음 — 끄면 예전처럼 모든 업체가 한 줄)', on: true },
   { key: 'paintContract', label: '신화탄성 탄성·페인트 계약서 (시공장소·품질보증·구역, 곰팡이방지·AS보장·후기 페이백, 업체 정보 칸)', on: false },
+  { key: 'paintImport', label: '신화탄성 계약서 엑셀 일괄 등록 (설정 > 데이터 가져오기: 손글씨 계약서를 옮긴 엑셀 → 계약 · 계약금 입금)', on: false },
   { key: 'photoStorage', label: '사진 전용 저장소 (새 사진을 DB 대신 사진 저장소에)', on: true },
   { key: 'callLog', label: '상담내역 메뉴 (전화번호별 통화 메모 · 번호 검색)', on: true },
   { key: 'scheduleLock', label: '시공일자·기사배정은 권한 있는 사람만 (권한 없으면 계약 등록에서 시공 칸 숨김)', on: true },

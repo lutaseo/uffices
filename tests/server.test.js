@@ -2205,6 +2205,39 @@ test('신화탄성 탄성·페인트 계약서(paintContract): 켜진 업체만 
   await sup.ok('companies', 'update', good.id, { features: {} });
 });
 
+test('신화탄성 계약서 엑셀 일괄 등록(paintImport): 꺼진 업체는 막고, 켜면 제품·곰팡이방지·최종금액·계약금으로 등록, 다시 올리면 건너뜀', async () => {
+  const sup = client();
+  await sup.ok('auth', 'login', 'super', 'super-test-1234');
+  const good = (await sup.ok('companies', 'list')).find((x) => x.code === 'thegood');
+  const row = {
+    contractDate: '2026-11-20', aptName: '호반써밋 연희공원', dong: '107', ho: '1705', aptType: '84A', customerName: '엑셀고객', customerPhone: '010-7474-0001',
+    product: '에코그리트', places: ['베란다', '세탁실'], warranty: '13년', zone: '4구역', price: 900000, molds: ['드레스룸', '펜트리'],
+    asCoverage: true, finalAmount: 640000, deposit: 50000, depositMethod: '카드', reviewPayback: true, discountReason: '업그레이드 + 현장할인', memo: '비밀유지',
+  };
+  const off = await admin('imports', 'paintContracts', [row]);
+  assert.equal(off.status, 403, '기능이 꺼져 있으면 막힘');
+  await sup.ok('companies', 'update', good.id, { features: { paintContract: true, paintImport: true } });
+  const r = await admin.ok('imports', 'paintContracts', [row, { ...row, customerName: '', customerPhone: '010-1' }]);
+  assert.equal(r.created, 1);
+  assert.equal(r.errors.length, 1, '고객명 없는 줄은 오류로');
+  const list = await admin.ok('contracts', 'list', { keyword: '엑셀고객' });
+  const c = await admin.ok('contracts', 'get', (list.items || list).find((x) => x.customerName === '엑셀고객').id);
+  assert.equal(c.lineItems.length, 3, '제품 + 곰팡이방지 2줄');
+  assert.deepEqual(c.lineItems[0].places, ['베란다', '세탁실']);
+  assert.equal(c.lineItems[0].warranty, '13년');
+  assert.equal(c.totalAmount, 900000, '곰팡이방지는 0원 서비스');
+  assert.equal(c.totalAmount - c.discount - c.voucher, 640000, '실계약금 = 최종금액');
+  assert.equal(c.payments[0].amount, 50000);
+  assert.equal(c.payments[0].method, '카드');
+  assert.equal(c.asCoverage, true);
+  assert.equal(c.reviewPayback, true);
+  assert.equal(c.dong, '107');
+  const again = await admin.ok('imports', 'paintContracts', [row]);
+  assert.equal(again.created, 0);
+  assert.equal(again.skipped, 1, '같은 계약일·연락처·고객명은 건너뜀');
+  await sup.ok('companies', 'update', good.id, { features: {} });
+});
+
 test('업체별 따로 저장(parallelSave): 두 업체가 동시에 계약을 만들어도 번호가 겹치지 않고 번호표가 맞음', async () => {
   const other = client();
   await other.ok('auth', 'login', 'otheradmin', 'other1234', 'other-co');
