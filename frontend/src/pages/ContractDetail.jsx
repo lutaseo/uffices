@@ -18,7 +18,7 @@ import PhotoViewer from '../components/PhotoViewer.jsx';
 import LineItems from '../components/LineItems.jsx';
 import MapLink from '../components/MapLink.jsx';
 import WorkRecord from '../components/WorkRecord.jsx';
-import { compressImage } from '../utils/image.js';
+import { compressImage, paperPhotoOptions } from '../utils/image.js';
 
 const CIRCLED = ['①', '②', '③'];
 const TABS = ['계약정보', '계약자', '시공관리', '상담내역'];
@@ -906,7 +906,7 @@ function PaperPanel({ contract, canEdit, onChanged }) {
     setBusy(true);
     try {
       for (const f of files.slice(0, Math.max(room, 0))) {
-        const img = await compressImage(f, { maxSize: 1800, quality: 0.75, maxBytes: 500 * 1024 });
+        const img = await compressImage(f, paperPhotoOptions());
         await contractApi.setPaperPhotos(contract.id, { add: [img] }); // 용량 한도 때문에 한 장씩
       }
       onChanged();

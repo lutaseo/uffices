@@ -2346,3 +2346,48 @@ test('매입·매출관리: 매출(계약 외 수입)도 저장, 박람회 구�
   assert.deepEqual(dec.map((r) => r.kind).sort(), ['매입', '매출', '매출']);
   await sup.ok('companies', 'update', good.id, { features: {} });
 });
+
+test('업체별 저장 용량(운영자): 사진 장수·용량, 회사 자료, 운영자만', async () => {
+  const sup = client();
+  await sup.ok('auth', 'login', 'super', 'super-test-1234');
+  const rows = await sup.ok('companies', 'usage');
+  const good = rows.find((r) => r.name === '더좋은집');
+  assert.ok(good && good.photoCount > 0 && good.photoBytes > 0, '사진이 있는 업체는 장수·용량');
+  assert.equal(good.totalBytes, good.photoBytes + good.fileBytes, '합계 = 사진 + 회사 자료');
+  assert.equal((await admin('companies', 'usage')).status, 403, '업체 관리자는 못 봄');
+});
+
+test('오래된 사진 정리: 6개월 지난 시공완료 계약만, 사진 목록(이름), 지우면 사진·장수 0 + 변경이력, 권한·기능', async () => {
+  const img = (n) => 'data:image/jpeg;base64,' + Buffer.from(`old-photo-${n}`).toString('base64');
+  const old = await admin.ok('contracts', 'create', { ...base, customerName: '오래된사진고객', customerPhone: '010-7474-0001', contractDate: '2025-01-10', status: '시공완료', completedDate: '2025-01-15', schedules: [{ date: '2025-01-15', time: '10:00' }], totalAmount: 500000, payments: [{ kind: '계약금', method: '현금', amount: 50000, date: '2025-01-10' }] });
+  await admin.ok('contracts', 'setPaperPhotos', old.id, { add: [img(1), img(2)] });
+  await admin.ok('contracts', 'paymentPhotos', old.id, old.payments[0].id, { add: [img(3)] });
+  const fresh = await admin.ok('contracts', 'create', { ...base, customerName: '최근사진고객', customerPhone: '010-7474-0002', status: '시공완료' });
+  await admin.ok('contracts', 'setPaperPhotos', fresh.id, { add: [img(4)] });
+
+  const p = await admin.ok('photoCleanup', 'preview', {});
+  const mine = p.contracts.find((c) => c.id === old.id);
+  assert.ok(mine && mine.photoCount === 3, '6개월 지난 계약 + 사진 3장');
+  assert.ok(!p.contracts.some((c) => c.id === fresh.id), '최근 계약은 대상 아님');
+  const photos = await admin.ok('photoCleanup', 'photos', old.id);
+  assert.deepEqual(photos.map((x) => x.name), ['실물계약서_1.jpg', '실물계약서_2.jpg', '입금_계약금_2025-01-10_1.jpg']);
+  assert.equal((await manager('photoCleanup', 'preview', {})).status, 403, '실장은 못 씀');
+
+  const r = await admin.ok('photoCleanup', 'clear', [old.id, fresh.id], {});
+  assert.deepEqual([r.count, r.photoCount, r.skipped], [1, 3, 1], '대상만 지우고 최근 계약은 건너뜀');
+  const got = await admin.ok('contracts', 'get', old.id);
+  assert.equal(got.paperPhotoCount, 0);
+  assert.equal(got.payments[0].receiptCount, 0);
+  assert.ok(got.photosClearedAt, '정리한 날');
+  assert.match(got.history.at(-1).action, /사진 정리/);
+  assert.equal((await admin.ok('contracts', 'paperPhotos', old.id)).length, 0, '사진 없어짐');
+  assert.equal((await admin.ok('contracts', 'paperPhotos', fresh.id)).length, 1, '최근 계약 사진은 그대로');
+  assert.ok(!(await admin.ok('photoCleanup', 'preview', {})).contracts.some((c) => c.id === old.id), '다시 보면 대상 아님');
+
+  const sup = client();
+  await sup.ok('auth', 'login', 'super', 'super-test-1234');
+  const good = (await sup.ok('companies', 'list')).find((x) => x.code === 'thegood');
+  await sup.ok('companies', 'update', good.id, { features: { photoCleanup: false } });
+  assert.equal((await admin('photoCleanup', 'preview', {})).status, 403, '기능 끄면 막힘');
+  await sup.ok('companies', 'update', good.id, { features: {} });
+});

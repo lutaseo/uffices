@@ -14,7 +14,7 @@ import * as services from '../frontend/src/api/services.js';
 import { setRuntimeAdapter } from '../frontend/src/api/runtime.js';
 import { ApiError } from '../frontend/src/api/core.js';
 import { bizgoConfigured, listSenders, sendAlimtalk, inquiryReport } from './bizgo.js';
-import { getPool, loadSnapshot, persistChanges, saveAuditLog, resolveCompanyId, contractByEsignToken, companyIdForCustomer, fingerprint, touchedSlim } from './pg.js';
+import { getPool, loadSnapshot, persistChanges, saveAuditLog, storageUsage, resolveCompanyId, contractByEsignToken, companyIdForCustomer, fingerprint, touchedSlim } from './pg.js';
 import { AUDIT_KEEP_DAYS, buildAuditEntry, skipAudit, undoSnapshot } from '../frontend/src/api/audit.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { bootstrap } from './bootstrap.js';
@@ -57,6 +57,7 @@ setRuntimeAdapter({
   },
   // 비즈고 알림톡 (API Key 는 서버 환경변수에만)
   alimtalk: { configured: bizgoConfigured, listSenders, sendAlimtalk, inquiryReport },
+  storageUsage, // 운영자 화면: 업체별 저장 용량
   // 회사 자료 파일 저장소 (사진 저장소와 같은 Supabase Storage) — 시험(FILE_STORE_FAKE=1)은 가짜 주소
   files:
     process.env.FILE_STORE_FAKE === '1'
@@ -90,6 +91,7 @@ const SERVICES = {
   imports: services.imports,
   customerApp: services.customerApp,
   companyFiles: services.companyFiles,
+  photoCleanup: services.photoCleanup,
 };
 const BLOCKED = new Set(['auth.resetDemoData']);
 
@@ -136,6 +138,9 @@ const READ_ONLY = new Set([
   'engineerApp.paperPhotos',
   'engineerApp.myAs',
   'companyFiles.list',
+  'companies.usage',
+  'photoCleanup.preview',
+  'photoCleanup.photos',
   'engineerApp.colleagues',
   'engineerApp.asPhotos',
   'contracts.receipt',
@@ -182,6 +187,7 @@ const LIGHT_TABLES = {
   'engineerApp.myFairs': [],
   'engineerApp.colleagues': [], // 기사 목록만
   'companyFiles.list': [], // 회사 자료: 업체 정보만
+  'companies.usage': [], // 운영자: 업체별 저장 용량 (DB 에서 따로 셈)
   'companyFiles.add': [],
   'companyFiles.confirm': [],
   'companyFiles.remove': [],
@@ -195,7 +201,7 @@ const LIGHT_TABLES = {
 };
 
 // 입금 영수증 사진을 읽거나 바꾸는 요청 (첫 인자 = 계약 번호)
-const RECEIPT_CALLS = new Set(['contracts.receipt', 'contracts.addPayment', 'contracts.updatePayment', 'contracts.removePayment', 'contracts.update', 'contracts.paymentPhotos', 'contracts.paperPhotos', 'contracts.setPaperPhotos', 'contracts.asPhotos', 'contracts.setAs', 'contracts.addAsPhotos', 'engineerApp.paperPhotos', 'engineerApp.asPhotos']);
+const RECEIPT_CALLS = new Set(['contracts.receipt', 'contracts.addPayment', 'contracts.updatePayment', 'contracts.removePayment', 'contracts.update', 'contracts.paymentPhotos', 'contracts.paperPhotos', 'contracts.setPaperPhotos', 'contracts.asPhotos', 'contracts.setAs', 'contracts.addAsPhotos', 'engineerApp.paperPhotos', 'engineerApp.asPhotos', 'photoCleanup.photos', 'photoCleanup.clear']);
 
 // 계약 목록·통계: 저장하지 않는 요청이라 계약의 긴 글·변경이력 없이 읽어도 됨
 const SLIM_CALLS = new Set(['contracts.list', 'contracts.listCached', 'reports.contracts', 'reports.engineers', 'engineerApp.myAs']);

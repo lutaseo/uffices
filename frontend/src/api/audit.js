@@ -85,6 +85,7 @@ const ACTIONS = {
   'engineerApp.transferAs': 'AS 담당 기사 변경',
   'engineerApp.reportAs': 'AS 기사 보고',
   'contracts.undoBulkDone': '일괄 시공완료 되돌림',
+  'photoCleanup.clear': '오래된 사진 정리',
   'companyFiles.add': '회사 자료 올리기',
   'companyFiles.confirm': '회사 자료 올리기 완료',
   'companyFiles.remove': '회사 자료 삭제',

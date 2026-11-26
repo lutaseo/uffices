@@ -59,6 +59,8 @@ export const FEATURES = [
   { key: 'companyFiles', label: '회사 자료 백업 (PDF · PPT 등 올려 두고 내려받기)', on: true },
   { key: 'purchases', label: '매입·매출관리 (통계정보 > 매입·매출관리: 박람회비 등 비용·기타 수입, 통계에서 매출·매입·차액)', on: false },
   { key: 'stocks', label: '재고체크 (통계정보 > 재고체크: 자재 입고·사용·실사, 부족 표시)', on: false },
+  { key: 'photoCleanup', label: '오래된 사진 정리 (관리자: 6개월 지난 사진을 압축 파일로 내려받고 서버에서 지우기)', on: true },
+  { key: 'smallPhotos', label: '사진 더 작게 저장 (사진 1장 약 150KB, 실물 계약서 약 300KB — 끄면 약 300KB · 500KB)', on: true },
   { key: 'parallelSave', label: '업체별 따로 저장 (다른 업체 저장을 기다리지 않음 — 끄면 예전처럼 모든 업체가 한 줄)', on: true },
   { key: 'paintContract', label: '신화탄성 탄성·페인트 계약서 (시공장소·품질보증·구역, 곰팡이방지·AS보장·후기 페이백, 업체 정보 칸)', on: false },
   { key: 'photoStorage', label: '사진 전용 저장소 (새 사진을 DB 대신 사진 저장소에)', on: true },

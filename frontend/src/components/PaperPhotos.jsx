@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import PhotoPickButton from './CameraButton.jsx';
 import { contracts as contractApi } from '../api/index.js';
-import { compressImage } from '../utils/image.js';
+import { compressImage, paperPhotoOptions } from '../utils/image.js';
 import PhotoViewer from './PhotoViewer.jsx';
 
 export const PAPER_MAX = 10; // 계약 1건당 실물 계약서 사진 최대 장수 (서버와 같음)
@@ -39,7 +39,7 @@ export default function PaperPhotos({ contractId, savedCount = 0, value, onChang
     try {
       const list = [];
       // 손글씨가 읽히도록 다른 사진보다 조금 크게 (긴 변 1800px, 약 500KB)
-      for (const f of files.slice(0, Math.max(room, 0))) list.push(await compressImage(f, { maxSize: 1800, quality: 0.75, maxBytes: 500 * 1024 }));
+      for (const f of files.slice(0, Math.max(room, 0))) list.push(await compressImage(f, paperPhotoOptions()));
       onChange({ ...v, add: [...v.add, ...list] });
     } catch (err) {
       alert(err.message);

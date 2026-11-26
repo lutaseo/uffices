@@ -1,8 +1,15 @@
+import { currentHasFeature } from '../constants.js';
+
 // 사진 줄이기(압축): 휴대폰 사진(수 MB)을 작은 JPEG 로 줄여서 올림
 //   maxSize: 긴 변 최대 픽셀, quality: 처음 화질(0~1), maxBytes: 1장 목표 용량
 //   목표보다 크면 화질을 조금씩 낮추고(0.5까지), 그래도 크면 크기를 한 단계씩 더 줄임
-//   기본값: 긴 변 1280px · 화질 0.7 · 약 300KB — 영수증·하자 부위는 충분히 보임 (원본 3~5MB → 보통 150~300KB)
-export function compressImage(file, { maxSize = 1280, quality = 0.7, maxBytes = 300 * 1024 } = {}) {
+//   기본값: 긴 변 1280px · 화질 0.7 · 약 150KB (기능 smallPhotos 를 끈 업체는 예전처럼 약 300KB)
+//   — 영수증·하자 부위는 충분히 보임 (원본 3~5MB → 보통 100~150KB)
+export const photoMaxBytes = () => (currentHasFeature('smallPhotos') ? 150 : 300) * 1024;
+// 실물(종이) 계약서: 글씨가 읽혀야 해서 조금 크게 — 약 300KB (끈 업체는 예전처럼 약 500KB)
+export const paperPhotoOptions = () => ({ maxSize: 1800, quality: 0.75, maxBytes: (currentHasFeature('smallPhotos') ? 300 : 500) * 1024 });
+
+export function compressImage(file, { maxSize = 1280, quality = 0.7, maxBytes = photoMaxBytes() } = {}) {
   return new Promise((resolve, reject) => {
     if (!file.type.startsWith('image/')) return reject(new Error('사진 파일만 첨부할 수 있습니다.'));
     const url = URL.createObjectURL(file);

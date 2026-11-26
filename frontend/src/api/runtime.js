@@ -32,5 +32,7 @@ export const requestCompany = () => (adapter.requestCompany ? adapter.requestCom
 export const alimtalkGateway = () => adapter.alimtalk || null;
 // 회사 자료 파일 저장소(Supabase Storage) — 서버에서만. 브라우저 데모 모드는 null
 export const fileStore = () => adapter.files || null;
+// 업체별 저장 용량(사진·회사 자료) 세기 — 서버에서만 (브라우저 데모 모드는 자료에서 직접 셈)
+export const storageUsageReader = () => adapter.storageUsage || null;
 
 export { nextId } from './seed.js';

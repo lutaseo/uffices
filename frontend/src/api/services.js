@@ -20,6 +20,7 @@ import {
   setSession,
   clearSession,
   resetDemoData,
+  storageUsageReader,
 } from './runtime.js';
 import { ROLES, DATA_SCOPES, permissionsOf, isOwnScopeOnly, ALL_PERMISSION_KEYS, can } from '../auth/permissions.js';
 import { digitsOnly, formatPhone } from '../utils/format.js';
@@ -46,6 +47,7 @@ import {
 export { ApiError } from './core.js';
 export { contracts, esign, notifications, reports, imports, customerApp } from './contracts.js';
 export { companyFiles } from './files.js';
+export { photoCleanup } from './photoCleanup.js';
 export { schedules, engineerOffs, engineerApp, scheduleSettings, fairs } from './schedule.js';
 
 // ============================================================
@@ -235,6 +237,48 @@ export const companies = {
       managerCount: db.users.filter((u) => u.companyId === c.id && u.role === ROLES.MANAGER).length,
       contractCount: db.contracts.filter((x) => x.companyId === c.id && !x.deletedAt).length,
     }));
+  },
+
+  // 업체별 저장 용량 (운영자): 사진 장수·용량, 회사 자료 용량, 합계
+  //   저장소 용량을 읽을 수 없으면 저장소 사진은 1장 약 200KB 로 어림 (estimated: true)
+  async usage() {
+    const { db, user } = await session();
+    if (user.role !== ROLES.SUPER) throw new ApiError('권한이 없습니다.', 'FORBIDDEN');
+    const reader = storageUsageReader();
+    let photos;
+    let stored = null;
+    if (reader) ({ photos, stored } = await reader());
+    else {
+      // 브라우저 데모: 들고 있는 자료에서 직접
+      const by = new Map();
+      (db.paymentReceipts || []).forEach((r) => {
+        const e = by.get(r.companyId) || { companyId: r.companyId, count: 0, storedCount: 0, dbBytes: 0 };
+        e.count += 1;
+        e.dbBytes += Math.round(String(r.image || '').length * 0.75);
+        by.set(r.companyId, e);
+      });
+      photos = [...by.values()];
+    }
+    const PHOTO_GUESS = 200 * 1024;
+    return db.companies.map((c) => {
+      const p = photos.find((x) => x.companyId === c.id) || { count: 0, storedCount: 0, dbBytes: 0 };
+      const sp = stored?.find((x) => x.companyId === c.id && !x.isFile);
+      const sf = stored?.find((x) => x.companyId === c.id && x.isFile);
+      const ready = (c.files || []).filter((f) => f.ready);
+      const storedPhotoBytes = stored ? sp?.bytes || 0 : p.storedCount * PHOTO_GUESS;
+      const fileBytes = sf ? sf.bytes : ready.reduce((t, f) => t + (Number(f.size) || 0), 0);
+      return {
+        companyId: c.id,
+        name: c.name,
+        photoCount: p.count,
+        photoBytes: p.dbBytes + storedPhotoBytes,
+        dbPhotoBytes: p.dbBytes,
+        fileCount: ready.length,
+        fileBytes,
+        totalBytes: p.dbBytes + storedPhotoBytes + fileBytes,
+        estimated: !stored && p.storedCount > 0,
+      };
+    });
   },
 
   // 업체 + 최초 관리자 계정을 함께 발급
