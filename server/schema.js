@@ -58,6 +58,46 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 CREATE INDEX IF NOT EXISTS audit_logs_company_time_idx ON audit_logs (company_id, created_at DESC);
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 
+-- 자료 기억해 두기(rowCache): 줄마다 마지막으로 쓴 트랜잭션 번호(vx) + 지운 줄 기록(row_deletes)
+--   서버가 기억해 둔 표에서 바뀐 줄만 다시 읽도록 (DB 전송량 절약)
+CREATE TABLE IF NOT EXISTS row_deletes (
+  seq        bigserial PRIMARY KEY,
+  tbl        text NOT NULL,
+  row_id     bigint NOT NULL,
+  company_id bigint,
+  vx         xid8 NOT NULL,
+  at         timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS row_deletes_find_idx ON row_deletes (tbl, company_id, vx);
+CREATE INDEX IF NOT EXISTS row_deletes_at_idx ON row_deletes (at);
+ALTER TABLE row_deletes ENABLE ROW LEVEL SECURITY;
+
+CREATE OR REPLACE FUNCTION vb_mark_row() RETURNS trigger LANGUAGE plpgsql AS $f$
+BEGIN
+  NEW.vx := pg_current_xact_id();
+  RETURN NEW;
+END $f$;
+CREATE OR REPLACE FUNCTION vb_log_delete() RETURNS trigger LANGUAGE plpgsql AS $f$
+BEGIN
+  INSERT INTO row_deletes (tbl, row_id, company_id, vx) VALUES (TG_TABLE_NAME, OLD.id, OLD.company_id, pg_current_xact_id());
+  RETURN OLD;
+END $f$;
+
+DO $$
+DECLARE t text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['engineer_offs','teams','products','apartments','customers','contracts',
+                           'notifications','call_logs','purchases','stocks']
+  LOOP
+    EXECUTE format('ALTER TABLE %I ADD COLUMN IF NOT EXISTS vx xid8', t);
+    EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I (company_id, vx)', t || '_vx_idx', t);
+    EXECUTE format('DROP TRIGGER IF EXISTS vb_mark ON %I', t);
+    EXECUTE format('CREATE TRIGGER vb_mark BEFORE INSERT OR UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION vb_mark_row()', t);
+    EXECUTE format('DROP TRIGGER IF EXISTS vb_log_delete ON %I', t);
+    EXECUTE format('CREATE TRIGGER vb_log_delete AFTER DELETE ON %I FOR EACH ROW EXECUTE FUNCTION vb_log_delete()', t);
+  END LOOP;
+END $$;
+
 -- 브라우저에서 Supabase 로 직접 접근하지 못하도록 차단 (서버만 접근)
 ALTER TABLE meta ENABLE ROW LEVEL SECURITY;
 DO $$

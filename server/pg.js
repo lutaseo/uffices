@@ -3,6 +3,7 @@ import pg from 'pg';
 import { randomBytes } from 'node:crypto';
 import { photoStoreConfigured, uploadPhoto } from './photoStore.js';
 import { hasFeature } from '../frontend/src/constants.js';
+import { cacheOff, companyRows } from './rowCache.js';
 
 const TABLE_MAP = {
   companies: 'companies',
@@ -63,7 +64,12 @@ const rows = async (client, sql, params = []) => (await client.query(sql, params
 //   scope.signatureFor: 이 계약의 서명 이미지도 함께 로드 (계약서 보기)
 //   scope.slimContracts: 계약의 긴 글·변경이력은 빼고 로드 (목록·통계 — 읽기 전용 요청만)
 // scope.slimContracts 일 때 계약에서 빼고 읽을 항목 (목록용 — 읽기 전용 요청에만 사용)
-const SLIM_DROP = ['history', 'memo', 'happyCallMemo', 'notes', 'engineerNote', 'customerNote'].map((k) => `- '${k}'`).join(' ');
+const SLIM_KEYS = ['history', 'memo', 'happyCallMemo', 'notes', 'engineerNote', 'customerNote'];
+const SLIM_DROP = SLIM_KEYS.map((k) => `- '${k}'`).join(' ');
+const slimmed = (row) => {
+  SLIM_KEYS.forEach((k) => delete row[k]);
+  return row;
+};
 
 export async function loadSnapshot(client, scope) {
   const db = { seq: {}, version: 2 };
@@ -80,6 +86,7 @@ export async function loadSnapshot(client, scope) {
   for (const key of ['companies', 'users', 'engineers']) {
     db[key] = (await rows(client, `SELECT data FROM ${TABLE_MAP[key]} ORDER BY id`)).map(toObj);
   }
+  const useCache = !cacheOff() && scope.companyId && hasFeature(db.companies.find((c) => c.id === Number(scope.companyId)), 'dbCache');
   // scope.tables: 이 요청에 필요한 업체 표만 (없으면 전부) — 트래픽 절약
   const wanted = scope.tables || COMPANY_SCOPED.filter((k) => !HEAVY.includes(k));
   for (const key of COMPANY_SCOPED) {
@@ -91,6 +98,16 @@ export async function loadSnapshot(client, scope) {
           [].concat(scope.receiptsFor).map((x) => String(Number(x))),
         ])
       ).map(toObj);
+    } else if (scope.companyId && wanted.includes(key) && useCache && key !== 'paymentReceipts') {
+      // 기억해 둔 자료 + 바뀐 줄만 DB 에서 (기능 dbCache) — 목록·계약 하나 보기도 예전과 같은 모양으로 (긴 글·변경이력 빼기)
+      const list = (await companyRows(client, TABLE_MAP[key], scope.companyId)).map((j) => JSON.parse(j));
+      if (key === 'contracts' && scope.focusContracts) {
+        const focus = new Set(scope.focusContracts.filter((x) => Number.isSafeInteger(x)));
+        db.contracts = list.map((r) => (focus.has(r.id) ? r : slimmed(r)));
+        slimIds = new Set(list.filter((r) => !focus.has(r.id)).map((r) => r.id));
+        continue;
+      }
+      db[key] = key === 'contracts' && scope.slimContracts ? list.map(slimmed) : list;
     } else if (scope.companyId && wanted.includes(key)) {
       // 목록 요청(읽기 전용)은 계약의 긴 글·변경이력을 DB 에서 아예 읽지 않음
       const cols = key === 'contracts' && scope.slimContracts ? `data ${SLIM_DROP}` : 'data';
@@ -273,6 +290,8 @@ export async function persistChanges(client, before, after, readOnly, seqWrite) 
     if (removed.length) {
       await client.query(`DELETE FROM ${table} WHERE id = ANY($1::bigint[])`, [removed]);
       if (isContracts) await client.query(`DELETE FROM contract_signatures WHERE contract_id = ANY($1::bigint[])`, [removed]);
+      // 지운 줄 기록(자료 기억용)은 하루 지나면 정리 — 서버는 20분마다 표 전체를 다시 읽으므로 그보다 오래된 기록은 필요 없음
+      await client.query(`DELETE FROM row_deletes WHERE at < now() - interval '1 day'`);
     }
   }
   const seq = seqWrite !== undefined ? seqWrite : JSON.stringify(before.seq) !== JSON.stringify(after.seq) ? after.seq : null;
